@@ -1,0 +1,9823 @@
+<script>
+
+ 
+
+let bootstrap = null;
+
+ 
+
+let currentAssessment = null;
+
+ 
+
+let currentCvUpload = null;
+
+ 
+
+let currentBatchCvUploads = [];
+
+ 
+
+let selectedClient = '';
+
+ 
+
+let assessmentMode = 'single';
+
+ 
+
+let currentAssessmentSource = 'single';
+
+ 
+
+let currentViewedBatchIndex = null;
+
+ 
+
+ 
+
+ 
+
+function getATSSessionToken_() {
+
+ 
+
+  const token =
+
+ 
+
+    localStorage.getItem(
+
+ 
+
+      'OSYNIX_ATS_SESSION'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  if (!token) {
+
+ 
+
+    throw new Error(
+
+ 
+
+      'Your ATS session is missing. Please sign in again.'
+
+ 
+
+    );
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+  return token;
+
+ 
+
+}
+
+ 
+
+function restoreBatchAssessmentState() {
+
+ 
+
+ 
+
+ 
+
+  try {
+
+ 
+
+ 
+
+ 
+
+    const stored =
+
+ 
+
+      sessionStorage.getItem(
+
+ 
+
+        'osynixBatchAssessmentResults'
+
+ 
+
+      );
+
+ 
+
+ 
+
+ 
+
+    if (!stored) {
+
+ 
+
+      return;
+
+ 
+
+    }
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+    const results =
+
+ 
+
+      JSON.parse(stored);
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+    if (
+
+ 
+
+      !Array.isArray(results) ||
+
+ 
+
+      results.length === 0
+
+ 
+
+    ) {
+
+ 
+
+      return;
+
+ 
+
+    }
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+    window.currentBatchResults =
+
+ 
+
+      results;
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+    /*
+
+ 
+
+     * Keep restored Batch data available,
+
+ 
+
+     * but only display it while Batch mode
+
+ 
+
+     * is active. This prevents old Batch
+
+ 
+
+     * results from appearing in Single mode.
+
+ 
+
+     */
+
+ 
+
+    if (assessmentMode === 'batch') {
+
+ 
+
+      renderBatchResults(
+
+ 
+
+        results
+
+ 
+
+      );
+
+ 
+
+    }
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  } catch (error) {
+
+ 
+
+ 
+
+ 
+
+    console.warn(
+
+ 
+
+      'Could not restore batch assessment state.',
+
+ 
+
+      error
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+    sessionStorage.removeItem(
+
+ 
+
+      'osynixBatchAssessmentResults'
+
+ 
+
+    );
+
+ 
+
+  }
+
+ 
+
+}
+
+ 
+
+function restoreSingleAssessmentState() {
+
+ 
+
+ 
+
+ 
+
+  try {
+
+ 
+
+ 
+
+ 
+
+    const stored =
+
+ 
+
+      sessionStorage.getItem(
+
+ 
+
+        'osynixSingleAssessmentResult'
+
+ 
+
+      );
+
+ 
+
+ 
+
+ 
+
+    if (!stored) {
+
+ 
+
+      return;
+
+ 
+
+    }
+
+ 
+
+ 
+
+ 
+
+    const assessment =
+
+ 
+
+      JSON.parse(stored);
+
+ 
+
+ 
+
+ 
+
+    if (
+
+ 
+
+      !assessment ||
+
+ 
+
+      typeof assessment !== 'object'
+
+ 
+
+    ) {
+
+ 
+
+      return;
+
+ 
+
+    }
+
+ 
+
+ 
+
+ 
+
+    currentAssessment =
+
+ 
+
+      assessment;
+
+ 
+
+    currentAssessmentSource =
+
+      'single';
+
+ 
+
+    currentViewedBatchIndex =
+
+      null;
+
+ 
+
+ 
+
+ 
+
+    /*
+
+ 
+
+     * Restore the Single result visually only
+
+ 
+
+     * while Single mode is active.
+
+ 
+
+     */
+
+ 
+
+    if (assessmentMode === 'single') {
+
+ 
+
+      renderAssessment(
+
+        assessment,
+
+        false
+
+      );
+
+ 
+
+    }
+
+ 
+
+ 
+
+ 
+
+  } catch (error) {
+
+ 
+
+ 
+
+ 
+
+    console.warn(
+
+ 
+
+      'Could not restore individual assessment state.',
+
+ 
+
+      error
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+    sessionStorage.removeItem(
+
+ 
+
+      'osynixSingleAssessmentResult'
+
+ 
+
+    );
+
+ 
+
+  }
+
+ 
+
+}
+
+ 
+
+document.addEventListener(
+
+ 
+
+  'DOMContentLoaded',
+
+ 
+
+  () => {
+
+ 
+
+ 
+
+ 
+
+    google.script.run
+
+ 
+
+ 
+
+ 
+
+      .withSuccessHandler(
+
+ 
+
+        data => {
+
+ 
+
+ 
+
+ 
+
+          bootstrap =
+
+ 
+
+            data || {};
+
+ 
+
+ 
+
+ 
+
+          bootstrap.positions =
+
+ 
+
+            Array.isArray(
+
+ 
+
+              bootstrap.positions
+
+ 
+
+            )
+
+ 
+
+              ? bootstrap.positions
+
+ 
+
+              : [];
+
+ 
+
+ 
+
+ 
+
+          renderClientDropdown();
+
+ 
+
+          restoreBatchAssessmentState();
+
+ 
+
+          restoreSingleAssessmentState();
+
+ 
+
+        }
+
+ 
+
+      )
+
+ 
+
+ 
+
+ 
+
+      .withFailureHandler(
+
+ 
+
+        showError
+
+ 
+
+      )
+
+ 
+
+ 
+
+ 
+
+      .getBootstrapData(
+
+ 
+
+        getATSSessionToken_()
+
+ 
+
+      );
+
+ 
+
+  }
+
+ 
+
+);
+
+ 
+
+ 
+
+ 
+
+function switchAssessmentMode(mode) {
+
+ 
+
+  assessmentMode =
+
+ 
+
+    mode === 'batch'
+
+ 
+
+      ? 'batch'
+
+ 
+
+      : 'single';
+
+ 
+
+ 
+
+ 
+
+  const singleBtn =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'singleModeBtn'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  const batchBtn =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'batchModeBtn'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  const singleSection =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'singleUploadSection'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  const batchSection =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'batchUploadSection'
+
+ 
+
+    );
+
+ 
+
+  const singleResultCard =
+
+ 
+
+  document.getElementById(
+
+ 
+
+    'resultCard'
+
+ 
+
+  );
+
+ 
+
+ 
+
+ 
+
+const batchResultCard =
+
+ 
+
+  document.getElementById(
+
+ 
+
+    'batchResultCard'
+
+ 
+
+  );  
+
+ 
+
+ 
+
+ 
+
+  if (singleBtn) {
+
+ 
+
+    singleBtn.classList.toggle(
+
+ 
+
+      'active',
+
+ 
+
+      assessmentMode === 'single'
+
+ 
+
+    );
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+  if (batchBtn) {
+
+ 
+
+    batchBtn.classList.toggle(
+
+ 
+
+      'active',
+
+ 
+
+      assessmentMode === 'batch'
+
+ 
+
+    );
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+  if (singleSection) {
+
+ 
+
+    singleSection.classList.toggle(
+
+ 
+
+      'hidden',
+
+ 
+
+      assessmentMode !== 'single'
+
+ 
+
+    );
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+  if (batchSection) {
+
+ 
+
+    batchSection.classList.toggle(
+
+ 
+
+      'hidden',
+
+ 
+
+      assessmentMode !== 'batch'
+
+ 
+
+    );
+
+ 
+
+  }
+
+ 
+
+  if (
+
+ 
+
+  assessmentMode === 'single' &&
+
+ 
+
+  batchResultCard
+
+ 
+
+) {
+
+ 
+
+  batchResultCard.classList.add(
+
+ 
+
+    'hidden'
+
+ 
+
+  );
+
+ 
+
+}
+
+ 
+
+ 
+
+ 
+
+if (
+
+ 
+
+  assessmentMode === 'batch' &&
+
+ 
+
+  singleResultCard
+
+ 
+
+) {
+
+ 
+
+  singleResultCard.classList.add(
+
+ 
+
+    'hidden'
+
+ 
+
+  );
+
+ 
+
+}
+
+ 
+
+ 
+
+ 
+
+/*
+
+ 
+
+ * Restore only the result set that belongs
+
+ 
+
+ * to the mode the recruiter has selected.
+
+ 
+
+ */
+
+ 
+
+if (assessmentMode === 'single') {
+
+ 
+
+  restoreSingleAssessmentState();
+
+ 
+
+}
+
+ 
+
+ 
+
+ 
+
+if (
+
+ 
+
+  assessmentMode === 'batch' &&
+
+ 
+
+  Array.isArray(window.currentBatchResults) &&
+
+ 
+
+  window.currentBatchResults.length > 0
+
+ 
+
+) {
+
+ 
+
+  renderBatchResults(
+
+ 
+
+    window.currentBatchResults
+
+ 
+
+  );
+
+ 
+
+}
+
+ 
+
+}
+
+ 
+
+function handleBatchFiles() {
+
+ 
+
+  const input =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'batchCvFiles'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  const summary =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'batchFileSummary'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  if (!input || !summary) {
+
+ 
+
+    return;
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+  const files =
+
+ 
+
+    Array.from(
+
+ 
+
+      input.files || []
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  if (files.length > 5) {
+
+ 
+
+    input.value = '';
+
+ 
+
+ 
+
+ 
+
+    summary.textContent =
+
+ 
+
+      'Maximum 5 CVs allowed per batch.';
+
+ 
+
+ 
+
+ 
+
+    showError(
+
+ 
+
+      'You can upload a maximum of 5 CVs per batch.'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+    return;
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+  if (!files.length) {
+
+ 
+
+    summary.textContent =
+
+ 
+
+      'No files selected.';
+
+ 
+
+ 
+
+ 
+
+    return;
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+  summary.textContent =
+
+ 
+
+    files.length +
+
+ 
+
+    (files.length === 1
+
+ 
+
+      ? ' CV selected.'
+
+ 
+
+      : ' CVs selected.');
+
+ 
+
+}
+
+ 
+
+function assessBatch() {
+
+ 
+
+  const refNo =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'positionSelect'
+
+ 
+
+    ).value;
+
+ 
+
+ 
+
+ 
+
+  const input =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'batchCvFiles'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  const files =
+
+ 
+
+    Array.from(
+
+ 
+
+      input.files || []
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  if (!refNo) {
+
+ 
+
+    return showError(
+
+ 
+
+      'Select a position first.'
+
+ 
+
+    );
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+  if (!files.length) {
+
+ 
+
+    return showError(
+
+ 
+
+      'Choose at least one candidate CV.'
+
+ 
+
+    );
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+  if (files.length > 5) {
+
+ 
+
+    return showError(
+
+ 
+
+      'You can upload a maximum of 5 CVs per batch.'
+
+ 
+
+    );
+
+ 
+
+  }
+
+ 
+
+const saveBatchButton =
+
+ 
+
+  document.getElementById(
+
+ 
+
+    'saveBatchBtn'
+
+ 
+
+  );
+
+ 
+
+ 
+
+ 
+
+if (saveBatchButton) {
+
+ 
+
+  saveBatchButton.disabled = true;
+
+ 
+
+  saveBatchButton.textContent =
+
+ 
+
+    'Save Batch to ATS';
+
+ 
+
+}
+
+ 
+
+  setBusy(
+
+ 
+
+    true,
+
+ 
+
+    'Assessing batch...'
+
+ 
+
+  );
+
+ 
+
+ 
+
+ 
+
+  const results = [];
+
+ 
+
+  currentBatchCvUploads = [];
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  function processNext(index) {
+
+ 
+
+    if (index >= files.length) {
+
+ 
+
+  setBusy(
+
+ 
+
+    false,
+
+ 
+
+    'Batch assessment complete.'
+
+ 
+
+  );
+
+ 
+
+ 
+
+ 
+
+  renderBatchResults(
+
+ 
+
+    results
+
+ 
+
+  );
+
+ 
+
+ 
+
+ 
+
+  return;
+
+ 
+
+}
+
+ 
+
+ 
+
+ 
+
+    const file = files[index];
+
+ 
+
+ 
+
+ 
+
+    const reader =
+
+ 
+
+      new FileReader();
+
+ 
+
+ 
+
+ 
+
+    reader.onload = event => {
+
+ 
+
+      const base64 =
+
+ 
+
+        event.target.result
+
+ 
+
+          .split(',')[1];
+
+ 
+
+          currentBatchCvUploads[index] = {
+
+ 
+
+  fileBase64: base64,
+
+ 
+
+  fileName: file.name,
+
+ 
+
+  mimeType:
+
+ 
+
+    file.type ||
+
+ 
+
+    'application/octet-stream'
+
+ 
+
+};
+
+ 
+
+ 
+
+ 
+
+      google.script.run
+
+ 
+
+        .withSuccessHandler(
+
+ 
+
+          assessment => {
+
+ 
+
+ 
+
+ 
+
+            assessment.batchOriginalIndex =
+
+ 
+
+              index;
+
+ 
+
+ 
+
+ 
+
+            results.push(
+
+ 
+
+              assessment
+
+ 
+
+            );
+
+ 
+
+ 
+
+ 
+
+            processNext(
+
+ 
+
+              index + 1
+
+ 
+
+            );
+
+ 
+
+          }
+
+ 
+
+        )
+
+ 
+
+        .withFailureHandler(
+
+ 
+
+          error => {
+
+ 
+
+            results.push({
+
+ 
+
+              fileName: file.name,
+
+ 
+
+              error:
+
+ 
+
+                error.message ||
+
+ 
+
+                String(error)
+
+ 
+
+            });
+
+ 
+
+ 
+
+ 
+
+            processNext(
+
+ 
+
+              index + 1
+
+ 
+
+            );
+
+ 
+
+          }
+
+ 
+
+        )
+
+ 
+
+        .assessCandidate(
+
+ 
+
+          getATSSessionToken_(),
+
+ 
+
+          {
+
+ 
+
+            refNo: refNo,
+
+ 
+
+            fileBase64: base64,
+
+ 
+
+            fileName: file.name,
+
+ 
+
+            mimeType:
+
+ 
+
+              file.type ||
+
+ 
+
+              'application/octet-stream'
+
+ 
+
+          }
+
+ 
+
+        );
+
+ 
+
+    };
+
+ 
+
+ 
+
+ 
+
+    reader.readAsDataURL(
+
+ 
+
+      file
+
+ 
+
+    );
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+  processNext(0);
+
+ 
+
+}
+
+ 
+
+function renderBatchResults(results) {
+
+ 
+
+  const card =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'batchResultCard'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  const body =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'batchResultBody'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  const summary =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'batchResultSummary'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  if (!card || !body || !summary) {
+
+ 
+
+    return;
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+  const validResults =
+
+    (results || []).filter(
+
+      result =>
+
+        result &&
+
+        !result.error
+
+    );
+
+ 
+
+  const unsavedResults =
+
+    validResults.filter(
+
+      result =>
+
+        !result._atsSaved
+
+    );
+
+ 
+
+ 
+
+ 
+
+  const failedResults =
+
+ 
+
+    (results || []).filter(
+
+ 
+
+      result =>
+
+ 
+
+        result &&
+
+ 
+
+        result.error
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  body.innerHTML =
+
+ 
+
+    (results || [])
+
+ 
+
+      .map(
+
+ 
+
+        (result, index) => {
+
+ 
+
+ 
+
+ 
+
+          if (result.error) {
+
+ 
+
+            return `
+
+ 
+
+              <tr>
+
+ 
+
+                <td>
+
+ 
+
+                  ${escapeHtml(
+
+ 
+
+                    result.fileName ||
+
+ 
+
+                    'Unknown file'
+
+ 
+
+                  )}
+
+ 
+
+                </td>
+
+ 
+
+ 
+
+ 
+
+                <td colspan="4">
+
+ 
+
+                  Assessment failed
+
+ 
+
+                </td>
+
+ 
+
+ 
+
+ 
+
+                <td>
+
+ 
+
+                  <span class="batch-error-text">
+
+ 
+
+                    ${escapeHtml(
+
+ 
+
+                      result.error
+
+ 
+
+                    )}
+
+ 
+
+                  </span>
+
+ 
+
+                </td>
+
+ 
+
+              </tr>
+
+ 
+
+            `;
+
+ 
+
+          }
+
+ 
+
+ 
+
+ 
+
+          return `
+
+ 
+
+            <tr>
+
+ 
+
+ 
+
+ 
+
+              <td>
+
+ 
+
+                <strong>
+
+ 
+
+                  ${escapeHtml(
+
+ 
+
+                    result.candidate_name ||
+
+ 
+
+                    'Candidate'
+
+ 
+
+                  )}
+
+ 
+
+                </strong>
+
+ 
+
+              </td>
+
+ 
+
+ 
+
+ 
+
+              <td>
+
+ 
+
+                ${escapeHtml(
+
+ 
+
+                  String(
+
+ 
+
+                    result.ats_match_percent ??
+
+ 
+
+                    '—'
+
+ 
+
+                  )
+
+ 
+
+                )}%
+
+ 
+
+              </td>
+
+ 
+
+ 
+
+ 
+
+              <td>
+
+ 
+
+                ${escapeHtml(
+
+ 
+
+                  result.must_have_fit ||
+
+ 
+
+                  '—'
+
+ 
+
+                )}
+
+ 
+
+              </td>
+
+ 
+
+ 
+
+ 
+
+              <td>
+
+ 
+
+                ${escapeHtml(
+
+ 
+
+                  String(
+
+ 
+
+                    result.core_role_fit_10 ??
+
+ 
+
+                    '—'
+
+ 
+
+                  )
+
+ 
+
+                )}/10
+
+ 
+
+              </td>
+
+ 
+
+ 
+
+ 
+
+              <td>
+
+ 
+
+                ${escapeHtml(
+
+ 
+
+                  result.decision ||
+
+ 
+
+                  '—'
+
+ 
+
+                )}
+
+ 
+
+              </td>
+
+ 
+
+ 
+
+ 
+
+              <td>
+
+ 
+
+                <button
+
+ 
+
+                  type="button"
+
+ 
+
+                  class="batch-view-btn"
+
+ 
+
+                  onclick="viewBatchAssessment(${index})"
+
+ 
+
+                >
+
+                  ${result._atsSaved ? 'View Saved' : 'View'}
+
+                </button>
+
+ 
+
+              </td>
+
+ 
+
+ 
+
+ 
+
+            </tr>
+
+ 
+
+          `;
+
+ 
+
+        }
+
+ 
+
+      )
+
+ 
+
+      .join('');
+
+ 
+
+ 
+
+ 
+
+  const savedResults =
+
+    validResults.filter(
+
+      result =>
+
+        result._atsSaved
+
+    );
+
+ 
+
+  summary.textContent =
+
+    validResults.length +
+
+    ' completed' +
+
+    (
+
+      savedResults.length
+
+        ? ' • ' +
+
+          savedResults.length +
+
+          ' saved'
+
+        : ''
+
+    ) +
+
+    (
+
+      failedResults.length
+
+        ? ' • ' +
+
+          failedResults.length +
+
+          ' failed'
+
+        : ''
+
+    );
+
+ 
+
+  window.currentBatchResults =
+
+ 
+
+    results || [];
+
+ 
+
+try {
+
+ 
+
+  sessionStorage.setItem(
+
+ 
+
+    'osynixBatchAssessmentResults',
+
+ 
+
+    JSON.stringify(
+
+ 
+
+      window.currentBatchResults
+
+ 
+
+    )
+
+ 
+
+  );
+
+ 
+
+} catch (error) {
+
+ 
+
+  console.warn(
+
+ 
+
+    'Could not preserve batch assessment state.',
+
+ 
+
+    error
+
+ 
+
+  );
+
+ 
+
+}
+
+ 
+
+ 
+
+ 
+
+  card.classList.remove(
+
+ 
+
+    'hidden'
+
+ 
+
+  );
+
+ 
+
+  const downloadBatchPdfBtn =
+
+ 
+
+  document.getElementById(
+
+ 
+
+    'downloadBatchPdfBtn'
+
+ 
+
+  );
+
+ 
+
+ 
+
+ 
+
+if (downloadBatchPdfBtn) {
+
+ 
+
+  downloadBatchPdfBtn.disabled =
+
+ 
+
+    validResults.length === 0;
+
+ 
+
+}
+
+ 
+
+const saveBatchButton =
+
+ 
+
+  document.getElementById(
+
+ 
+
+    'saveBatchBtn'
+
+ 
+
+  );
+
+ 
+
+ 
+
+ 
+
+if (saveBatchButton) {
+
+ 
+
+ 
+
+ 
+
+  const batchCvFilesAvailable =
+
+    unsavedResults.length > 0 &&
+
+    unsavedResults.every(
+
+      result =>
+
+        Number.isInteger(
+
+          result.batchOriginalIndex
+
+        ) &&
+
+        currentBatchCvUploads[
+
+          result.batchOriginalIndex
+
+        ] &&
+
+        currentBatchCvUploads[
+
+          result.batchOriginalIndex
+
+        ].fileBase64
+
+    );
+
+ 
+
+  saveBatchButton.disabled =
+
+    !batchCvFilesAvailable;
+
+ 
+
+  saveBatchButton.textContent =
+
+    unsavedResults.length === 0 &&
+
+    validResults.length > 0
+
+      ? 'All Candidates Saved'
+
+      : (
+
+          batchCvFilesAvailable
+
+            ? (
+
+                savedResults.length > 0
+
+                  ? 'Save Remaining to ATS'
+
+                  : 'Save Batch to ATS'
+
+              )
+
+            : (
+
+                unsavedResults.length > 0
+
+                  ? 'Reassess CVs to Save Batch'
+
+                  : 'Save Batch to ATS'
+
+              )
+
+        );
+
+}
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+}
+
+ 
+
+function saveBatchToATS() {
+
+ 
+
+ 
+
+ 
+
+  const results =
+
+ 
+
+    window.currentBatchResults || [];
+
+ 
+
+ 
+
+ 
+
+  const validResults =
+
+    results.filter(
+
+      result =>
+
+        result &&
+
+        !result.error &&
+
+        !result._atsSaved
+
+    );
+
+ 
+
+ 
+
+ 
+
+  if (!validResults.length) {
+
+ 
+
+    return showError(
+
+ 
+
+      'No unsaved batch assessments are available to save.'
+
+ 
+
+    );
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  const missingBatchCv =
+
+ 
+
+    validResults.some(
+
+ 
+
+      assessment =>
+
+ 
+
+        !Number.isInteger(
+
+ 
+
+          assessment.batchOriginalIndex
+
+ 
+
+        ) ||
+
+ 
+
+        !currentBatchCvUploads[
+
+ 
+
+          assessment.batchOriginalIndex
+
+ 
+
+        ] ||
+
+ 
+
+        !currentBatchCvUploads[
+
+ 
+
+          assessment.batchOriginalIndex
+
+ 
+
+        ].fileBase64
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  if (missingBatchCv) {
+
+ 
+
+    return showError(
+
+ 
+
+      'The original batch CV files are no longer available in this browser session. Please select and assess the CVs again before saving the batch to ATS.'
+
+ 
+
+    );
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  const button =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'saveBatchBtn'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  if (button) {
+
+ 
+
+    button.disabled = true;
+
+ 
+
+    button.textContent =
+
+ 
+
+      'Saving Batch...';
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  let currentIndex = 0;
+
+ 
+
+  let savedCount = 0;
+
+ 
+
+  let failedCount = 0;
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  function saveNextCandidate() {
+
+ 
+
+ 
+
+ 
+
+    /*
+
+ 
+
+     * All candidates processed.
+
+ 
+
+     */
+
+ 
+
+    if (
+
+ 
+
+      currentIndex >=
+
+ 
+
+      validResults.length
+
+ 
+
+    ) {
+
+ 
+
+ 
+
+ 
+
+      if (button) {
+
+ 
+
+        button.textContent =
+
+ 
+
+          'Batch Saved';
+
+ 
+
+ 
+
+ 
+
+        /*
+
+ 
+
+         * Keep disabled after completion
+
+ 
+
+         * to prevent accidental duplicate saves.
+
+ 
+
+         */
+
+ 
+
+        button.disabled = true;
+
+ 
+
+      }
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+      if (failedCount === 0) {
+
+ 
+
+        const allBatchResults =
+
+          window.currentBatchResults || [];
+
+ 
+
+        const allValidSaved =
+
+          allBatchResults
+
+            .filter(
+
+              result =>
+
+                result &&
+
+                !result.error
+
+            )
+
+            .every(
+
+              result =>
+
+                result._atsSaved
+
+            );
+
+ 
+
+        if (allValidSaved) {
+
+          clearBatchAssessmentState_();
+
+        } else {
+
+          renderBatchResults(
+
+            allBatchResults
+
+          );
+
+        }
+
+        showSuccess(
+
+ 
+
+          savedCount +
+
+ 
+
+          ' of ' +
+
+ 
+
+          validResults.length +
+
+ 
+
+          ' candidates saved successfully.'
+
+ 
+
+        );
+
+ 
+
+ 
+
+ 
+
+      } else {
+
+ 
+
+ 
+
+ 
+
+        showError(
+
+ 
+
+          savedCount +
+
+ 
+
+          ' of ' +
+
+ 
+
+          validResults.length +
+
+ 
+
+          ' candidates saved successfully. ' +
+
+ 
+
+          failedCount +
+
+ 
+
+          ' failed to save.'
+
+ 
+
+        );
+
+ 
+
+      }
+
+ 
+
+ 
+
+ 
+
+      return;
+
+ 
+
+    }
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+    const assessment =
+
+ 
+
+      validResults[currentIndex];
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+    if (button) {
+
+ 
+
+      button.textContent =
+
+ 
+
+        'Saving ' +
+
+ 
+
+        (currentIndex + 1) +
+
+ 
+
+        ' of ' +
+
+ 
+
+        validResults.length +
+
+ 
+
+        '...';
+
+ 
+
+    }
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+    google.script.run
+
+ 
+
+ 
+
+ 
+
+      .withSuccessHandler(
+
+ 
+
+        function() {
+
+ 
+
+          assessment._atsSaved =
+
+            true;
+
+ 
+
+          try {
+
+            sessionStorage.setItem(
+
+              'osynixBatchAssessmentResults',
+
+              JSON.stringify(
+
+                window.currentBatchResults || []
+
+              )
+
+            );
+
+          } catch (error) {
+
+            console.warn(
+
+              'Could not update batch save state.',
+
+              error
+
+            );
+
+          }
+
+ 
+
+          savedCount++;
+
+          currentIndex++;
+
+ 
+
+          saveNextCandidate();
+
+ 
+
+        }
+
+ 
+
+      )
+
+ 
+
+ 
+
+ 
+
+      .withFailureHandler(
+
+ 
+
+        function(error) {
+
+ 
+
+ 
+
+ 
+
+          console.error(
+
+ 
+
+            'Batch save failed:',
+
+ 
+
+            error
+
+ 
+
+          );
+
+ 
+
+ 
+
+ 
+
+          failedCount++;
+
+ 
+
+          currentIndex++;
+
+ 
+
+ 
+
+ 
+
+          /*
+
+ 
+
+           * Continue with the remaining
+
+ 
+
+           * candidates even if one fails.
+
+ 
+
+           */
+
+ 
+
+          saveNextCandidate();
+
+ 
+
+        }
+
+ 
+
+      )
+
+ 
+
+ 
+
+ 
+
+      .saveAssessment(
+
+ 
+
+  getATSSessionToken_(),
+
+ 
+
+  assessment,
+
+ 
+
+  currentBatchCvUploads[
+
+ 
+
+    assessment.batchOriginalIndex
+
+ 
+
+  ]
+
+ 
+
+);
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  saveNextCandidate();
+
+ 
+
+}
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+function clearBatchAssessmentState_() {
+
+ 
+
+  sessionStorage.removeItem(
+
+    'osynixBatchAssessmentResults'
+
+  );
+
+ 
+
+  window.currentBatchResults = [];
+
+ 
+
+  currentBatchCvUploads = [];
+
+ 
+
+  const card =
+
+    document.getElementById(
+
+      'batchResultCard'
+
+    );
+
+ 
+
+  if (card) {
+
+    card.classList.add('hidden');
+
+  }
+
+ 
+
+  const body =
+
+    document.getElementById(
+
+      'batchResultBody'
+
+    );
+
+ 
+
+  if (body) {
+
+    body.innerHTML = '';
+
+  }
+
+ 
+
+  const summary =
+
+    document.getElementById(
+
+      'batchResultSummary'
+
+    );
+
+ 
+
+  if (summary) {
+
+    summary.textContent =
+
+      'No batch assessment completed.';
+
+  }
+
+ 
+
+  const input =
+
+    document.getElementById(
+
+      'batchCvFiles'
+
+    );
+
+ 
+
+  if (input) {
+
+    input.value = '';
+
+  }
+
+ 
+
+  const fileSummary =
+
+    document.getElementById(
+
+      'batchFileSummary'
+
+    );
+
+ 
+
+  if (fileSummary) {
+
+    fileSummary.textContent =
+
+      'No files selected.';
+
+  }
+
+}
+
+ 
+
+ 
+
+function downloadBatchPdf() {
+
+ 
+
+ 
+
+ 
+
+  const results =
+
+ 
+
+    window.currentBatchResults || [];
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  const validResults =
+
+ 
+
+    results.filter(
+
+ 
+
+      result =>
+
+ 
+
+        result &&
+
+ 
+
+        !result.error
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  if (!validResults.length) {
+
+ 
+
+    return showError(
+
+ 
+
+      'No completed batch assessments are available.'
+
+ 
+
+    );
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  const button =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'downloadBatchPdfBtn'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  if (button) {
+
+ 
+
+    button.disabled = true;
+
+ 
+
+    button.textContent =
+
+ 
+
+      'Preparing Batch PDF...';
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  google.script.run
+
+ 
+
+ 
+
+ 
+
+    .withSuccessHandler(
+
+ 
+
+      result => {
+
+ 
+
+ 
+
+ 
+
+        const binary =
+
+ 
+
+          atob(
+
+ 
+
+            result.base64
+
+ 
+
+          );
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+        const bytes =
+
+ 
+
+          new Uint8Array(
+
+ 
+
+            binary.length
+
+ 
+
+          );
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+        for (
+
+ 
+
+          let i = 0;
+
+ 
+
+          i < binary.length;
+
+ 
+
+          i++
+
+ 
+
+        ) {
+
+ 
+
+          bytes[i] =
+
+ 
+
+            binary.charCodeAt(i);
+
+ 
+
+        }
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+        const blob =
+
+ 
+
+          new Blob(
+
+ 
+
+            [bytes],
+
+ 
+
+            {
+
+ 
+
+              type:
+
+ 
+
+                result.mimeType ||
+
+ 
+
+                'application/pdf'
+
+ 
+
+            }
+
+ 
+
+          );
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+        const url =
+
+ 
+
+          URL.createObjectURL(
+
+ 
+
+            blob
+
+ 
+
+          );
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+        const link =
+
+ 
+
+          document.createElement(
+
+ 
+
+            'a'
+
+ 
+
+          );
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+        link.href =
+
+ 
+
+          url;
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+        link.download =
+
+ 
+
+          result.fileName ||
+
+ 
+
+          'Osynix_Batch_Candidate_Assessment.pdf';
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+        document.body.appendChild(
+
+ 
+
+          link
+
+ 
+
+        );
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+        link.click();
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+        document.body.removeChild(
+
+ 
+
+          link
+
+ 
+
+        );
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+        URL.revokeObjectURL(
+
+ 
+
+          url
+
+ 
+
+        );
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+        if (button) {
+
+ 
+
+          button.disabled = false;
+
+ 
+
+          button.textContent =
+
+ 
+
+            'Download Batch PDF';
+
+ 
+
+        }
+
+ 
+
+      }
+
+ 
+
+    )
+
+ 
+
+ 
+
+ 
+
+    .withFailureHandler(
+
+ 
+
+      error => {
+
+ 
+
+ 
+
+ 
+
+        if (button) {
+
+ 
+
+          button.disabled = false;
+
+ 
+
+          button.textContent =
+
+ 
+
+            'Download Batch PDF';
+
+ 
+
+        }
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+        showError(
+
+ 
+
+          error
+
+ 
+
+        );
+
+ 
+
+      }
+
+ 
+
+    )
+
+ 
+
+ 
+
+ 
+
+    .generateBatchCandidatePdf(
+
+ 
+
+      getATSSessionToken_(),
+
+ 
+
+      validResults
+
+ 
+
+    );
+
+ 
+
+}
+
+ 
+
+ 
+
+ 
+
+function viewBatchAssessment(index) {
+
+ 
+
+  const results =
+
+ 
+
+    window.currentBatchResults || [];
+
+ 
+
+ 
+
+ 
+
+  const assessment =
+
+ 
+
+    results[index];
+
+ 
+
+ 
+
+ 
+
+  if (
+
+ 
+
+    !assessment ||
+
+ 
+
+    assessment.error
+
+ 
+
+  ) {
+
+ 
+
+    return;
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+  currentAssessment =
+
+    assessment;
+
+ 
+
+  currentAssessmentSource =
+
+    'batch';
+
+ 
+
+  currentViewedBatchIndex =
+
+    index;
+
+ 
+
+  renderAssessment(
+
+    assessment,
+
+    false
+
+  );
+
+ 
+
+ 
+
+ 
+
+  document
+
+ 
+
+    .getElementById(
+
+ 
+
+      'resultCard'
+
+ 
+
+    )
+
+ 
+
+    .scrollIntoView({
+
+ 
+
+      behavior: 'smooth',
+
+ 
+
+      block: 'start'
+
+ 
+
+    });
+
+ 
+
+}
+
+ 
+
+ 
+
+ 
+
+function renderClientDropdown() {
+
+ 
+
+  const select =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'clientSelect'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  const activePositions =
+
+ 
+
+    (bootstrap.positions || []).filter(
+
+ 
+
+      p =>
+
+ 
+
+        String(p.status || 'Active')
+
+ 
+
+          .trim()
+
+ 
+
+          .toLowerCase() === 'active'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  const clientMap =
+
+ 
+
+    new Map();
+
+ 
+
+ 
+
+ 
+
+  activePositions.forEach(position => {
+
+ 
+
+    const client =
+
+ 
+
+      String(position.client || '')
+
+ 
+
+        .trim();
+
+ 
+
+ 
+
+ 
+
+    if (!client) return;
+
+ 
+
+ 
+
+ 
+
+    const key =
+
+ 
+
+      normalizeClientName(client);
+
+ 
+
+ 
+
+ 
+
+    if (!clientMap.has(key)) {
+
+ 
+
+      clientMap.set(
+
+ 
+
+        key,
+
+ 
+
+        client
+
+ 
+
+      );
+
+ 
+
+    }
+
+ 
+
+  });
+
+ 
+
+ 
+
+ 
+
+  const clients =
+
+ 
+
+    Array.from(
+
+ 
+
+      clientMap.values()
+
+ 
+
+    ).sort(
+
+ 
+
+      (a, b) =>
+
+ 
+
+        a.localeCompare(b)
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  select.innerHTML =
+
+ 
+
+    '<option value="">Select a client</option>' +
+
+ 
+
+    clients.map(
+
+ 
+
+      client => `
+
+ 
+
+        <option value="${escapeHtml(client)}">
+
+ 
+
+          ${escapeHtml(client)}
+
+ 
+
+        </option>
+
+ 
+
+      `
+
+ 
+
+    ).join('');
+
+ 
+
+}
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+function handleClientChange() {
+
+ 
+
+  const clientName =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'clientSelect'
+
+ 
+
+    ).value;
+
+ 
+
+ 
+
+ 
+
+  selectedClient =
+
+ 
+
+    String(clientName || '')
+
+ 
+
+      .trim();
+
+ 
+
+ 
+
+ 
+
+  currentAssessment = null;
+
+ 
+
+ 
+
+ 
+
+  document
+
+ 
+
+    .getElementById('resultCard')
+
+ 
+
+    .classList.add('hidden');
+
+ 
+
+ 
+
+ 
+
+  document
+
+ 
+
+    .getElementById('result')
+
+ 
+
+    .innerHTML = '';
+
+ 
+
+ 
+
+ 
+
+  if (!selectedClient) {
+
+ 
+
+    document
+
+ 
+
+      .getElementById(
+
+ 
+
+        'positionSelectorCard'
+
+ 
+
+      )
+
+ 
+
+      .classList.add('hidden');
+
+ 
+
+ 
+
+ 
+
+    document
+
+ 
+
+      .getElementById(
+
+ 
+
+        'positionMeta'
+
+ 
+
+      )
+
+ 
+
+      .textContent = '';
+
+ 
+
+ 
+
+ 
+
+    return;
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+  renderPositionCards(
+
+ 
+
+    selectedClient
+
+ 
+
+  );
+
+ 
+
+}
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+function renderPositionCards(clientName) {
+
+ 
+
+  const card =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'positionSelectorCard'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  const container =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'positionCards'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  const positionSelect =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'positionSelect'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  const meta =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'positionMeta'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  const positions =
+
+ 
+
+    (bootstrap.positions || [])
+
+ 
+
+      .filter(
+
+ 
+
+        function(position) {
+
+ 
+
+ 
+
+ 
+
+          const sameClient =
+
+ 
+
+            normalizeClientName(
+
+ 
+
+              position.client
+
+ 
+
+            ) ===
+
+ 
+
+            normalizeClientName(
+
+ 
+
+              clientName
+
+ 
+
+            );
+
+ 
+
+ 
+
+ 
+
+          const isActive =
+
+ 
+
+            String(
+
+ 
+
+              position.status || 'Active'
+
+ 
+
+            )
+
+ 
+
+              .trim()
+
+ 
+
+              .toLowerCase() ===
+
+ 
+
+            'active';
+
+ 
+
+ 
+
+ 
+
+          return (
+
+ 
+
+            sameClient &&
+
+ 
+
+            isActive
+
+ 
+
+          );
+
+ 
+
+        }
+
+ 
+
+      );
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  positionSelect.innerHTML =
+
+ 
+
+    '<option value="">Select active position</option>' +
+
+ 
+
+    positions
+
+ 
+
+      .map(
+
+ 
+
+        function(position) {
+
+ 
+
+ 
+
+ 
+
+          const label =
+
+ 
+
+            'Ref #' +
+
+ 
+
+            escapeHtml(
+
+ 
+
+              position.refNo
+
+ 
+
+            ) +
+
+ 
+
+            ' — ' +
+
+ 
+
+            escapeHtml(
+
+ 
+
+              position.position ||
+
+ 
+
+              'Untitled Position'
+
+ 
+
+            );
+
+ 
+
+ 
+
+ 
+
+          return `
+
+ 
+
+            <option
+
+ 
+
+              value="${escapeHtml(position.refNo)}"
+
+ 
+
+            >
+
+ 
+
+              ${label}
+
+ 
+
+            </option>
+
+ 
+
+          `;
+
+ 
+
+        }
+
+ 
+
+      )
+
+ 
+
+      .join('');
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  positionSelect.value = '';
+
+ 
+
+ 
+
+ 
+
+  positionSelect.classList.remove(
+
+ 
+
+    'hidden'
+
+ 
+
+  );
+
+ 
+
+ 
+
+ 
+
+  positionSelect.removeAttribute(
+
+ 
+
+    'aria-hidden'
+
+ 
+
+  );
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  positionSelect.onchange =
+
+ 
+
+    function() {
+
+ 
+
+      const refNo =
+
+ 
+
+        this.value;
+
+ 
+
+ 
+
+ 
+
+      if (!refNo) {
+
+ 
+
+        meta.textContent = '';
+
+ 
+
+ 
+
+ 
+
+        updatePositionContextPanel(
+
+ 
+
+          null,
+
+ 
+
+          []
+
+ 
+
+        );
+
+ 
+
+ 
+
+ 
+
+        return;
+
+ 
+
+      }
+
+ 
+
+ 
+
+ 
+
+      selectPositionCard(
+
+ 
+
+        refNo
+
+ 
+
+      );
+
+ 
+
+    };
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  container.innerHTML = '';
+
+ 
+
+ 
+
+ 
+
+  container.classList.add(
+
+ 
+
+    'hidden'
+
+ 
+
+  );
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  meta.textContent = '';
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  card.classList.remove(
+
+ 
+
+    'hidden'
+
+ 
+
+  );
+
+ 
+
+}
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+function selectPositionCard(refNo) {
+
+ 
+
+  const hiddenSelect =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'positionSelect'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  hiddenSelect.value =
+
+ 
+
+    String(refNo || '');
+
+ 
+
+ 
+
+ 
+
+  document
+
+ 
+
+    .querySelectorAll('.position-choice-card')
+
+ 
+
+    .forEach(card => {
+
+ 
+
+      card.classList.toggle(
+
+ 
+
+        'selected',
+
+ 
+
+        String(card.dataset.ref) ===
+
+ 
+
+        String(refNo)
+
+ 
+
+      );
+
+ 
+
+    });
+
+ 
+
+ 
+
+ 
+
+  loadPosition();
+
+ 
+
+}
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+function loadPosition() {
+
+ 
+
+  const refNo =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'positionSelect'
+
+ 
+
+    ).value;
+
+ 
+
+ 
+
+ 
+
+  const meta =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'positionMeta'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+if (!refNo) {
+
+ 
+
+  meta.textContent = '';
+
+ 
+
+ 
+
+ 
+
+  updatePositionContextPanel(
+
+ 
+
+    null,
+
+ 
+
+    []
+
+ 
+
+  );
+
+ 
+
+ 
+
+ 
+
+  return;
+
+ 
+
+}
+
+ 
+
+ 
+
+ 
+
+  google.script.run
+
+ 
+
+    .withSuccessHandler(data => {
+
+ 
+
+      meta.textContent =
+
+ 
+
+        `${data.position['Client']} | ` +
+
+ 
+
+        `${data.position['Position']} | ` +
+
+ 
+
+        `${data.criteria.length} criteria`;
+
+ 
+
+        updatePositionContextPanel(
+
+ 
+
+  data.position,
+
+ 
+
+  data.criteria
+
+ 
+
+);
+
+ 
+
+    })
+
+ 
+
+    .withFailureHandler(showError)
+
+ 
+
+    .getPositionDetails(
+
+ 
+
+      getATSSessionToken_(),
+
+ 
+
+      refNo
+
+ 
+
+    );
+
+ 
+
+}
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+function normalizeClientName(value) {
+
+ 
+
+  return String(value || '')
+
+ 
+
+    .toLowerCase()
+
+ 
+
+    .replace(/\s+/g, ' ')
+
+ 
+
+    .trim();
+
+ 
+
+}
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+function priorityClass(priority) {
+
+ 
+
+  const value =
+
+ 
+
+    String(priority || '')
+
+ 
+
+      .toLowerCase()
+
+ 
+
+      .trim();
+
+ 
+
+ 
+
+ 
+
+  if (value === 'high') {
+
+ 
+
+    return 'priority-high';
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+  if (value === 'low') {
+
+ 
+
+    return 'priority-low';
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+  return 'priority-medium';
+
+ 
+
+}
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+function assess() {
+
+ 
+
+  const refNo =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'positionSelect'
+
+ 
+
+    ).value;
+
+ 
+
+ 
+
+ 
+
+  const input =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'cvFile'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  const file =
+
+ 
+
+    input.files[0];
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  if (!refNo) {
+
+ 
+
+    return showError(
+
+ 
+
+      'Select a position first.'
+
+ 
+
+    );
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  if (!file) {
+
+ 
+
+    return showError(
+
+ 
+
+      'Choose a candidate CV first.'
+
+ 
+
+    );
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  setBusy(
+
+ 
+
+    true,
+
+ 
+
+    'Assessing candidate...'
+
+ 
+
+  );
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  const reader =
+
+ 
+
+    new FileReader();
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  reader.onload = event => {
+
+ 
+
+ 
+
+ 
+
+    const base64 =
+
+ 
+
+      event.target.result
+
+ 
+
+        .split(',')[1];
+
+ 
+
+    currentCvUpload = {
+
+ 
+
+      fileBase64: base64,
+
+ 
+
+      fileName: file.name,
+
+ 
+
+      mimeType:
+
+ 
+
+        file.type ||
+
+ 
+
+        'application/octet-stream'
+
+ 
+
+    };
+
+ 
+
+ 
+
+ 
+
+    google.script.run
+
+ 
+
+      .withSuccessHandler(
+
+ 
+
+        assessment => {
+
+ 
+
+ 
+
+ 
+
+          currentAssessment =
+
+ 
+
+            assessment;
+
+ 
+
+          currentAssessmentSource =
+
+            'single';
+
+ 
+
+          currentViewedBatchIndex =
+
+            null;
+
+ 
+
+ 
+
+ 
+
+          renderAssessment(
+
+ 
+
+            assessment
+
+ 
+
+          );
+
+ 
+
+ 
+
+ 
+
+          setBusy(
+
+ 
+
+            false,
+
+ 
+
+            'Assessment complete.'
+
+ 
+
+          );
+
+ 
+
+        }
+
+ 
+
+      )
+
+ 
+
+ 
+
+ 
+
+      .withFailureHandler(
+
+ 
+
+        error => {
+
+ 
+
+ 
+
+ 
+
+          setBusy(false);
+
+ 
+
+ 
+
+ 
+
+          showError(error);
+
+ 
+
+        }
+
+ 
+
+      )
+
+ 
+
+ 
+
+ 
+
+      .assessCandidate(
+
+ 
+
+        getATSSessionToken_(),
+
+ 
+
+        {
+
+ 
+
+        refNo:
+
+ 
+
+          refNo,
+
+ 
+
+ 
+
+ 
+
+        fileBase64:
+
+ 
+
+          base64,
+
+ 
+
+ 
+
+ 
+
+        fileName:
+
+ 
+
+          file.name,
+
+ 
+
+ 
+
+ 
+
+        mimeType:
+
+ 
+
+          file.type ||
+
+ 
+
+          'application/octet-stream'
+
+ 
+
+        }
+
+ 
+
+      );
+
+ 
+
+  };
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  reader.readAsDataURL(file);
+
+ 
+
+}
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+function renderAssessment(assessment, persistState = true) {
+
+ 
+
+  if (
+
+ 
+
+    assessment &&
+
+ 
+
+    typeof assessment === 'object' &&
+
+ 
+
+    !assessment.error
+
+ 
+
+  ) {
+
+ 
+
+ 
+
+ 
+
+    currentAssessment =
+
+ 
+
+      assessment;
+
+ 
+
+ 
+
+ 
+
+    try {
+
+ 
+
+      if (
+
+        persistState &&
+
+        currentAssessmentSource === 'single'
+
+      ) {
+
+        sessionStorage.setItem(
+
+          'osynixSingleAssessmentResult',
+
+          JSON.stringify(
+
+            assessment
+
+          )
+
+        );
+
+      }
+
+ 
+
+    } catch (error) {
+
+ 
+
+      console.warn(
+
+ 
+
+        'Could not preserve individual assessment state.',
+
+ 
+
+        error
+
+ 
+
+      );
+
+ 
+
+    }
+
+ 
+
+  }
+
+ 
+
+  document
+
+ 
+
+    .getElementById('resultCard')
+
+ 
+
+    .classList
+
+ 
+
+    .remove('hidden');
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  const criterionBreakdown =
+
+ 
+
+    Array.isArray(assessment.criterion_results)
+
+ 
+
+ 
+
+ 
+
+      ? assessment.criterion_results
+
+ 
+
+          .map(result => `
+
+ 
+
+            <div class="metric wide">
+
+ 
+
+ 
+
+ 
+
+              <b>
+
+ 
+
+                ${escapeHtml(result.criterion)}
+
+ 
+
+              </b>
+
+ 
+
+ 
+
+ 
+
+              <div style="margin-top:8px;">
+
+ 
+
+                <strong>Weight:</strong>
+
+ 
+
+                ${escapeHtml(String(result.weight))}%
+
+ 
+
+              </div>
+
+ 
+
+ 
+
+ 
+
+              <div>
+
+ 
+
+                <strong>Criterion Score:</strong>
+
+ 
+
+                ${escapeHtml(String(result.score10))}/10
+
+ 
+
+              </div>
+
+ 
+
+ 
+
+ 
+
+              <div>
+
+ 
+
+                <strong>Evidence Status:</strong>
+
+ 
+
+                ${escapeHtml(result.evidenceStatus)}
+
+ 
+
+              </div>
+
+ 
+
+ 
+
+ 
+
+              <div>
+
+ 
+
+                <strong>Evidence Confidence:</strong>
+
+ 
+
+                ${escapeHtml(String(result.evidenceConfidence10))}/10
+
+ 
+
+              </div>
+
+ 
+
+ 
+
+ 
+
+              <div style="margin-top:8px;">
+
+ 
+
+                <strong>Evidence Found:</strong><br>
+
+ 
+
+                ${escapeHtml(result.evidenceFound)}
+
+ 
+
+              </div>
+
+ 
+
+ 
+
+ 
+
+              <div style="margin-top:8px;">
+
+ 
+
+                <strong>Assessment Rationale:</strong><br>
+
+ 
+
+                ${escapeHtml(result.rationale)}
+
+ 
+
+              </div>
+
+ 
+
+ 
+
+ 
+
+            </div>
+
+ 
+
+          `)
+
+ 
+
+          .join('')
+
+ 
+
+ 
+
+ 
+
+      : '';
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  document
+
+ 
+
+    .getElementById('result')
+
+ 
+
+    .innerHTML = `
+
+ 
+
+ 
+
+ 
+
+      <div class="candidate-summary-card">
+
+ 
+
+ 
+
+ 
+
+  <div class="candidate-summary-main">
+
+ 
+
+ 
+
+ 
+
+    <div class="candidate-avatar">
+
+ 
+
+      ${escapeHtml(
+
+ 
+
+        String(
+
+ 
+
+          assessment.candidate_name || 'C'
+
+ 
+
+        )
+
+ 
+
+          .trim()
+
+ 
+
+          .split(/\s+/)
+
+ 
+
+          .slice(0, 2)
+
+ 
+
+          .map(name => name.charAt(0))
+
+ 
+
+          .join('')
+
+ 
+
+          .toUpperCase()
+
+ 
+
+      )}
+
+ 
+
+    </div>
+
+ 
+
+ 
+
+ 
+
+    <div>
+
+ 
+
+ 
+
+ 
+
+      <div class="candidate-summary-topline">
+
+ 
+
+ 
+
+ 
+
+        <h3 class="candidate-summary-name">
+
+ 
+
+          ${escapeHtml(
+
+ 
+
+            assessment.candidate_name || 'Candidate'
+
+ 
+
+          )}
+
+ 
+
+        </h3>
+
+ 
+
+ 
+
+ 
+
+        <span class="candidate-decision-badge">
+
+ 
+
+          ${escapeHtml(
+
+ 
+
+            assessment.decision || '—'
+
+ 
+
+          )}
+
+ 
+
+        </span>
+
+ 
+
+ 
+
+ 
+
+      </div>
+
+ 
+
+ 
+
+ 
+
+      <div class="candidate-summary-meta">
+
+ 
+
+ 
+
+ 
+
+  <span>
+
+ 
+
+    <strong>Role:</strong>
+
+ 
+
+    ${escapeHtml(
+
+ 
+
+      assessment.current_designation || '—'
+
+ 
+
+    )}
+
+ 
+
+  </span>
+
+ 
+
+ 
+
+ 
+
+  <span>
+
+ 
+
+    <strong>Company:</strong>
+
+ 
+
+    ${escapeHtml(
+
+ 
+
+      assessment.current_company || '—'
+
+ 
+
+    )}
+
+ 
+
+  </span>
+
+ 
+
+ 
+
+ 
+
+</div>
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+<div class="candidate-contact-row">
+
+ 
+
+ 
+
+ 
+
+  <span>
+
+ 
+
+    ✉
+
+ 
+
+    <strong>Email:</strong>
+
+ 
+
+    ${escapeHtml(
+
+ 
+
+      assessment.email_id ||
+
+ 
+
+      'Not provided'
+
+ 
+
+    )}
+
+ 
+
+  </span>
+
+ 
+
+ 
+
+ 
+
+  <span>
+
+ 
+
+    ☎
+
+ 
+
+    <strong>Phone:</strong>
+
+ 
+
+    ${escapeHtml(
+
+ 
+
+      assessment.mobile_phone_number ||
+
+ 
+
+      'Not provided'
+
+ 
+
+    )}
+
+ 
+
+  </span>
+
+ 
+
+ 
+
+ 
+
+  <span>
+
+ 
+
+    ●
+
+ 
+
+    <strong>Location:</strong>
+
+ 
+
+    ${escapeHtml(
+
+ 
+
+      assessment.location ||
+
+ 
+
+      'Not provided'
+
+ 
+
+    )}
+
+ 
+
+  </span>
+
+ 
+
+ 
+
+ 
+
+</div>
+
+ 
+
+ 
+
+ 
+
+    </div>
+
+ 
+
+ 
+
+ 
+
+  </div>
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  <!-- ATS MATCH KPI -->
+
+ 
+
+  <div class="ats-score-block">
+
+ 
+
+ 
+
+ 
+
+    <div class="ats-score-label">
+
+ 
+
+      Overall ATS Match
+
+ 
+
+    </div>
+
+ 
+
+ 
+
+ 
+
+    <div
+
+ 
+
+      class="ats-score-ring"
+
+ 
+
+      style="--score:${
+
+ 
+
+        Number(
+
+ 
+
+          assessment.ats_match_percent || 0
+
+ 
+
+        )
+
+ 
+
+      }"
+
+ 
+
+    >
+
+ 
+
+      <span class="ats-score-value">
+
+ 
+
+        ${escapeHtml(
+
+ 
+
+          String(
+
+ 
+
+            assessment.ats_match_percent || 0
+
+ 
+
+          )
+
+ 
+
+        )}%
+
+ 
+
+      </span>
+
+ 
+
+    </div>
+
+ 
+
+ 
+
+ 
+
+  </div>
+
+ 
+
+ 
+
+ 
+
+</div>
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+<!-- =====================================================
+
+ 
+
+     QUICK KPI ROW
+
+ 
+
+     ===================================================== -->
+
+ 
+
+ 
+
+ 
+
+<div class="assessment-quick-kpis">
+
+ 
+
+ 
+
+ 
+
+  <div class="quick-kpi-card">
+
+ 
+
+ 
+
+ 
+
+    <span class="quick-kpi-label">
+
+ 
+
+      Must-Have Fit
+
+ 
+
+    </span>
+
+ 
+
+ 
+
+ 
+
+    <strong>
+
+ 
+
+      ${escapeHtml(
+
+ 
+
+        assessment.must_have_fit || '—'
+
+ 
+
+      )}
+
+ 
+
+    </strong>
+
+ 
+
+ 
+
+ 
+
+  </div>
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  <div class="quick-kpi-card">
+
+ 
+
+ 
+
+ 
+
+    <span class="quick-kpi-label">
+
+ 
+
+      Evidence Strength
+
+ 
+
+    </span>
+
+ 
+
+ 
+
+ 
+
+    <strong>
+
+ 
+
+      ${escapeHtml(
+
+ 
+
+        String(
+
+ 
+
+          assessment.evidence_strength_10 ?? '—'
+
+ 
+
+        )
+
+ 
+
+      )}/10
+
+ 
+
+    </strong>
+
+ 
+
+ 
+
+ 
+
+  </div>
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  <div class="quick-kpi-card">
+
+ 
+
+ 
+
+ 
+
+    <span class="quick-kpi-label">
+
+ 
+
+      Core Role Fit
+
+ 
+
+    </span>
+
+ 
+
+ 
+
+ 
+
+    <strong>
+
+ 
+
+      ${escapeHtml(
+
+ 
+
+        String(
+
+ 
+
+          assessment.core_role_fit_10 ?? '—'
+
+ 
+
+        )
+
+ 
+
+      )}/10
+
+ 
+
+    </strong>
+
+ 
+
+ 
+
+ 
+
+  </div>
+
+ 
+
+ 
+
+ 
+
+</div>
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+<!-- =====================================================
+
+ 
+
+     RESULT TABS
+
+ 
+
+     ===================================================== -->
+
+ 
+
+ 
+
+ 
+
+<div class="assessment-tabs">
+
+ 
+
+ 
+
+ 
+
+  <button
+
+ 
+
+    type="button"
+
+ 
+
+    class="assessment-tab active"
+
+ 
+
+    onclick="showAssessmentTab('overview', this)"
+
+ 
+
+  >
+
+ 
+
+    Overview
+
+ 
+
+  </button>
+
+ 
+
+ 
+
+ 
+
+  <button
+
+ 
+
+    type="button"
+
+ 
+
+    class="assessment-tab"
+
+ 
+
+    onclick="showAssessmentTab('criteria', this)"
+
+ 
+
+  >
+
+ 
+
+    Criteria Evaluation
+
+ 
+
+  </button>
+
+ 
+
+ 
+
+ 
+
+  <button
+
+ 
+
+    type="button"
+
+ 
+
+    class="assessment-tab"
+
+ 
+
+    onclick="showAssessmentTab('strengths', this)"
+
+ 
+
+  >
+
+ 
+
+    Strengths & Risks
+
+ 
+
+  </button>
+
+ 
+
+ 
+
+ 
+
+  <button
+
+ 
+
+    type="button"
+
+ 
+
+    class="assessment-tab"
+
+ 
+
+    onclick="showAssessmentTab('executive', this)"
+
+ 
+
+  >
+
+ 
+
+    Executive Assessment
+
+ 
+
+  </button>
+
+ 
+
+ 
+
+ 
+
+</div>
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+<!-- =====================================================
+
+ 
+
+     TAB 1 — OVERVIEW
+
+ 
+
+     ===================================================== -->
+
+ 
+
+ 
+
+ 
+
+<div
+
+ 
+
+  class="assessment-tab-panel active"
+
+ 
+
+  data-assessment-tab="overview"
+
+ 
+
+>
+
+ 
+
+ 
+
+ 
+
+  <div class="assessment-overview-grid">
+
+ 
+
+ 
+
+ 
+
+    <div class="assessment-info-card">
+
+ 
+
+ 
+
+ 
+
+      <span>
+
+ 
+
+        Current Role
+
+ 
+
+      </span>
+
+ 
+
+ 
+
+ 
+
+      <strong>
+
+ 
+
+        ${escapeHtml(
+
+ 
+
+          assessment.current_designation || '—'
+
+ 
+
+        )}
+
+ 
+
+      </strong>
+
+ 
+
+ 
+
+ 
+
+    </div>
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+    <div class="assessment-info-card">
+
+ 
+
+ 
+
+ 
+
+      <span>
+
+ 
+
+        Current Company
+
+ 
+
+      </span>
+
+ 
+
+ 
+
+ 
+
+      <strong>
+
+ 
+
+        ${escapeHtml(
+
+ 
+
+          assessment.current_company || '—'
+
+ 
+
+        )}
+
+ 
+
+      </strong>
+
+ 
+
+ 
+
+ 
+
+    </div>
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+    <div class="assessment-info-card">
+
+ 
+
+ 
+
+ 
+
+      <span>
+
+ 
+
+        Location
+
+ 
+
+      </span>
+
+ 
+
+ 
+
+ 
+
+      <strong>
+
+ 
+
+        ${escapeHtml(
+
+ 
+
+          assessment.location || '—'
+
+ 
+
+        )}
+
+ 
+
+      </strong>
+
+ 
+
+ 
+
+ 
+
+    </div>
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+    <div class="assessment-info-card">
+
+ 
+
+ 
+
+ 
+
+      <span>
+
+ 
+
+        Decision
+
+ 
+
+      </span>
+
+ 
+
+ 
+
+ 
+
+      <strong>
+
+ 
+
+        ${escapeHtml(
+
+ 
+
+          assessment.decision || '—'
+
+ 
+
+        )}
+
+ 
+
+      </strong>
+
+ 
+
+ 
+
+ 
+
+    </div>
+
+ 
+
+ 
+
+ 
+
+  </div>
+
+ 
+
+ 
+
+ 
+
+</div>
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+<!-- =====================================================
+
+ 
+
+     TAB 2 — CRITERIA
+
+ 
+
+     ===================================================== -->
+
+ 
+
+ 
+
+ 
+
+<div
+
+ 
+
+  class="assessment-tab-panel"
+
+ 
+
+  data-assessment-tab="criteria"
+
+ 
+
+>
+
+ 
+
+ 
+
+ 
+
+  <div class="assessment-tab-heading">
+
+ 
+
+    Criterion-by-Criterion Assessment
+
+ 
+
+  </div>
+
+ 
+
+ 
+
+ 
+
+  ${criterionBreakdown}
+
+ 
+
+ 
+
+ 
+
+</div>
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+<!-- =====================================================
+
+ 
+
+     TAB 3 — STRENGTHS & RISKS
+
+ 
+
+     ===================================================== -->
+
+ 
+
+ 
+
+ 
+
+<div
+
+ 
+
+  class="assessment-tab-panel"
+
+ 
+
+  data-assessment-tab="strengths"
+
+ 
+
+>
+
+ 
+
+ 
+
+ 
+
+  <div class="strength-risk-grid">
+
+ 
+
+ 
+
+ 
+
+    <div class="assessment-text-card strength-card">
+
+ 
+
+ 
+
+ 
+
+      <span class="assessment-text-label">
+
+ 
+
+        Key Strengths
+
+ 
+
+      </span>
+
+ 
+
+ 
+
+ 
+
+      <p>
+
+ 
+
+        ${escapeHtml(
+
+ 
+
+          assessment.key_strengths || '—'
+
+ 
+
+        )}
+
+ 
+
+      </p>
+
+ 
+
+ 
+
+ 
+
+    </div>
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+    <div class="assessment-text-card risk-card">
+
+ 
+
+ 
+
+ 
+
+      <span class="assessment-text-label">
+
+ 
+
+        Key Gap / Risk
+
+ 
+
+      </span>
+
+ 
+
+ 
+
+ 
+
+      <p>
+
+ 
+
+        ${escapeHtml(
+
+ 
+
+          assessment.key_gap_risk || '—'
+
+ 
+
+        )}
+
+ 
+
+      </p>
+
+ 
+
+ 
+
+ 
+
+    </div>
+
+ 
+
+ 
+
+ 
+
+  </div>
+
+ 
+
+ 
+
+ 
+
+</div>
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+<!-- =====================================================
+
+ 
+
+     TAB 4 — EXECUTIVE ASSESSMENT
+
+ 
+
+     ===================================================== -->
+
+ 
+
+ 
+
+ 
+
+<div
+
+ 
+
+  class="assessment-tab-panel"
+
+ 
+
+  data-assessment-tab="executive"
+
+ 
+
+>
+
+ 
+
+ 
+
+ 
+
+  <div class="assessment-text-card executive-card">
+
+ 
+
+ 
+
+ 
+
+    <span class="assessment-text-label">
+
+ 
+
+      Executive Assessment
+
+ 
+
+    </span>
+
+ 
+
+ 
+
+ 
+
+    <p>
+
+ 
+
+      ${escapeHtml(
+
+ 
+
+        assessment.executive_assessment || '—'
+
+ 
+
+      )}
+
+ 
+
+    </p>
+
+ 
+
+ 
+
+ 
+
+  </div>
+
+ 
+
+ 
+
+ 
+
+</div>
+
+ 
+
+    `;
+
+ 
+
+}
+
+ 
+
+function downloadSinglePdf() {
+
+ 
+
+  if (!currentAssessment) {
+
+ 
+
+    return showError(
+
+ 
+
+      'No candidate assessment is available.'
+
+ 
+
+    );
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+  const button =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'downloadSinglePdfBtn'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  if (button) {
+
+ 
+
+    button.disabled = true;
+
+ 
+
+    button.textContent =
+
+ 
+
+      'Preparing PDF...';
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+  google.script.run
+
+ 
+
+ 
+
+ 
+
+    .withSuccessHandler(
+
+ 
+
+      result => {
+
+ 
+
+ 
+
+ 
+
+        const binary =
+
+ 
+
+          atob(
+
+ 
+
+            result.base64
+
+ 
+
+          );
+
+ 
+
+ 
+
+ 
+
+        const bytes =
+
+ 
+
+          new Uint8Array(
+
+ 
+
+            binary.length
+
+ 
+
+          );
+
+ 
+
+ 
+
+ 
+
+        for (
+
+ 
+
+          let i = 0;
+
+ 
+
+          i < binary.length;
+
+ 
+
+          i++
+
+ 
+
+        ) {
+
+ 
+
+          bytes[i] =
+
+ 
+
+            binary.charCodeAt(i);
+
+ 
+
+        }
+
+ 
+
+ 
+
+ 
+
+        const blob =
+
+ 
+
+          new Blob(
+
+ 
+
+            [bytes],
+
+ 
+
+            {
+
+ 
+
+              type:
+
+ 
+
+                result.mimeType ||
+
+ 
+
+                'application/pdf'
+
+ 
+
+            }
+
+ 
+
+          );
+
+ 
+
+ 
+
+ 
+
+        const url =
+
+ 
+
+          URL.createObjectURL(
+
+ 
+
+            blob
+
+ 
+
+          );
+
+ 
+
+ 
+
+ 
+
+        const link =
+
+ 
+
+          document.createElement(
+
+ 
+
+            'a'
+
+ 
+
+          );
+
+ 
+
+ 
+
+ 
+
+        link.href = url;
+
+ 
+
+ 
+
+ 
+
+        link.download =
+
+ 
+
+          result.fileName ||
+
+ 
+
+          'Osynix_Candidate_Assessment.pdf';
+
+ 
+
+ 
+
+ 
+
+        document.body.appendChild(
+
+ 
+
+          link
+
+ 
+
+        );
+
+ 
+
+ 
+
+ 
+
+        link.click();
+
+ 
+
+ 
+
+ 
+
+        document.body.removeChild(
+
+ 
+
+          link
+
+ 
+
+        );
+
+ 
+
+ 
+
+ 
+
+        URL.revokeObjectURL(
+
+ 
+
+          url
+
+ 
+
+        );
+
+ 
+
+ 
+
+ 
+
+        if (button) {
+
+ 
+
+          button.disabled = false;
+
+ 
+
+          button.textContent =
+
+ 
+
+            'Download PDF Report';
+
+ 
+
+        }
+
+ 
+
+      }
+
+ 
+
+    )
+
+ 
+
+ 
+
+ 
+
+    .withFailureHandler(
+
+ 
+
+      error => {
+
+ 
+
+ 
+
+ 
+
+        if (button) {
+
+ 
+
+          button.disabled = false;
+
+ 
+
+          button.textContent =
+
+ 
+
+            'Download PDF Report';
+
+ 
+
+        }
+
+ 
+
+ 
+
+ 
+
+        showError(error);
+
+ 
+
+      }
+
+ 
+
+    )
+
+ 
+
+ 
+
+ 
+
+    .generateSingleCandidatePdf(
+
+ 
+
+      getATSSessionToken_(),
+
+ 
+
+      currentAssessment
+
+ 
+
+    );
+
+ 
+
+}
+
+ 
+
+ 
+
+ 
+
+function save() {
+
+ 
+
+  if (!currentAssessment) {
+
+    return;
+
+  }
+
+ 
+
+  const button =
+
+    document.getElementById(
+
+      'saveBtn'
+
+    );
+
+ 
+
+  const isBatchCandidate =
+
+    currentAssessmentSource === 'batch' &&
+
+    Number.isInteger(
+
+      currentViewedBatchIndex
+
+    );
+
+ 
+
+  let cvUpload =
+
+    currentCvUpload;
+
+ 
+
+  if (isBatchCandidate) {
+
+ 
+
+    const batchAssessment =
+
+      (
+
+        window.currentBatchResults ||
+
+        []
+
+      )[currentViewedBatchIndex];
+
+ 
+
+    if (
+
+      !batchAssessment ||
+
+      batchAssessment._atsSaved
+
+    ) {
+
+      return showError(
+
+        'This Batch candidate has already been saved to ATS.'
+
+      );
+
+    }
+
+ 
+
+    cvUpload =
+
+      currentBatchCvUploads[
+
+        batchAssessment.batchOriginalIndex
+
+      ];
+
+ 
+
+    if (
+
+      !cvUpload ||
+
+      !cvUpload.fileBase64
+
+    ) {
+
+      return showError(
+
+        'The original CV for this Batch candidate is no longer available in this browser session. Please reassess the Batch before saving.'
+
+      );
+
+    }
+
+  }
+
+ 
+
+  button.disabled = true;
+
+ 
+
+  google.script.run
+
+ 
+
+    .withSuccessHandler(
+
+      result => {
+
+ 
+
+        alert(
+
+          'Saved successfully. ' +
+
+          'Candidate ID: ' +
+
+          result.candidateId
+
+        );
+
+ 
+
+        if (isBatchCandidate) {
+
+ 
+
+          const batchResults =
+
+            window.currentBatchResults ||
+
+            [];
+
+ 
+
+          const savedAssessment =
+
+            batchResults[
+
+              currentViewedBatchIndex
+
+            ];
+
+ 
+
+          if (savedAssessment) {
+
+            savedAssessment._atsSaved =
+
+              true;
+
+          }
+
+ 
+
+          const allValidSaved =
+
+            batchResults
+
+              .filter(
+
+                item =>
+
+                  item &&
+
+                  !item.error
+
+              )
+
+              .every(
+
+                item =>
+
+                  item._atsSaved
+
+              );
+
+ 
+
+          currentAssessment = null;
+
+          currentCvUpload = null;
+
+          currentAssessmentSource = 'single';
+
+          currentViewedBatchIndex = null;
+
+ 
+
+          document
+
+            .getElementById(
+
+              'resultCard'
+
+            )
+
+            .classList
+
+            .add('hidden');
+
+ 
+
+          document
+
+            .getElementById(
+
+              'result'
+
+            )
+
+            .innerHTML = '';
+
+ 
+
+          if (allValidSaved) {
+
+            clearBatchAssessmentState_();
+
+          } else {
+
+            renderBatchResults(
+
+              batchResults
+
+            );
+
+          }
+
+ 
+
+        } else {
+
+ 
+
+          resetAssessment();
+
+        }
+
+ 
+
+        button.disabled = false;
+
+      }
+
+    )
+
+ 
+
+    .withFailureHandler(
+
+      error => {
+
+ 
+
+        button.disabled = false;
+
+ 
+
+        showError(error);
+
+      }
+
+    )
+
+ 
+
+    .saveAssessment(
+
+      getATSSessionToken_(),
+
+      currentAssessment,
+
+      cvUpload
+
+    );
+
+}
+
+ 
+
+ 
+
+function resetAssessment() {
+
+ 
+
+ 
+
+ 
+
+  currentAssessment =
+
+ 
+
+    null;
+
+ 
+
+  currentCvUpload =
+
+ 
+
+    null;
+
+ 
+
+  currentAssessmentSource =
+
+    'single';
+
+ 
+
+  currentViewedBatchIndex =
+
+    null;
+
+sessionStorage.removeItem(
+
+  'osynixSingleAssessmentResult'
+
+);
+
+ 
+
+ 
+
+  document
+
+ 
+
+    .getElementById(
+
+ 
+
+      'resultCard'
+
+ 
+
+    )
+
+ 
+
+    .classList
+
+ 
+
+    .add('hidden');
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  document
+
+ 
+
+    .getElementById(
+
+ 
+
+      'result'
+
+ 
+
+    )
+
+ 
+
+    .innerHTML =
+
+ 
+
+    '';
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  document
+
+ 
+
+    .getElementById(
+
+ 
+
+      'cvFile'
+
+ 
+
+    )
+
+ 
+
+    .value =
+
+ 
+
+    '';
+
+ 
+
+}
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+function metric(
+
+ 
+
+  label,
+
+ 
+
+  value,
+
+ 
+
+  extraClass = ''
+
+ 
+
+) {
+
+ 
+
+ 
+
+ 
+
+  return `
+
+ 
+
+    <div class="metric ${extraClass}">
+
+ 
+
+      <b>
+
+ 
+
+        ${escapeHtml(label)}
+
+ 
+
+      </b>
+
+ 
+
+ 
+
+ 
+
+      <span>
+
+ 
+
+        ${escapeHtml(
+
+ 
+
+          String(
+
+ 
+
+            value ?? '—'
+
+ 
+
+          )
+
+ 
+
+        )}
+
+ 
+
+      </span>
+
+ 
+
+    </div>
+
+ 
+
+  `;
+
+ 
+
+}
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+function setBusy(
+
+ 
+
+  isBusy,
+
+ 
+
+  message = ''
+
+ 
+
+) {
+
+ 
+
+ 
+
+ 
+
+  document
+
+ 
+
+    .getElementById(
+
+ 
+
+      'assessBtn'
+
+ 
+
+    )
+
+ 
+
+    .disabled =
+
+ 
+
+    isBusy;
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  document
+
+ 
+
+    .getElementById(
+
+ 
+
+      'status'
+
+ 
+
+    )
+
+ 
+
+    .textContent =
+
+ 
+
+    message;
+
+ 
+
+}
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+function showError(error) {
+
+ 
+
+ 
+
+ 
+
+  const message =
+
+ 
+
+    typeof error === 'string'
+
+ 
+
+ 
+
+ 
+
+      ? error
+
+ 
+
+ 
+
+ 
+
+      : (
+
+ 
+
+          error &&
+
+ 
+
+          error.message
+
+ 
+
+ 
+
+ 
+
+            ? error.message
+
+ 
+
+ 
+
+ 
+
+            : String(error)
+
+ 
+
+        );
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  document
+
+ 
+
+    .getElementById(
+
+ 
+
+      'status'
+
+ 
+
+    )
+
+ 
+
+    .textContent =
+
+ 
+
+    'Error: ' +
+
+ 
+
+    message;
+
+ 
+
+}
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+function escapeHtml(value) {
+
+ 
+
+ 
+
+ 
+
+  return String(value)
+
+ 
+
+    .replace(
+
+ 
+
+      /[&<>"']/g,
+
+ 
+
+ 
+
+ 
+
+      character => ({
+
+ 
+
+        '&':
+
+ 
+
+          '&amp;',
+
+ 
+
+ 
+
+ 
+
+        '<':
+
+ 
+
+          '&lt;',
+
+ 
+
+ 
+
+ 
+
+        '>':
+
+ 
+
+          '&gt;',
+
+ 
+
+ 
+
+ 
+
+        '"':
+
+ 
+
+          '&quot;',
+
+ 
+
+ 
+
+ 
+
+        "'":
+
+ 
+
+          '&#039;'
+
+ 
+
+      })[character]
+
+ 
+
+    );
+
+ 
+
+}
+
+ 
+
+function updatePositionContextPanel(position, criteria) {
+
+ 
+
+  const emptyState =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'positionContextEmpty'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  const content =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'positionContextContent'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  if (!position) {
+
+ 
+
+    emptyState.classList.remove(
+
+ 
+
+      'hidden'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+    content.classList.add(
+
+ 
+
+      'hidden'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+    return;
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  emptyState.classList.add(
+
+ 
+
+    'hidden'
+
+ 
+
+  );
+
+ 
+
+ 
+
+ 
+
+  content.classList.remove(
+
+ 
+
+    'hidden'
+
+ 
+
+  );
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  document.getElementById(
+
+ 
+
+    'sideClient'
+
+ 
+
+  ).textContent =
+
+ 
+
+    position['Client'] || '—';
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  document.getElementById(
+
+ 
+
+    'sideRefNo'
+
+ 
+
+  ).textContent =
+
+ 
+
+    position['Ref #'] || '—';
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  document.getElementById(
+
+ 
+
+    'sidePosition'
+
+ 
+
+  ).textContent =
+
+ 
+
+    position['Position'] || '—';
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  document.getElementById(
+
+ 
+
+    'sideLocation'
+
+ 
+
+  ).textContent =
+
+ 
+
+    position['Location'] || '—';
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  document.getElementById(
+
+ 
+
+    'sidePriority'
+
+ 
+
+  ).textContent =
+
+ 
+
+    position['Priority'] || '—';
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  document.getElementById(
+
+ 
+
+    'sidePositionStatus'
+
+ 
+
+  ).textContent =
+
+ 
+
+    position['Status'] || '—';
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  const jdLink =
+
+ 
+
+    String(
+
+ 
+
+      position['JD / File Link'] || ''
+
+ 
+
+    ).trim();
+
+ 
+
+ 
+
+ 
+
+  const jdButton =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'sideJDLink'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  const jdUnavailable =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'sideJDUnavailable'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  if (jdLink) {
+
+ 
+
+    jdButton.href =
+
+ 
+
+      jdLink;
+
+ 
+
+ 
+
+ 
+
+    jdButton.classList.remove(
+
+ 
+
+      'hidden'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+    jdUnavailable.classList.add(
+
+ 
+
+      'hidden'
+
+ 
+
+    );
+
+ 
+
+  } else {
+
+ 
+
+    jdButton.href =
+
+ 
+
+      '#';
+
+ 
+
+ 
+
+ 
+
+    jdButton.classList.add(
+
+ 
+
+      'hidden'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+    jdUnavailable.classList.remove(
+
+ 
+
+      'hidden'
+
+ 
+
+    );
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  const criteriaContainer =
+
+ 
+
+    document.getElementById(
+
+ 
+
+      'sideCriteria'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  const list =
+
+ 
+
+    Array.isArray(criteria)
+
+ 
+
+      ? criteria
+
+ 
+
+      : [];
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  if (!list.length) {
+
+ 
+
+    criteriaContainer.innerHTML = `
+
+ 
+
+      <div class="jd-unavailable">
+
+ 
+
+        No approved criteria available.
+
+ 
+
+      </div>
+
+ 
+
+    `;
+
+ 
+
+ 
+
+ 
+
+    return;
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  criteriaContainer.innerHTML =
+
+ 
+
+    list.map(
+
+ 
+
+      function(item) {
+
+ 
+
+ 
+
+ 
+
+        const criterion =
+
+ 
+
+          item['Criterion'] ||
+
+ 
+
+          item.criterion ||
+
+ 
+
+          'Criterion';
+
+ 
+
+ 
+
+ 
+
+        const weight =
+
+ 
+
+          item['Weight %'] ??
+
+ 
+
+          item.weight ??
+
+ 
+
+          '';
+
+ 
+
+ 
+
+ 
+
+        const knockoutRaw =
+
+ 
+
+          item['Knockout?'] ??
+
+ 
+
+          item.knockout ??
+
+ 
+
+          '';
+
+ 
+
+ 
+
+ 
+
+        const knockout =
+
+ 
+
+          String(
+
+ 
+
+            knockoutRaw
+
+ 
+
+          )
+
+ 
+
+            .trim()
+
+ 
+
+            .toLowerCase();
+
+ 
+
+ 
+
+ 
+
+        const isKnockout =
+
+ 
+
+          knockout === 'yes' ||
+
+ 
+
+          knockout === 'true' ||
+
+ 
+
+          knockout === '1';
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+        return `
+
+ 
+
+          <div class="side-criterion-row">
+
+ 
+
+ 
+
+ 
+
+            <div class="side-criterion-name">
+
+ 
+
+              ${escapeHtml(criterion)}
+
+ 
+
+            </div>
+
+ 
+
+ 
+
+ 
+
+            <div class="side-criterion-weight">
+
+ 
+
+              ${escapeHtml(String(weight))}%
+
+ 
+
+            </div>
+
+ 
+
+ 
+
+ 
+
+            <div
+
+ 
+
+              class="side-knockout ${
+
+ 
+
+                isKnockout
+
+ 
+
+                  ? 'yes'
+
+ 
+
+                  : 'no'
+
+ 
+
+              }"
+
+ 
+
+            >
+
+ 
+
+              ${
+
+ 
+
+                isKnockout
+
+ 
+
+                  ? 'Yes'
+
+ 
+
+                  : 'No'
+
+ 
+
+              }
+
+ 
+
+            </div>
+
+ 
+
+ 
+
+ 
+
+          </div>
+
+ 
+
+        `;
+
+ 
+
+      }
+
+ 
+
+    )
+
+ 
+
+    .join('');
+
+ 
+
+}
+
+ 
+
+function showAssessmentTab(tabName, button) {
+
+ 
+
+  const panels =
+
+ 
+
+    document.querySelectorAll(
+
+ 
+
+      '.assessment-tab-panel'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  const tabs =
+
+ 
+
+    document.querySelectorAll(
+
+ 
+
+      '.assessment-tab'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  panels.forEach(
+
+ 
+
+    function(panel) {
+
+ 
+
+      panel.classList.remove(
+
+ 
+
+        'active'
+
+ 
+
+      );
+
+ 
+
+    }
+
+ 
+
+  );
+
+ 
+
+ 
+
+ 
+
+  tabs.forEach(
+
+ 
+
+    function(tab) {
+
+ 
+
+      tab.classList.remove(
+
+ 
+
+        'active'
+
+ 
+
+      );
+
+ 
+
+    }
+
+ 
+
+  );
+
+ 
+
+ 
+
+ 
+
+  const target =
+
+ 
+
+    document.querySelector(
+
+ 
+
+      '[data-assessment-tab="' +
+
+ 
+
+      tabName +
+
+ 
+
+      '"]'
+
+ 
+
+    );
+
+ 
+
+ 
+
+ 
+
+  if (target) {
+
+ 
+
+    target.classList.add(
+
+ 
+
+      'active'
+
+ 
+
+    );
+
+ 
+
+  }
+
+ 
+
+ 
+
+ 
+
+  if (button) {
+
+ 
+
+    button.classList.add(
+
+ 
+
+      'active'
+
+ 
+
+    );
+
+ 
+
+  }
+
+ 
+
+}
+
+ 
+
+</script>

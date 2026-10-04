@@ -1,0 +1,1454 @@
+<!DOCTYPE html>
+ 
+<html>
+ 
+ 
+ 
+<head>
+ 
+  <base target="_top">
+ 
+ 
+ 
+  <?!= include('Styles'); ?>
+ 
+  <?!= include('CandidateDatabaseStyles'); ?>
+ 
+</head>
+ 
+ 
+ 
+<body>
+ 
+ 
+ 
+  <?!= include('AccessGuard'); ?>
+ 
+  <?!= include('Navigation'); ?>
+ 
+ 
+ 
+ 
+ 
+  <div class="candidate-database-shell">
+ 
+ 
+ 
+ 
+ 
+    <!-- ==========================================
+ 
+         PAGE HEADER
+ 
+         ========================================== -->
+ 
+ 
+ 
+    
+ 
+    <!-- ==========================================
+ 
+         KPI CARDS
+ 
+         ========================================== -->
+ 
+ 
+ 
+    <section class="candidate-db-kpi-grid">
+ 
+ 
+ 
+ 
+ 
+  <!-- TALENT POOL -->
+ 
+ 
+ 
+  <div
+ 
+  class="candidate-db-kpi-card candidate-db-kpi-clickable"
+ 
+  onclick="openTalentPoolDatabase()"
+ 
+  role="button"
+ 
+  tabindex="0"
+ 
+>
+ 
+ 
+ 
+    <div class="candidate-db-kpi-icon kpi-blue">
+ 
+      👥
+ 
+    </div>
+ 
+ 
+ 
+    <div>
+ 
+ 
+ 
+      <span>Talent Pool</span>
+ 
+ 
+ 
+      <strong id="candidateKpiTotal">
+ 
+        —
+ 
+      </strong>
+ 
+ 
+ 
+      <small>
+ 
+        Total candidates
+ 
+      </small>
+ 
+ 
+ 
+    </div>
+ 
+ 
+ 
+  </div>
+ 
+ 
+ 
+ 
+ 
+  <!-- SHORTLISTED -->
+ 
+ 
+ 
+  <div
+ 
+  class="candidate-db-kpi-card candidate-db-kpi-clickable"
+ 
+  onclick="openCandidateReactiveView('shortlisted')"
+ 
+  role="button"
+ 
+  tabindex="0"
+ 
+>
+ 
+ 
+ 
+    <div class="candidate-db-kpi-icon kpi-yellow">
+ 
+      ★
+ 
+    </div>
+ 
+ 
+ 
+    <div>
+ 
+ 
+ 
+      <span>Shortlisted</span>
+ 
+ 
+ 
+      <strong id="candidateKpiShortlisted">
+ 
+        —
+ 
+      </strong>
+ 
+ 
+ 
+      <small>
+ 
+        Current stage
+ 
+      </small>
+ 
+ 
+ 
+    </div>
+ 
+ 
+ 
+  </div>
+ 
+ 
+ 
+ 
+ 
+  <!-- ON HOLD -->
+ 
+ 
+ 
+  <div
+ 
+  class="candidate-db-kpi-card candidate-db-kpi-clickable"
+ 
+  onclick="openCandidateReactiveView('hold')"
+ 
+  role="button"
+ 
+  tabindex="0"
+ 
+>
+ 
+ 
+ 
+    <div class="candidate-db-kpi-icon kpi-orange">
+ 
+      Ⅱ
+ 
+    </div>
+ 
+ 
+ 
+    <div>
+ 
+ 
+ 
+      <span>On Hold</span>
+ 
+ 
+ 
+      <strong id="candidateKpiHold">
+ 
+        —
+ 
+      </strong>
+ 
+ 
+ 
+      <small>
+ 
+        Current stage
+ 
+      </small>
+ 
+ 
+ 
+    </div>
+ 
+ 
+ 
+  </div>
+ 
+ 
+ 
+ 
+ 
+  <!-- REJECTED -->
+ 
+ 
+ 
+  <div
+ 
+  class="candidate-db-kpi-card candidate-db-kpi-clickable"
+ 
+  onclick="openCandidateReactiveView('rejected')"
+ 
+  role="button"
+ 
+  tabindex="0"
+ 
+>
+ 
+ 
+ 
+    <div class="candidate-db-kpi-icon kpi-red">
+ 
+      ×
+ 
+    </div>
+ 
+ 
+ 
+    <div>
+ 
+ 
+ 
+      <span>Rejected</span>
+ 
+ 
+ 
+      <strong id="candidateKpiRejected">
+ 
+        —
+ 
+      </strong>
+ 
+ 
+ 
+      <small>
+ 
+        Current stage
+ 
+      </small>
+ 
+ 
+ 
+    </div>
+ 
+ 
+ 
+  </div>
+ 
+ 
+ 
+ 
+ 
+  <!-- IN INTERVIEW -->
+ 
+ 
+ 
+  <div
+ 
+  class="candidate-db-kpi-card candidate-db-kpi-clickable"
+ 
+  onclick="openCandidateReactiveView('interview')"
+ 
+  role="button"
+ 
+  tabindex="0"
+ 
+>
+ 
+ 
+ 
+    <div class="candidate-db-kpi-icon kpi-blue">
+ 
+      ▣
+ 
+    </div>
+ 
+ 
+ 
+    <div>
+ 
+ 
+ 
+      <span>In Interview</span>
+ 
+ 
+ 
+      <strong id="candidateKpiInterview">
+ 
+        —
+ 
+      </strong>
+ 
+ 
+ 
+      <small>
+ 
+        Active interviews
+ 
+      </small>
+ 
+ 
+ 
+    </div>
+ 
+ 
+ 
+  </div>
+ 
+ 
+ 
+ 
+ 
+  <!-- PENDING DECISION -->
+ 
+ 
+ 
+<div
+ 
+  class="candidate-db-kpi-card candidate-db-kpi-clickable"
+ 
+  onclick="openCandidateReactiveView('pending')"
+ 
+  role="button"
+ 
+  tabindex="0"
+ 
+>
+ 
+ 
+ 
+  <div class="candidate-db-kpi-icon kpi-purple">
+ 
+    ◷
+ 
+  </div>
+ 
+ 
+ 
+  <div>
+ 
+ 
+ 
+    <span>Pending Decision</span>
+ 
+ 
+ 
+    <strong id="candidateKpiOffers">
+ 
+      —
+ 
+    </strong>
+ 
+ 
+ 
+    <small>
+ 
+      Awaiting outcome
+ 
+    </small>
+ 
+ 
+ 
+  </div>
+ 
+ 
+ 
+</div>
+ 
+ 
+ 
+ 
+ 
+  <!-- HIRED / PLACED -->
+ 
+ 
+ 
+  <div
+ 
+  class="candidate-db-kpi-card candidate-db-kpi-clickable"
+ 
+  onclick="openCandidateReactiveView('hired')"
+ 
+  role="button"
+ 
+  tabindex="0"
+ 
+>
+ 
+ 
+ 
+    <div class="candidate-db-kpi-icon kpi-green">
+ 
+      ✓
+ 
+    </div>
+ 
+ 
+ 
+    <div>
+ 
+ 
+ 
+      <span>Hired / Placed</span>
+ 
+ 
+ 
+      <strong id="candidateKpiHired">
+ 
+        —
+ 
+      </strong>
+ 
+ 
+ 
+      <small>
+ 
+        Successful hires
+ 
+      </small>
+ 
+ 
+ 
+    </div>
+ 
+ 
+ 
+  </div>
+ 
+ 
+ 
+ 
+ 
+</section>
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+    <!-- ==========================================
+ 
+         INSIGHTS PLACEHOLDER
+ 
+         ========================================== -->
+ 
+ 
+ 
+    <section class="candidate-db-insights">
+ 
+ 
+ 
+      <div class="candidate-db-insight-card">
+ 
+ 
+ 
+        <h3>
+ 
+          Talent Pool by Status
+ 
+        </h3>
+ 
+ 
+ 
+        <div
+ 
+          id="candidateStatusInsight"
+ 
+          class="candidate-db-placeholder"
+ 
+        >
+ 
+          Loading candidate insights...
+ 
+        </div>
+ 
+ 
+ 
+      </div>
+ 
+ 
+ 
+ 
+ 
+      <div class="candidate-db-insight-card">
+ 
+ 
+ 
+        <h3>Seniority Mix</h3>
+ 
+ 
+ 
+        <div
+ 
+          id="candidateSkillsInsight"
+ 
+          class="candidate-db-placeholder"
+ 
+        >
+ 
+          Loading skills...
+ 
+        </div>
+ 
+ 
+ 
+      </div>
+ 
+ 
+ 
+ 
+ 
+      <div class="candidate-db-insight-card">
+ 
+ 
+ 
+        <h3>
+ 
+          Top Locations
+ 
+        </h3>
+ 
+ 
+ 
+        <div
+ 
+          id="candidateLocationsInsight"
+ 
+          class="candidate-db-placeholder"
+ 
+        >
+ 
+          Loading locations...
+ 
+        </div>
+ 
+ 
+ 
+      </div>
+ 
+ 
+ 
+    </section>
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+   <!-- ==========================================
+ 
+     REACTIVE CANDIDATE RESULTS
+ 
+     ========================================== -->
+ 
+ 
+ 
+<section
+ 
+  id="candidateReactiveSection"
+ 
+  class="candidate-reactive-section"
+ 
+  style="display:none;"
+ 
+>
+ 
+ 
+ 
+ 
+ 
+  <!-- RESULTS HEADER -->
+ 
+ 
+ 
+  <div class="candidate-reactive-header">
+ 
+ 
+ 
+    <div>
+ 
+ 
+ 
+      <div class="candidate-reactive-eyebrow">
+ 
+        CANDIDATE VIEW
+ 
+      </div>
+ 
+ 
+ 
+      <h2 id="candidateReactiveTitle">
+ 
+        Shortlisted Candidates
+ 
+      </h2>
+ 
+ 
+ 
+      <p id="candidateReactiveSubtitle">
+ 
+        Candidates currently matching the selected recruitment stage.
+ 
+      </p>
+ 
+ 
+ 
+    </div>
+ 
+ 
+ 
+ 
+ 
+  <button
+ 
+  type="button"
+ 
+  class="candidate-reactive-close-btn"
+ 
+  onclick="closeCandidateReactiveView()"
+ 
+>
+ 
+  ×&nbsp;&nbsp;Close
+ 
+</button>
+ 
+ 
+ 
+  </div>
+ 
+ 
+ 
+ 
+ 
+  <!-- COMPACT SEARCH -->
+ 
+ 
+ 
+  <div class="candidate-reactive-tools">
+ 
+ 
+ 
+  <div class="candidate-db-search">
+ 
+ 
+ 
+    <input
+ 
+      type="search"
+ 
+      id="candidateReactiveSearch"
+ 
+      placeholder="Search within these candidates..."
+ 
+    >
+ 
+ 
+ 
+  </div>
+ 
+ 
+ 
+ 
+ 
+  <div class="candidate-reactive-result-toolbar">
+ 
+ 
+ 
+    <strong id="candidateReactiveCount">
+ 
+      0 candidates
+ 
+    </strong>
+ 
+ 
+ 
+    <div
+ 
+      id="candidateReactivePagination"
+ 
+      class="candidate-db-pagination"
+ 
+    >
+ 
+    </div>
+ 
+ 
+ 
+  </div>
+ 
+ 
+ 
+</div>
+ 
+ 
+ 
+ 
+ 
+  <!-- RESULTS TABLE -->
+ 
+ 
+ 
+  <!-- STICKY TABLE COLUMN HEADER -->
+ 
+ 
+ 
+<div
+ 
+  id="candidateReactiveStickyHeader"
+ 
+  class="candidate-reactive-sticky-header"
+ 
+  aria-hidden="true"
+ 
+>
+ 
+ 
+ 
+ <div>Candidate</div>
+ 
+ 
+ 
+<div class="candidate-reactive-sticky-filter-cell">
+ 
+ 
+ 
+  <button
+ 
+    type="button"
+ 
+    id="candidateReactiveStickyPositionTrigger"
+ 
+    class="candidate-reactive-filter-trigger candidate-reactive-sticky-filter-trigger"
+ 
+  >
+ 
+    <span>Position</span>
+ 
+    <span class="candidate-reactive-filter-arrow">▼</span>
+ 
+  </button>
+ 
+ 
+ 
+</div>
+ 
+ 
+ 
+<div>ATS Match</div>
+ 
+ 
+ 
+<div class="candidate-reactive-sticky-filter-cell">
+ 
+ 
+ 
+  <button
+ 
+    type="button"
+ 
+    id="candidateReactiveStickyDecisionTrigger"
+ 
+    class="candidate-reactive-filter-trigger candidate-reactive-sticky-filter-trigger"
+ 
+  >
+ 
+    <span>AI Decision</span>
+ 
+    <span class="candidate-reactive-filter-arrow">▼</span>
+ 
+  </button>
+ 
+ 
+ 
+</div>
+ 
+ 
+ 
+<div class="candidate-reactive-sticky-filter-cell">
+ 
+ 
+ 
+  <button
+ 
+    type="button"
+ 
+    id="candidateReactiveStickyStageTrigger"
+ 
+    class="candidate-reactive-filter-trigger candidate-reactive-sticky-filter-trigger"
+ 
+  >
+ 
+    <span>Recruitment Stage</span>
+ 
+    <span class="candidate-reactive-filter-arrow">▼</span>
+ 
+  </button>
+ 
+ 
+ 
+</div>
+ 
+ 
+ 
+<div>Interview Status</div>
+ 
+ 
+ 
+<div>Client Status</div>
+ 
+ 
+ 
+<div>Action</div>
+ 
+ 
+ 
+</div>
+ 
+ 
+ 
+  <div class="candidate-db-table-card">
+ 
+ 
+ 
+    <div class="candidate-db-table-wrap">
+ 
+ 
+ 
+      <table class="candidate-db-table">
+ 
+ 
+ 
+        <thead>
+ 
+ 
+ 
+  <tr>
+ 
+ 
+ 
+    <th>
+ 
+      Candidate
+ 
+    </th>
+ 
+ 
+ 
+    <th class="candidate-reactive-filter-th">
+ 
+ 
+ 
+      <button
+ 
+        type="button"
+ 
+        class="candidate-reactive-filter-trigger"
+ 
+        id="candidateReactivePositionTrigger"
+ 
+      >
+ 
+ 
+ 
+        <span>Position</span>
+ 
+ 
+ 
+        <span class="candidate-reactive-filter-arrow">
+ 
+          ▼
+ 
+        </span>
+ 
+ 
+ 
+      </button>
+ 
+ 
+ 
+    </th>
+ 
+ 
+ 
+    <th>
+ 
+      ATS Match
+ 
+    </th>
+ 
+ 
+ 
+    <th class="candidate-reactive-filter-th">
+ 
+ 
+ 
+      <button
+ 
+        type="button"
+ 
+        class="candidate-reactive-filter-trigger"
+ 
+        id="candidateReactiveDecisionTrigger"
+ 
+      >
+ 
+ 
+ 
+        <span>AI Decision</span>
+ 
+ 
+ 
+        <span class="candidate-reactive-filter-arrow">
+ 
+          ▼
+ 
+        </span>
+ 
+ 
+ 
+      </button>
+ 
+ 
+ 
+    </th>
+ 
+ 
+ 
+    <th class="candidate-reactive-filter-th">
+ 
+ 
+ 
+      <button
+ 
+        type="button"
+ 
+        class="candidate-reactive-filter-trigger"
+ 
+        id="candidateReactiveStageTrigger"
+ 
+      >
+ 
+ 
+ 
+        <span>Recruitment Stage</span>
+ 
+ 
+ 
+        <span class="candidate-reactive-filter-arrow">
+ 
+          ▼
+ 
+        </span>
+ 
+ 
+ 
+      </button>
+ 
+ 
+ 
+    </th>
+ 
+ 
+ 
+    <th>
+ 
+      Interview Status
+ 
+    </th>
+ 
+ 
+ 
+    <th>
+ 
+      Client Status
+ 
+    </th>
+ 
+ 
+ 
+    <th>
+ 
+      Action
+ 
+    </th>
+ 
+ 
+ 
+  </tr>
+ 
+ 
+ 
+</thead>
+ 
+ 
+ 
+ 
+ 
+        <tbody id="candidateReactiveBody">
+ 
+ 
+ 
+          <tr>
+ 
+ 
+ 
+            <td
+ 
+              colspan="8"
+ 
+              class="candidate-db-loading-cell"
+ 
+            >
+ 
+              Select a Candidate Dashboard KPI
+ 
+              to view candidates.
+ 
+            </td>
+ 
+ 
+ 
+          </tr>
+ 
+ 
+ 
+        </tbody>
+ 
+ 
+ 
+      </table>
+ 
+ 
+ 
+    </div>
+ 
+ 
+ 
+  </div>
+ 
+ 
+ 
+ 
+ 
+</section>
+ 
+ 
+ 
+<!-- ==========================================
+ 
+     CANDIDATE PROFILE DRAWER — OVERVIEW PHASE
+ 
+     ========================================== -->
+ 
+ 
+ 
+<div id="candidateProfileOverlay" class="candidate-profile-overlay" onclick="closeCandidateProfile_()" aria-hidden="true"></div>
+ 
+ 
+ 
+<aside id="candidateProfileSection" class="candidate-profile-drawer" aria-hidden="true">
+ 
+  <div class="candidate-profile-drawer-shell">
+ 
+ 
+ 
+    <header class="candidate-profile-drawer-header">
+ 
+      <div class="candidate-profile-header-main">
+ 
+        <div class="candidate-profile-eyebrow">CANDIDATE PROFILE</div>
+ 
+        <h2 id="candidateProfileName">Candidate Profile</h2>
+ 
+        <p id="candidateProfileHeadline">Candidate information and recruitment history</p>
+ 
+        <div class="candidate-profile-header-meta">
+ 
+          <span id="candidateProfileCandidateId">—</span>
+ 
+          <span id="candidateProfilePhone">—</span>
+ 
+          <span id="candidateProfileEmail">—</span>
+ 
+          <span id="candidateProfileLocationHeader">—</span>
+ 
+        </div>
+ 
+      </div>
+ 
+      <div class="candidate-profile-header-actions">
+ 
+        <a id="candidateProfileCvButton" class="candidate-profile-cv-btn" href="#" target="_blank" rel="noopener" style="display:none;">View / Download CV</a>
+ 
+        <button type="button" class="candidate-profile-close-btn" onclick="closeCandidateProfile_()" aria-label="Close candidate profile">×</button>
+ 
+      </div>
+ 
+    </header>
+ 
+ 
+ 
+    <nav class="candidate-profile-tabs" aria-label="Candidate profile tabs">
+ 
+      <button type="button" class="candidate-profile-tab active" data-profile-tab="overview" onclick="switchCandidateProfileTab_('overview')">Overview</button>
+ 
+      <button type="button" class="candidate-profile-tab" data-profile-tab="assessment" onclick="switchCandidateProfileTab_('assessment')">Assessment</button>
+ 
+      <button type="button" class="candidate-profile-tab" disabled title="Coming in next phase">Notes</button>
+ 
+      <button type="button" class="candidate-profile-tab" disabled title="Coming in next phase">Activity</button>
+ 
+    </nav>
+ 
+ 
+ 
+    <div id="candidateProfileLoading" class="candidate-profile-loading">Loading candidate profile...</div>
+ 
+ 
+ 
+    <div id="candidateProfileContent" class="candidate-profile-content" style="display:none;">
+ 
+      <section id="candidateProfileTabOverview" class="candidate-profile-tab-panel active">
+ 
+        <div class="candidate-profile-overview-layout">
+ 
+ 
+ 
+          <div class="candidate-profile-overview-left">
+ 
+            <div class="candidate-profile-status-row">
+ 
+              <span>Talent Pool Status</span>
+ 
+              <strong id="candidateProfileTalentStatus" class="candidate-profile-status-badge">—</strong>
+ 
+            </div>
+ 
+ 
+ 
+            <div id="candidateProfileProfessionalSummarySection" class="candidate-profile-resume-section">
+ 
+              <h3>Professional Summary</h3>
+ 
+              <p id="candidateProfileProfessionalSummary">—</p>
+ 
+            </div>
+ 
+ 
+ 
+            <div class="candidate-profile-resume-section">
+ 
+              <h3>Current Role</h3>
+ 
+              <div class="candidate-profile-overview-grid">
+ 
+                <div class="candidate-profile-field"><span>Designation</span><strong id="candidateProfileCurrentRole">—</strong></div>
+ 
+                <div class="candidate-profile-field"><span>Company</span><strong id="candidateProfileCurrentCompany">—</strong></div>
+ 
+                <div class="candidate-profile-field"><span>Experience</span><strong id="candidateProfileExperience">—</strong></div>
+ 
+                <div class="candidate-profile-field"><span>Seniority</span><strong id="candidateProfileSeniority">—</strong></div>
+ 
+                <div class="candidate-profile-field"><span>Primary Function</span><strong id="candidateProfileFunction">—</strong></div>
+ 
+                <div class="candidate-profile-field"><span>Specialization</span><strong id="candidateProfileSecondaryFunction">—</strong></div>
+ 
+              </div>
+ 
+            </div>
+ 
+ 
+ 
+            <div id="candidateProfileSkillsSection" class="candidate-profile-resume-section"><h3>Key Skills</h3><p id="candidateProfileCoreSkills">—</p></div>
+ 
+            <div id="candidateProfileEmploymentSection" class="candidate-profile-resume-section"><h3>Employment / Career History</h3><p id="candidateProfileEmploymentHistory">—</p></div>
+ 
+            <div id="candidateProfileEducationSection" class="candidate-profile-resume-section"><h3>Education</h3><p id="candidateProfileEducation">—</p></div>
+ 
+            <div id="candidateProfileCareerSummarySection" class="candidate-profile-resume-section"><h3>Career Profile</h3><p id="candidateProfileCareerSummary">—</p></div>
+ 
+            <div class="candidate-profile-resume-grid">
+ 
+              <div id="candidateProfileIndustriesSection" class="candidate-profile-resume-section"><h3>Industries / Domains</h3><p id="candidateProfileIndustries">—</p></div>
+ 
+              <div id="candidateProfileSystemsSection" class="candidate-profile-resume-section"><h3>Systems / Tools</h3><p id="candidateProfileSystemsTools">—</p></div>
+ 
+              <div id="candidateProfileMarketSection" class="candidate-profile-resume-section"><h3>Geographic / Market Exposure</h3><p id="candidateProfileMarketExposure">—</p></div>
+ 
+            </div>
+ 
+          </div>
+ 
+ 
+ 
+          <aside class="candidate-profile-overview-right">
+ 
+            <div class="candidate-profile-context-card">
+ 
+              <div class="candidate-profile-card-heading"><div><span class="candidate-profile-card-eyebrow">LATEST / SELECTED POSITION</span><h3 id="candidateProfilePosition">—</h3><small id="candidateProfileClient">—</small></div></div>
+ 
+              <div class="candidate-profile-context-list">
+ 
+                <div><span>Ref #</span><strong id="candidateProfileRef">—</strong></div>
+ 
+                <div><span>ATS Match</span><strong id="candidateProfileAtsMatch">—</strong></div>
+ 
+                <div><span>AI Decision</span><strong id="candidateProfileDecision">—</strong></div>
+ 
+                <div><span>Recruitment Stage</span><strong id="candidateProfileRecruitmentStageText">—</strong></div>
+ 
+              </div>
+ 
+            </div>
+ 
+ 
+ 
+            <div class="candidate-profile-context-card">
+ 
+              <div class="candidate-profile-card-heading"><div><span class="candidate-profile-card-eyebrow">AI SUMMARY</span><h3>Executive Assessment</h3></div></div>
+ 
+              <p id="candidateProfileExecutiveAssessment">—</p>
+ 
+            </div>
+ 
+ 
+ 
+            <div class="candidate-profile-context-card">
+ 
+              <div class="candidate-profile-card-heading"><div><span class="candidate-profile-card-eyebrow">ROLE FIT</span><h3>Assessment Snapshot</h3></div></div>
+ 
+              <div class="candidate-profile-context-list">
+ 
+                <div><span>Must-Have Fit</span><strong id="candidateProfileMustHave">—</strong></div>
+ 
+                <div><span>Core Role Fit</span><strong id="candidateProfileCoreFit">—</strong></div>
+ 
+                <div><span>Evidence Strength</span><strong id="candidateProfileEvidence">—</strong></div>
+ 
+              </div>
+ 
+              <div class="candidate-profile-mini-copy"><span>Key Strengths</span><p id="candidateProfileStrengths">—</p></div>
+ 
+              <div class="candidate-profile-mini-copy"><span>Key Gap / Risk</span><p id="candidateProfileGap">—</p></div>
+ 
+            </div>
+ 
+          </aside>
+ 
+ 
+ 
+        </div>
+ 
+      </section>
+ 
+      <section id="candidateProfileTabAssessment" class="candidate-profile-tab-panel">
+        <div class="candidate-assessment-workspace">
+ 
+          <div class="candidate-assessment-hero">
+            <div class="candidate-assessment-hero-copy">
+              <span class="candidate-profile-card-eyebrow">ASSESSMENT REPORT</span>
+              <h3 id="candidateAssessmentPosition">—</h3>
+              <p id="candidateAssessmentContext">—</p>
+            </div>
+            <div class="candidate-assessment-decision-block">
+              <span>AI Decision</span>
+              <strong id="candidateAssessmentDecision" class="candidate-assessment-decision">—</strong>
+              <small id="candidateAssessmentMustHave">Must-Have: —</small>
+            </div>
+          </div>
+ 
+          <div class="candidate-assessment-score-grid">
+            <div class="candidate-assessment-score-card">
+              <div id="candidateAssessmentAtsDonut" class="candidate-assessment-donut"><div><strong id="candidateAssessmentAtsValue">—</strong><span>ATS Match</span></div></div>
+            </div>
+            <div class="candidate-assessment-score-card">
+              <div id="candidateAssessmentCoreDonut" class="candidate-assessment-donut"><div><strong id="candidateAssessmentCoreValue">—</strong><span>Core Role Fit</span></div></div>
+            </div>
+            <div class="candidate-assessment-score-card">
+              <div id="candidateAssessmentEvidenceDonut" class="candidate-assessment-donut"><div><strong id="candidateAssessmentEvidenceValue">—</strong><span>Evidence</span></div></div>
+            </div>
+          </div>
+ 
+          <div class="candidate-assessment-section candidate-assessment-collapsible">
+            <button type="button" class="candidate-assessment-section-header" aria-expanded="true">
+              <span><small>AI SUMMARY</small>Executive Assessment</span><b>−</b>
+            </button>
+            <div class="candidate-assessment-section-body"><p id="candidateAssessmentExecutive">—</p></div>
+          </div>
+ 
+          <div class="candidate-assessment-two-column">
+            <div class="candidate-assessment-section candidate-assessment-collapsible candidate-assessment-positive">
+              <button type="button" class="candidate-assessment-section-header" aria-expanded="true"><span><small>WHAT ALIGNS</small>Key Strengths</span><b>−</b></button>
+              <div class="candidate-assessment-section-body"><p id="candidateAssessmentStrengths">—</p></div>
+            </div>
+            <div class="candidate-assessment-section candidate-assessment-collapsible candidate-assessment-risk">
+              <button type="button" class="candidate-assessment-section-header" aria-expanded="true"><span><small>WATCH AREAS</small>Key Gaps / Risks</span><b>−</b></button>
+              <div class="candidate-assessment-section-body"><p id="candidateAssessmentRisks">—</p></div>
+            </div>
+          </div>
+ 
+          <div class="candidate-assessment-section candidate-assessment-collapsible">
+            <button type="button" class="candidate-assessment-section-header" aria-expanded="true">
+              <span><small>WEIGHTED JD REVIEW</small>Criterion-by-Criterion Assessment</span><b>−</b>
+            </button>
+            <div class="candidate-assessment-section-body candidate-assessment-criteria-scroll">
+              <div id="candidateAssessmentCriteria" class="candidate-assessment-criteria"></div>
+            </div>
+          </div>
+ 
+          <div class="candidate-assessment-section candidate-assessment-collapsible">
+            <button type="button" class="candidate-assessment-section-header" aria-expanded="true">
+              <span><small>RECRUITMENT CONTEXT</small>Current Application Status</span><b>−</b>
+            </button>
+            <div class="candidate-assessment-section-body">
+              <div class="candidate-assessment-context-grid">
+                <div><span>Position</span><strong id="candidateAssessmentApplicationPosition">—</strong></div>
+                <div><span>Ref #</span><strong id="candidateAssessmentRef">—</strong></div>
+                <div><span>Relevant Experience</span><strong id="candidateAssessmentRelevantExp">—</strong></div>
+                <div><span>Recruitment Stage</span><strong id="candidateAssessmentStage">—</strong></div>
+                <div><span>Interview Status</span><strong id="candidateAssessmentInterview">—</strong></div>
+                <div><span>Client Status</span><strong id="candidateAssessmentClient">—</strong></div>
+                <div><span>Date Screened</span><strong id="candidateAssessmentDate">—</strong></div>
+              </div>
+            </div>
+          </div>
+ 
+        </div>
+      </section>
+ 
+    </div>
+ 
+  </div>
+ 
+</aside>
+ 
+ 
+ 
+  </div>
+ 
+ 
+ 
+ 
+ 
+  <?!= include('CandidateDatabaseJavascript'); ?>
+ 
+ 
+ 
+ 
+ 
+  <script>
+ 
+ 
+ 
+    document.addEventListener(
+ 
+      'DOMContentLoaded',
+ 
+      function() {
+ 
+ 
+ 
+        const button =
+ 
+          document.getElementById(
+ 
+            'navCandidateDatabase'
+ 
+          );
+ 
+ 
+ 
+        if (button) {
+ 
+          button.classList.add(
+ 
+            'active'
+ 
+          );
+ 
+        }
+ 
+ 
+ 
+      }
+ 
+    );
+ 
+ 
+ 
+  </script>
+ 
+ 
+ 
+ 
+ 
+</body>
+ 
+ 
+ 
+</html>

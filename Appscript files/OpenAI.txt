@@ -1,0 +1,2118 @@
+/**
+ 
+ * Osynix ATS - OpenAI.gs
+ 
+ * Stable candidate assessment engine.
+ 
+ *
+ 
+ * Fixes in this version:
+ 
+ * - Supports BOTH live JD Criteria object shapes:
+ 
+ *   1) Sheet headers: "Criterion", "Weight %", "Knockout?", ...
+ 
+ *   2) App aliases: criterion, weight, knockout, evidenceExpected, ...
+ 
+ * - Prevents zero ATS caused by missing criterion weights/names.
+ 
+ * - Uses fixed score bands: 0, 2, 4, 6, 8, 10.
+ 
+ * - Calculates ATS / Must-Have / Core Role / Evidence Strength in code.
+ 
+ * - Reads decision rules directly from Lists & Settings columns M:O.
+ 
+ * - Returns a permanent Talent Pool profile from the same CV read.
+ 
+ */
+ 
+ 
+ 
+ 
+ 
+function assessCandidate(sessionToken, payload) {
+ 
+  requireATSOperationalUser_(sessionToken);
+ 
+ 
+ 
+  if (!payload) {
+ 
+    throw new Error('Missing candidate assessment payload.');
+ 
+  }
+ 
+ 
+ 
+  const refNo = String(payload.refNo || '').trim();
+ 
+ 
+ 
+  if (!refNo) {
+ 
+    throw new Error('Please select a position first.');
+ 
+  }
+ 
+ 
+ 
+  if (!payload.fileBase64 || !payload.fileName || !payload.mimeType) {
+ 
+    throw new Error('Please upload a candidate CV.');
+ 
+  }
+ 
+ 
+ 
+  const position = getPositionByRef_(refNo);
+ 
+ 
+ 
+  if (!position) {
+ 
+    throw new Error('Position not found for Ref #' + refNo);
+ 
+  }
+ 
+ 
+ 
+  const rawCriteria = getCriteriaByRef_(refNo);
+ 
+ 
+ 
+  if (!Array.isArray(rawCriteria) || !rawCriteria.length) {
+ 
+    throw new Error('No live JD Criteria found for Ref #' + refNo);
+ 
+  }
+ 
+ 
+ 
+  // Normalize live criteria to one internal shape.
+ 
+  const criteria = rawCriteria.map(normalizeLiveCriterion_);
+ 
+ 
+ 
+  // Safety check: we must have real criteria names and weights.
+ 
+  const totalWeight = criteria.reduce(function(sum, item) {
+ 
+    return sum + Number(item.weight || 0);
+ 
+  }, 0);
+ 
+ 
+ 
+  if (!criteria.every(function(item) { return !!item.criterion; })) {
+ 
+    throw new Error('One or more live JD criteria could not be read correctly.');
+ 
+  }
+ 
+ 
+ 
+  if (Math.round(totalWeight) !== 100) {
+ 
+    throw new Error(
+ 
+      'Live JD Criteria weights do not total 100%. Current total: ' +
+ 
+      totalWeight
+ 
+    );
+ 
+  }
+ 
+ 
+ 
+  const prompt = buildCandidateAssessmentPrompt_(position, criteria);
+ 
+ 
+ 
+  const body = {
+ 
+    model: CONFIG.OPENAI_MODEL,
+ 
+ 
+ 
+    input: [{
+ 
+      role: 'user',
+ 
+      content: [
+ 
+        {
+ 
+          type: 'input_file',
+ 
+          filename: payload.fileName,
+ 
+          file_data:
+ 
+            'data:' +
+ 
+            payload.mimeType +
+ 
+            ';base64,' +
+ 
+            payload.fileBase64
+ 
+        },
+ 
+        {
+ 
+          type: 'input_text',
+ 
+          text: prompt
+ 
+        }
+ 
+      ]
+ 
+    }],
+ 
+ 
+ 
+    text: {
+ 
+      format: {
+ 
+        type: 'json_schema',
+ 
+        name: 'osynix_candidate_assessment',
+ 
+        strict: true,
+ 
+ 
+ 
+        schema: {
+ 
+          type: 'object',
+ 
+          additionalProperties: false,
+ 
+ 
+ 
+          properties: {
+ 
+            candidate_name: { type: 'string' },
+ 
+            mobile_phone_number: { type: ['string', 'null'] },
+ 
+            email_id: { type: ['string', 'null'] },
+ 
+            current_designation: { type: ['string', 'null'] },
+ 
+            current_company: { type: ['string', 'null'] },
+ 
+            location: { type: ['string', 'null'] },
+ 
+            total_experience_years: { type: ['number', 'null'] },
+ 
+            relevant_industry_experience_years: { type: ['number', 'null'] },
+ 
+ 
+ 
+            criterion_results: {
+ 
+              type: 'array',
+ 
+              minItems: 1,
+ 
+ 
+ 
+              items: {
+ 
+                type: 'object',
+ 
+                additionalProperties: false,
+ 
+ 
+ 
+                properties: {
+ 
+                  criterion: { type: 'string' },
+ 
+ 
+ 
+                  score_10: {
+ 
+                    type: 'number',
+ 
+                    enum: [0, 2, 4, 6, 8, 10]
+ 
+                  },
+ 
+ 
+ 
+                  evidence_confidence_10: {
+ 
+                    type: 'number',
+ 
+                    enum: [2, 4, 6, 8, 10]
+ 
+                  },
+ 
+ 
+ 
+                  evidence_found: { type: 'string' },
+ 
+                  assessment_rationale: { type: 'string' }
+ 
+                },
+ 
+ 
+ 
+                required: [
+ 
+                  'criterion',
+ 
+                  'score_10',
+ 
+                  'evidence_confidence_10',
+ 
+                  'evidence_found',
+ 
+                  'assessment_rationale'
+ 
+                ]
+ 
+              }
+ 
+            },
+ 
+ 
+ 
+            talent_profile: {
+ 
+              type: 'object',
+ 
+              additionalProperties: false,
+ 
+ 
+ 
+              properties: {
+ 
+                primary_function: { type: 'string' },
+ 
+                secondary_function_specialization: { type: 'string' },
+ 
+                industries_domains: { type: 'string' },
+ 
+                core_skills: { type: 'string' },
+ 
+                seniority_level: { type: 'string' },
+ 
+                systems_tools: { type: 'string' },
+ 
+                geographic_market_exposure: { type: 'string' },
+ 
+                career_profile_summary: { type: 'string' },
+ 
+                professional_summary: { type: 'string' },
+ 
+                employment_career_history: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    additionalProperties: false,
+                    properties: {
+                      company_name: { type: 'string' },
+                      designation: { type: 'string' },
+                      start_date: { type: ['string', 'null'] },
+                      end_date: { type: ['string', 'null'] },
+                      location: { type: ['string', 'null'] }
+                    },
+                    required: ['company_name','designation','start_date','end_date','location']
+                  }
+                },
+ 
+                education: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    additionalProperties: false,
+                    properties: {
+                      qualification: { type: 'string' },
+                      institution: { type: ['string', 'null'] },
+                      start_date: { type: ['string', 'null'] },
+                      end_date: { type: ['string', 'null'] },
+                      location: { type: ['string', 'null'] }
+                    },
+                    required: ['qualification','institution','start_date','end_date','location']
+                  }
+                }
+ 
+              },
+ 
+ 
+ 
+              required: [
+ 
+                'primary_function',
+ 
+                'secondary_function_specialization',
+ 
+                'industries_domains',
+ 
+                'core_skills',
+ 
+                'seniority_level',
+ 
+                'systems_tools',
+ 
+                'geographic_market_exposure',
+ 
+                'career_profile_summary',
+ 
+                'professional_summary',
+ 
+                'employment_career_history',
+ 
+                'education'
+ 
+              ]
+ 
+            }
+ 
+          },
+ 
+ 
+ 
+          required: [
+ 
+            'candidate_name',
+ 
+            'mobile_phone_number',
+ 
+            'email_id',
+ 
+            'current_designation',
+ 
+            'current_company',
+ 
+            'location',
+ 
+            'total_experience_years',
+ 
+            'relevant_industry_experience_years',
+ 
+            'criterion_results',
+ 
+            'talent_profile'
+ 
+          ]
+ 
+        }
+ 
+      }
+ 
+    }
+ 
+  };
+ 
+ 
+ 
+  const response = UrlFetchApp.fetch(
+ 
+    'https://api.openai.com/v1/responses',
+ 
+    {
+ 
+      method: 'post',
+ 
+      contentType: 'application/json',
+ 
+      headers: {
+ 
+        Authorization: 'Bearer ' + getOpenAIKey_()
+ 
+      },
+ 
+      payload: JSON.stringify(body),
+ 
+      muteHttpExceptions: true
+ 
+    }
+ 
+  );
+ 
+ 
+ 
+  const status = response.getResponseCode();
+ 
+  const responseText = response.getContentText();
+ 
+ 
+ 
+  if (status < 200 || status >= 300) {
+ 
+    throw new Error(
+ 
+      'OpenAI API error ' + status + ': ' + responseText
+ 
+    );
+ 
+  }
+ 
+ 
+ 
+  const apiJson = JSON.parse(responseText);
+ 
+ 
+ 
+  let outputText = apiJson.output_text || '';
+ 
+ 
+ 
+  if (!outputText && Array.isArray(apiJson.output)) {
+ 
+    for (const item of apiJson.output) {
+ 
+      if (!Array.isArray(item.content)) continue;
+ 
+ 
+ 
+      for (const content of item.content) {
+ 
+        if (content.type === 'output_text' && content.text) {
+ 
+          outputText += content.text;
+ 
+        }
+ 
+      }
+ 
+    }
+ 
+  }
+ 
+ 
+ 
+  if (!outputText) {
+ 
+    throw new Error('No structured candidate assessment returned.');
+ 
+  }
+ 
+ 
+ 
+  const ai = JSON.parse(outputText);
+ 
+ 
+ 
+  const matchedResults = matchCriterionResultsStable_(
+ 
+    criteria,
+ 
+    ai.criterion_results || []
+ 
+  );
+ 
+ 
+ 
+  const atsMatch = calculateWeightedATSStable_(matchedResults);
+ 
+  const mustHaveFit = calculateMustHaveFitStable_(matchedResults);
+ 
+  const coreRoleFit = calculateCoreRoleFitStable_(matchedResults);
+ 
+  const evidenceStrength = calculateEvidenceStrengthStable_(matchedResults);
+ 
+ 
+ 
+  const decision = calculateDecisionStable_(
+ 
+    mustHaveFit,
+ 
+    atsMatch
+ 
+  );
+ 
+ 
+ 
+  const summaries = buildAssessmentSummaryStable_(
+ 
+    matchedResults,
+ 
+    atsMatch,
+ 
+    mustHaveFit,
+ 
+    criteria.length
+ 
+  );
+ 
+ 
+ 
+  const talentProfile = sanitizeTalentProfile_(ai.talent_profile || {});
+  const latestEmployment = getLatestEmploymentRecordStable_(
+    talentProfile.employment_career_history
+  );
+ 
+  const resolvedCurrentDesignation =
+    cleanNullableText_(ai.current_designation) ||
+    cleanNullableText_(latestEmployment.designation);
+ 
+  const resolvedCurrentCompany =
+    cleanNullableText_(ai.current_company) ||
+    cleanNullableText_(latestEmployment.company_name);
+ 
+  return {
+ 
+    refNo: refNo,
+ 
+ 
+ 
+    candidate_name:
+ 
+      String(ai.candidate_name || '').trim(),
+ 
+ 
+ 
+    mobile_phone_number:
+ 
+      cleanNullableText_(ai.mobile_phone_number),
+ 
+ 
+ 
+    email_id:
+ 
+      cleanNullableText_(ai.email_id),
+ 
+ 
+ 
+    current_designation:
+ 
+      resolvedCurrentDesignation,
+ 
+ 
+ 
+    current_company:
+ 
+      resolvedCurrentCompany,
+ 
+ 
+ 
+    location:
+ 
+      cleanNullableText_(ai.location),
+ 
+ 
+ 
+    total_experience_years:
+ 
+      cleanNullableNumber_(ai.total_experience_years),
+ 
+ 
+ 
+    relevant_industry_experience_years:
+ 
+      cleanNullableNumber_(ai.relevant_industry_experience_years),
+ 
+ 
+ 
+    evidence_strength_10:
+ 
+      evidenceStrength,
+ 
+ 
+ 
+    ats_match_percent:
+ 
+      atsMatch,
+ 
+ 
+ 
+    must_have_fit:
+ 
+      mustHaveFit,
+ 
+ 
+ 
+    core_role_fit_10:
+ 
+      coreRoleFit,
+ 
+ 
+ 
+    key_strengths:
+ 
+      summaries.keyStrengths,
+ 
+ 
+ 
+    key_gap_risk:
+ 
+      summaries.keyGap,
+ 
+ 
+ 
+    executive_assessment:
+ 
+      summaries.executiveAssessment,
+ 
+ 
+ 
+    decision:
+ 
+      decision,
+ 
+ 
+ 
+    recruitment_stage:
+ 
+      defaultStageFromDecisionStable_(decision),
+ 
+ 
+ 
+    criterion_results:
+ 
+      matchedResults,
+ 
+ 
+ 
+    talent_profile:
+ 
+      talentProfile
+ 
+  };
+ 
+}
+ 
+ 
+ 
+ 
+ 
+/* =========================================================
+ 
+   LIVE CRITERIA NORMALIZATION
+ 
+   ========================================================= */
+ 
+ 
+ 
+function normalizeLiveCriterion_(item) {
+ 
+  return {
+ 
+    criterion: firstDefinedText_(
+ 
+      item['Criterion'],
+ 
+      item.criterion,
+ 
+      item.name
+ 
+    ),
+ 
+ 
+ 
+    weight: firstDefinedNumber_(
+ 
+      item['Weight %'],
+ 
+      item.weight_percent,
+ 
+      item.weight,
+ 
+      item.weightPercent
+ 
+    ),
+ 
+ 
+ 
+    knockout:
+ 
+      normalizeYesNo_(
+ 
+        firstDefinedText_(
+ 
+          item['Knockout?'],
+ 
+          item.knockout
+ 
+        )
+ 
+      ),
+ 
+ 
+ 
+    evidenceExpected:
+ 
+      firstDefinedText_(
+ 
+        item['Evidence Expected'],
+ 
+        item.evidence_expected,
+ 
+        item.evidenceExpected
+ 
+      ),
+ 
+ 
+ 
+    scoringGuidance:
+ 
+      firstDefinedText_(
+ 
+        item['Scoring Guidance'],
+ 
+        item.scoring_guidance,
+ 
+        item.scoringGuidance
+ 
+      ),
+ 
+ 
+ 
+    notes:
+ 
+      firstDefinedText_(
+ 
+        item['Notes'],
+ 
+        item.notes
+ 
+      )
+ 
+  };
+ 
+}
+ 
+ 
+ 
+ 
+ 
+function firstDefinedText_() {
+ 
+  for (let i = 0; i < arguments.length; i++) {
+ 
+    const value = arguments[i];
+ 
+ 
+ 
+    if (value !== undefined && value !== null) {
+ 
+      const text = String(value).trim();
+ 
+ 
+ 
+      if (text !== '') {
+ 
+        return text;
+ 
+      }
+ 
+    }
+ 
+  }
+ 
+ 
+ 
+  return '';
+ 
+}
+ 
+ 
+ 
+ 
+ 
+function firstDefinedNumber_() {
+ 
+  for (let i = 0; i < arguments.length; i++) {
+ 
+    const value = arguments[i];
+ 
+ 
+ 
+    if (value !== undefined && value !== null && value !== '') {
+ 
+      const numeric = Number(
+ 
+        String(value).replace('%', '').trim()
+ 
+      );
+ 
+ 
+ 
+      if (!isNaN(numeric)) {
+ 
+        return numeric;
+ 
+      }
+ 
+    }
+ 
+  }
+ 
+ 
+ 
+  return 0;
+ 
+}
+ 
+ 
+ 
+ 
+ 
+function normalizeYesNo_(value) {
+ 
+  return String(value || '').trim().toLowerCase() === 'yes'
+ 
+    ? 'Yes'
+ 
+    : 'No';
+ 
+}
+ 
+ 
+ 
+ 
+ 
+/* =========================================================
+ 
+   PROMPT
+ 
+   ========================================================= */
+ 
+ 
+ 
+function buildCandidateAssessmentPrompt_(position, criteria) {
+ 
+  const criteriaText = criteria.map(function(item, index) {
+ 
+    return [
+ 
+      'CRITERION ' + (index + 1),
+ 
+      'Criterion: ' + item.criterion,
+ 
+      'Weight %: ' + item.weight,
+ 
+      'Knockout?: ' + item.knockout,
+ 
+      'Evidence Expected: ' + item.evidenceExpected,
+ 
+      'Scoring Guidance: ' + item.scoringGuidance,
+ 
+      'Notes / Interpretation Rules: ' + item.notes
+ 
+    ].join('\n');
+ 
+  }).join('\n\n');
+ 
+ 
+ 
+  return `
+ 
+You are the evidence-assessment component of the Osynix ATS.
+ 
+ 
+ 
+Assess ONE uploaded candidate CV against ONE existing live vacancy.
+ 
+ 
+ 
+==================================================
+ 
+POSITION
+ 
+==================================================
+ 
+ 
+ 
+Ref #:
+ 
+${firstDefinedText_(position['Ref #'], position.refNo)}
+ 
+ 
+ 
+Client:
+ 
+${firstDefinedText_(position['Client'], position.client)}
+ 
+ 
+ 
+Position:
+ 
+${firstDefinedText_(position['Position'], position.position)}
+ 
+ 
+ 
+Location:
+ 
+${firstDefinedText_(position['Location'], position.location)}
+ 
+ 
+ 
+==================================================
+ 
+LIVE JD CRITERIA — AUTHORITATIVE
+ 
+==================================================
+ 
+ 
+ 
+${criteriaText}
+ 
+ 
+ 
+==================================================
+ 
+SCORING RULES
+ 
+==================================================
+ 
+ 
+ 
+Use ONLY these criterion scores:
+ 
+ 
+ 
+0 = No usable evidence / clearly does not meet the requirement.
+ 
+2 = Very weak or adjacent evidence.
+ 
+4 = Transferable or partial evidence with important gaps.
+ 
+6 = Credible direct evidence at moderate scope/depth.
+ 
+8 = Strong direct evidence with clear ownership and alignment.
+ 
+10 = Exceptional direct evidence with strong scope, depth and/or quantified outcomes.
+ 
+ 
+ 
+Use ONLY these evidence-confidence scores:
+ 
+ 
+ 
+2 = Very limited / ambiguous.
+ 
+4 = Some evidence but important ambiguity.
+ 
+6 = Reasonably clear.
+ 
+8 = Strong and specific.
+ 
+10 = Explicit, detailed and highly reliable.
+ 
+ 
+ 
+Do not use any other values.
+ 
+ 
+ 
+==================================================
+ 
+EVIDENCE RULES
+ 
+==================================================
+ 
+ 
+ 
+- Use only the uploaded CV.
+ 
+- Do not infer experience from employer name alone.
+ 
+- Do not infer US/global exposure without evidence.
+ 
+- Do not convert transferable experience into direct industry experience.
+ 
+- If the CV is silent, say "not evidenced".
+ 
+- Evaluate every live criterion separately.
+ 
+- criterion must reproduce the live criterion name exactly.
+ 
+- Knockout status comes only from the live ATS; do not change it.
+ 
+ 
+ 
+==================================================
+CURRENT / LATEST EMPLOYMENT
+==================================================
+ 
+Current Designation and Current Company must be grounded in the Employment / Career History extracted from this same CV.
+ 
+- If any genuine employment record is explicitly current (for example Present, Current, Ongoing, Till Date), use that record.
+- Otherwise use the genuine employment record with the latest documented end date.
+- current_designation must equal that record's designation.
+- current_company must equal that record's company_name.
+- Do not use a profile headline, career objective, desired role, academic title, project, certification, training program, or employer sector as Current Designation or Current Company.
+- Return null only when the CV contains no genuine employment record from which the value can be determined.
+- These two fields must be consistent with employment_career_history.
+ 
+==================================================
+ 
+EXPERIENCE YEARS
+ 
+==================================================
+ 
+ 
+ 
+Total Experience:
+ 
+- Calculate from explicit employment dates where defensible.
+ 
+- Avoid double-counting overlapping jobs.
+ 
+- Round to one decimal.
+ 
+- Return null if a defensible figure cannot be calculated.
+ 
+ 
+ 
+Relevant Industry Experience:
+ 
+- Count only experience materially relevant to the target role/domain.
+ 
+- Do not count unrelated employment just because it is managerial.
+ 
+- Round to one decimal.
+ 
+- Return null if not defensible.
+ 
+ 
+ 
+==================================================
+ 
+PERMANENT TALENT PROFILE
+ 
+==================================================
+ 
+ 
+ 
+Also create a vacancy-independent Talent Pool profile from the CV:
+ 
+ 
+ 
+- Primary Function
+ 
+- Secondary Function / Specialization
+ 
+- Industries / Domains
+ 
+- Core Skills
+ 
+- Seniority Level
+ 
+- Systems / Tools
+ 
+- Geographic / Market Exposure
+ 
+- Career Profile Summary
+ 
+- Professional Summary
+ 
+- Employment / Career History
+ 
+- Education
+ 
+ 
+ 
+Professional Summary:
+ 
+- Write a concise vacancy-independent professional synopsis grounded only in the CV.
+ 
+- Do not add achievements, credentials or experience that are not evidenced.
+ 
+ 
+ 
+Employment / Career History:
+- Return ONE structured array item per genuine employment record.
+- Extract ONLY: company_name, designation, start_date, end_date and location.
+- Preserve dates exactly as evidenced in the CV. Use null when a date or location is not stated.
+- Do NOT include responsibilities, achievements, employer sector, department, employer address, projects, training, or other descriptive narrative.
+- Include an internship only when it is documented as actual employment/work experience; exclude training-only programs.
+- Do not merge separate employers or roles into one item.
+- Keep the employment sequence faithful to the CV and do not invent missing information.
+ 
+Education:
+- Return ONE structured array item per formal academic qualification.
+- Extract ONLY: qualification, institution, start_date, end_date and location.
+- Include academic records such as Matriculation, Intermediate, Diploma, Bachelor's, Master's or doctorate when explicitly documented.
+- Preserve dates exactly as evidenced in the CV. Use null when a date, institution or location is not stated.
+- Do NOT include certifications, conferences, seminars, workshops, projects, employer training, professional-development courses or skills.
+- Do not merge separate academic qualifications into one item and do not invent missing information.
+ 
+ 
+ 
+This profile must describe the candidate generally, not their fit for this vacancy.
+ 
+ 
+ 
+Do not mention Ref #, ATS score, shortlist/reject decision or this JD in the Talent Pool profile.
+ 
+ 
+ 
+Return only the JSON required by the schema.
+ 
+`.trim();
+ 
+}
+ 
+ 
+ 
+ 
+ 
+/* =========================================================
+ 
+   RESULT MATCHING
+ 
+   ========================================================= */
+ 
+ 
+ 
+function matchCriterionResultsStable_(criteria, aiResults) {
+ 
+  return criteria.map(function(live) {
+ 
+    let match = aiResults.find(function(item) {
+ 
+      return normalizeCriterionName_(item.criterion) ===
+ 
+        normalizeCriterionName_(live.criterion);
+ 
+    });
+ 
+ 
+ 
+    if (!match) {
+ 
+      match = {
+ 
+        criterion: live.criterion,
+ 
+        score_10: 0,
+ 
+        evidence_confidence_10: 2,
+ 
+        evidence_found:
+ 
+          'No reliable matched evidence result was returned for this criterion.',
+ 
+        assessment_rationale:
+ 
+          'No positive score is credited because the live criterion could not be matched reliably.'
+ 
+      };
+ 
+    }
+ 
+ 
+ 
+    const score = snapToAllowed_(
+ 
+      match.score_10,
+ 
+      [0, 2, 4, 6, 8, 10]
+ 
+    );
+ 
+ 
+ 
+    const confidence = snapToAllowed_(
+ 
+      match.evidence_confidence_10,
+ 
+      [2, 4, 6, 8, 10]
+ 
+    );
+ 
+ 
+ 
+    return {
+ 
+      criterion: live.criterion,
+ 
+      weight: live.weight,
+ 
+      knockout: live.knockout,
+ 
+      score10: score,
+ 
+      evidenceStatus: statusFromScoreStable_(score, confidence),
+ 
+      evidenceConfidence10: confidence,
+ 
+      evidenceFound: String(match.evidence_found || '').trim(),
+ 
+      assessmentRationale: String(match.assessment_rationale || '').trim()
+ 
+    };
+ 
+  });
+ 
+}
+ 
+ 
+ 
+ 
+ 
+function snapToAllowed_(value, allowed) {
+ 
+  const numeric = Number(value);
+ 
+ 
+ 
+  if (isNaN(numeric)) {
+ 
+    return allowed[0];
+ 
+  }
+ 
+ 
+ 
+  let best = allowed[0];
+ 
+  let distance = Math.abs(numeric - best);
+ 
+ 
+ 
+  allowed.forEach(function(item) {
+ 
+    const next = Math.abs(numeric - item);
+ 
+ 
+ 
+    if (next < distance) {
+ 
+      best = item;
+ 
+      distance = next;
+ 
+    }
+ 
+  });
+ 
+ 
+ 
+  return best;
+ 
+}
+ 
+ 
+ 
+ 
+ 
+function statusFromScoreStable_(score, confidence) {
+ 
+  if (score === 0 && confidence <= 2) {
+ 
+    return 'Insufficient Evidence';
+ 
+  }
+ 
+ 
+ 
+  if (score <= 2) {
+ 
+    return 'Fail';
+ 
+  }
+ 
+ 
+ 
+  if (score === 4) {
+ 
+    return 'Partial';
+ 
+  }
+ 
+ 
+ 
+  return 'Pass';
+ 
+}
+ 
+ 
+ 
+ 
+ 
+/* =========================================================
+ 
+   DETERMINISTIC SCORES
+ 
+   ========================================================= */
+ 
+ 
+ 
+function calculateWeightedATSStable_(results) {
+ 
+  let totalWeight = 0;
+ 
+  let weighted = 0;
+ 
+ 
+ 
+  results.forEach(function(item) {
+ 
+    const weight = Number(item.weight || 0);
+ 
+ 
+ 
+    totalWeight += weight;
+ 
+    weighted += weight * (Number(item.score10 || 0) / 10);
+ 
+  });
+ 
+ 
+ 
+  if (!totalWeight) {
+ 
+    throw new Error(
+ 
+      'ATS calculation failed because total live criterion weight is 0.'
+ 
+    );
+ 
+  }
+ 
+ 
+ 
+  return Math.round(
+ 
+    weighted * 100 / totalWeight
+ 
+  );
+ 
+}
+ 
+ 
+ 
+ 
+ 
+function calculateMustHaveFitStable_(results) {
+ 
+  const knockout = results.filter(function(item) {
+ 
+    return item.knockout === 'Yes';
+ 
+  });
+ 
+ 
+ 
+  if (!knockout.length) {
+ 
+    return 'Pass';
+ 
+  }
+ 
+ 
+ 
+  if (knockout.some(function(item) {
+ 
+    return item.evidenceStatus === 'Fail';
+ 
+  })) {
+ 
+    return 'Fail';
+ 
+  }
+ 
+ 
+ 
+  if (knockout.some(function(item) {
+ 
+    return item.evidenceStatus === 'Insufficient Evidence';
+ 
+  })) {
+ 
+    return 'Insufficient Evidence';
+ 
+  }
+ 
+ 
+ 
+  if (knockout.some(function(item) {
+ 
+    return item.evidenceStatus === 'Partial';
+ 
+  })) {
+ 
+    return 'Partial';
+ 
+  }
+ 
+ 
+ 
+  return 'Pass';
+ 
+}
+ 
+ 
+ 
+ 
+ 
+function calculateCoreRoleFitStable_(results) {
+ 
+  const nonKnockout = results.filter(function(item) {
+ 
+    return item.knockout !== 'Yes';
+ 
+  });
+ 
+ 
+ 
+  const source = nonKnockout.length
+ 
+    ? nonKnockout
+ 
+    : results;
+ 
+ 
+ 
+  let totalWeight = 0;
+ 
+  let weighted = 0;
+ 
+ 
+ 
+  source.forEach(function(item) {
+ 
+    const weight = Number(item.weight || 0);
+ 
+ 
+ 
+    totalWeight += weight;
+ 
+    weighted += weight * Number(item.score10 || 0);
+ 
+  });
+ 
+ 
+ 
+  if (!totalWeight) {
+ 
+    return 0;
+ 
+  }
+ 
+ 
+ 
+  return roundOneDecimal_(
+ 
+    weighted / totalWeight
+ 
+  );
+ 
+}
+ 
+ 
+ 
+ 
+ 
+function calculateEvidenceStrengthStable_(results) {
+ 
+  let totalWeight = 0;
+ 
+  let weighted = 0;
+ 
+ 
+ 
+  results.forEach(function(item) {
+ 
+    const weight = Number(item.weight || 0);
+ 
+ 
+ 
+    totalWeight += weight;
+ 
+    weighted += weight * Number(item.evidenceConfidence10 || 0);
+ 
+  });
+ 
+ 
+ 
+  if (!totalWeight) {
+ 
+    return 0;
+ 
+  }
+ 
+ 
+ 
+  return roundOneDecimal_(
+ 
+    weighted / totalWeight
+ 
+  );
+ 
+}
+ 
+ 
+ 
+ 
+ 
+/* =========================================================
+ 
+   LIVE DECISION RULES — LISTS & SETTINGS M:O
+ 
+   ========================================================= */
+ 
+ 
+ 
+function calculateDecisionStable_(mustHaveFit, atsMatch) {
+ 
+  if (mustHaveFit === 'Fail') {
+ 
+    return 'Reject';
+ 
+  }
+ 
+ 
+ 
+  if (mustHaveFit === 'Insufficient Evidence') {
+ 
+    return 'Insufficient Evidence';
+ 
+  }
+ 
+ 
+ 
+  const rules = getLiveDecisionRulesStable_();
+ 
+ 
+ 
+  const eligible = rules
+ 
+    .filter(function(rule) {
+ 
+      return (
+ 
+        rule.mustHaveFit === mustHaveFit &&
+ 
+        Number(atsMatch) >= Number(rule.minAtsMatch)
+ 
+      );
+ 
+    })
+ 
+    .sort(function(a, b) {
+ 
+      return b.minAtsMatch - a.minAtsMatch;
+ 
+    });
+ 
+ 
+ 
+  return eligible.length
+ 
+    ? eligible[0].decision
+ 
+    : 'Hold';
+ 
+}
+ 
+ 
+ 
+ 
+ 
+function getLiveDecisionRulesStable_() {
+ 
+  const ss = getSpreadsheet_();
+ 
+ 
+ 
+  const sheet = ss.getSheetByName(
+ 
+    CONFIG.SHEETS.SETTINGS
+ 
+  );
+ 
+ 
+ 
+  if (!sheet) {
+ 
+    throw new Error('Lists & Settings sheet was not found.');
+ 
+  }
+ 
+ 
+ 
+  // M:O are the approved decision-rule columns.
+ 
+  const values = sheet
+ 
+    .getRange('M1:O100')
+ 
+    .getDisplayValues();
+ 
+ 
+ 
+  const rules = [];
+ 
+ 
+ 
+  for (let r = 1; r < values.length; r++) {
+ 
+    const fit = String(values[r][0] || '').trim();
+ 
+    const thresholdText = String(values[r][1] || '').trim();
+ 
+    const decision = String(values[r][2] || '').trim();
+ 
+ 
+ 
+    if (!fit || !decision) {
+ 
+      continue;
+ 
+    }
+ 
+ 
+ 
+    let threshold = Number(
+ 
+      thresholdText.replace('%', '')
+ 
+    );
+ 
+ 
+ 
+    if (isNaN(threshold)) {
+ 
+      threshold = 0;
+ 
+    }
+ 
+ 
+ 
+    rules.push({
+ 
+      mustHaveFit: fit,
+ 
+      minAtsMatch: threshold,
+ 
+      decision: decision
+ 
+    });
+ 
+  }
+ 
+ 
+ 
+  return rules;
+ 
+}
+ 
+ 
+ 
+ 
+ 
+/* =========================================================
+ 
+   SUMMARY
+ 
+   ========================================================= */
+ 
+ 
+ 
+function buildAssessmentSummaryStable_(
+ 
+  results,
+ 
+  atsMatch,
+ 
+  mustHaveFit,
+ 
+  criterionCount
+ 
+) {
+ 
+  const strengths = results
+ 
+    .filter(function(item) {
+ 
+      return item.score10 >= 6 && item.evidenceFound;
+ 
+    })
+ 
+    .sort(function(a, b) {
+ 
+      return b.score10 - a.score10 || b.weight - a.weight;
+ 
+    })
+ 
+    .slice(0, 3)
+ 
+    .map(function(item) {
+ 
+      return item.criterion + ': ' + item.evidenceFound;
+ 
+    })
+ 
+    .join(' ');
+ 
+ 
+ 
+  const gaps = results
+ 
+    .filter(function(item) {
+ 
+      return item.score10 <= 4 && item.assessmentRationale;
+ 
+    })
+ 
+    .sort(function(a, b) {
+ 
+      return b.weight - a.weight || a.score10 - b.score10;
+ 
+    })
+ 
+    .slice(0, 3)
+ 
+    .map(function(item) {
+ 
+      return item.criterion + ': ' + item.assessmentRationale;
+ 
+    })
+ 
+    .join(' ');
+ 
+ 
+ 
+  return {
+ 
+    keyStrengths:
+ 
+      strengths ||
+ 
+      'No material strength was evidenced strongly enough to summarize.',
+ 
+ 
+ 
+    keyGap:
+ 
+      gaps ||
+ 
+      'No major criterion gap was identified from the documented CV evidence.',
+ 
+ 
+ 
+    executiveAssessment:
+ 
+      'Candidate assessed against ' +
+ 
+      criterionCount +
+ 
+      ' live ATS criteria. Weighted ATS Match: ' +
+ 
+      atsMatch +
+ 
+      '%. Must-Have Fit: ' +
+ 
+      mustHaveFit +
+ 
+      '. The result is based on the stored Ref # criteria, weights, knockout rules and documented CV evidence.'
+ 
+  };
+ 
+}
+ 
+ 
+ 
+ 
+ 
+/* =========================================================
+ 
+   TALENT PROFILE
+ 
+   ========================================================= */
+ 
+ 
+ 
+function sanitizeTalentProfile_(profile) {
+ 
+  return {
+ 
+    primary_function:
+ 
+      cleanProfileText_(profile.primary_function),
+ 
+ 
+ 
+    secondary_function_specialization:
+ 
+      cleanProfileText_(profile.secondary_function_specialization),
+ 
+ 
+ 
+    industries_domains:
+ 
+      cleanProfileText_(profile.industries_domains),
+ 
+ 
+ 
+    core_skills:
+ 
+      cleanProfileText_(profile.core_skills),
+ 
+ 
+ 
+    seniority_level:
+ 
+      cleanProfileText_(profile.seniority_level),
+ 
+ 
+ 
+    systems_tools:
+ 
+      cleanProfileText_(profile.systems_tools),
+ 
+ 
+ 
+    geographic_market_exposure:
+ 
+      cleanProfileText_(profile.geographic_market_exposure),
+ 
+ 
+ 
+    career_profile_summary:
+ 
+      cleanProfileText_(profile.career_profile_summary),
+ 
+ 
+ 
+    professional_summary:
+ 
+      cleanProfileText_(profile.professional_summary),
+ 
+ 
+ 
+    employment_career_history:
+      sanitizeEmploymentHistory_(profile.employment_career_history),
+ 
+    education:
+      sanitizeEducationHistory_(profile.education)
+ 
+  };
+ 
+}
+ 
+ 
+ 
+ 
+ 
+function sanitizeEmploymentHistory_(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map(function(item) {
+    item = item || {};
+    return {
+      company_name: cleanProfileText_(item.company_name),
+      designation: cleanProfileText_(item.designation),
+      start_date: cleanNullableText_(item.start_date),
+      end_date: cleanNullableText_(item.end_date),
+      location: cleanNullableText_(item.location)
+    };
+  }).filter(function(item) {
+    return !!(item.company_name || item.designation);
+  });
+}
+ 
+function sanitizeEducationHistory_(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map(function(item) {
+    item = item || {};
+    return {
+      qualification: cleanProfileText_(item.qualification),
+      institution: cleanNullableText_(item.institution),
+      start_date: cleanNullableText_(item.start_date),
+      end_date: cleanNullableText_(item.end_date),
+      location: cleanNullableText_(item.location)
+    };
+  }).filter(function(item) {
+    return !!item.qualification;
+  });
+}
+ 
+function getLatestEmploymentRecordStable_(history) {
+  if (!Array.isArray(history) || !history.length) return {};
+ 
+  const currentRecord = history.find(function(item) {
+    return isCurrentEmploymentEndDateStable_(item && item.end_date);
+  });
+  if (currentRecord) return currentRecord;
+ 
+  let bestRecord = null;
+  let bestDate = null;
+  history.forEach(function(item) {
+    if (!item) return;
+    const parsed = parseEmploymentDateStable_(item.end_date);
+    if (parsed && (!bestDate || parsed.getTime() > bestDate.getTime())) {
+      bestDate = parsed;
+      bestRecord = item;
+    }
+  });
+ 
+  return bestRecord || history[0] || {};
+}
+ 
+function isCurrentEmploymentEndDateStable_(value) {
+  const text = String(value || '').trim().toLowerCase();
+  return /^(present|current|ongoing|till date|to date|now)$/.test(text);
+}
+ 
+function parseEmploymentDateStable_(value) {
+  const text = String(value || '').trim();
+  if (!text || isCurrentEmploymentEndDateStable_(text)) return null;
+ 
+  let match = text.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  if (match) return new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
+ 
+  match = text.match(/^(\d{1,2})[\/\-.](\d{4})$/);
+  if (match) return new Date(Number(match[2]), Number(match[1]) - 1, 1);
+ 
+  match = text.match(/^(\d{4})$/);
+  if (match) return new Date(Number(match[1]), 11, 31);
+ 
+  const parsed = new Date(text);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+ 
+ 
+function cleanProfileText_(value) {
+ 
+  return value === null || value === undefined
+ 
+    ? ''
+ 
+    : String(value).trim();
+ 
+}
+ 
+ 
+ 
+ 
+ 
+/* =========================================================
+ 
+   HELPERS
+ 
+   ========================================================= */
+ 
+ 
+ 
+function normalizeCriterionName_(value) {
+ 
+  return String(value || '')
+ 
+    .toLowerCase()
+ 
+    .replace(/[^a-z0-9]+/g, ' ')
+ 
+    .replace(/\s+/g, ' ')
+ 
+    .trim();
+ 
+}
+ 
+ 
+ 
+ 
+ 
+function cleanNullableText_(value) {
+ 
+  return value === null || value === undefined
+ 
+    ? ''
+ 
+    : String(value).trim();
+ 
+}
+ 
+ 
+ 
+ 
+ 
+function cleanNullableNumber_(value) {
+ 
+  if (
+ 
+    value === null ||
+ 
+    value === undefined ||
+ 
+    value === ''
+ 
+  ) {
+ 
+    return '';
+ 
+  }
+ 
+ 
+ 
+  const numeric = Number(value);
+ 
+ 
+ 
+  return isNaN(numeric)
+ 
+    ? ''
+ 
+    : roundOneDecimal_(numeric);
+ 
+}
+ 
+ 
+ 
+ 
+ 
+function roundOneDecimal_(value) {
+ 
+  return Math.round(Number(value) * 10) / 10;
+ 
+}
+ 
+ 
+ 
+ 
+ 
+function defaultStageFromDecisionStable_(decision) {
+ 
+  const normalized = String(decision || '')
+ 
+    .trim()
+ 
+    .toLowerCase();
+ 
+ 
+ 
+  if (
+ 
+    normalized === 'priority shortlist' ||
+ 
+    normalized === 'shortlist'
+ 
+  ) {
+ 
+    return 'Shortlisted';
+ 
+  }
+ 
+ 
+ 
+  if (normalized === 'hold') {
+ 
+    return 'Hold';
+ 
+  }
+ 
+ 
+ 
+  if (normalized === 'reject') {
+ 
+    return 'Rejected';
+ 
+  }
+ 
+ 
+ 
+  return 'HR Screening';
+ 
+}

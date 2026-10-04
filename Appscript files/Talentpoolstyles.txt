@@ -1,0 +1,523 @@
+<style>
+
+/* =========================================================
+   TALENT POOL PAGE
+   ========================================================= */
+
+.talent-pool-back-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+
+.talent-pool-back-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 42px;
+  padding: 0 18px;
+
+  border: 1px solid #175AFF;
+  border-radius: 10px;
+
+  background: #175AFF;
+  color: #FFFFFF;
+
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition:
+    background 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+
+.talent-pool-back-btn:hover {
+  background: #1C1E66;
+  border-color: #1C1E66;
+
+  box-shadow:
+    0 6px 16px rgba(23, 90, 255, 0.16);
+
+  transform: translateY(-1px);
+}
+
+
+/* =========================================================
+   TABLE TOOLBAR
+   ========================================================= */
+
+.talent-pool-table-toolbar {
+  display: grid;
+
+  grid-template-columns:
+    minmax(280px, 1fr)
+    auto
+    1fr;
+
+  align-items: center;
+  gap: 18px;
+
+  margin: 4px 0 12px;
+}
+
+
+.talent-pool-toolbar-search {
+  max-width: 420px;
+}
+
+
+.talent-pool-toolbar-search input {
+  width: 100%;
+  height: 42px;
+
+  padding: 0 14px;
+
+  border: 1px solid #D8E0EE;
+  border-radius: 9px;
+
+  background: #FFFFFF;
+  color: #1C1E66;
+
+  font: inherit;
+  font-size: 13px;
+
+  outline: none;
+}
+
+
+.talent-pool-toolbar-search input:focus {
+  border-color: #175AFF;
+
+  box-shadow:
+    0 0 0 3px rgba(23, 90, 255, 0.08);
+}
+
+
+#talentPoolRecordCount {
+  color: #1C1E66;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+
+#talentPoolPagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+
+  gap: 7px;
+}
+
+
+/* =========================================================
+   TALENT POOL TABLE
+   ========================================================= */
+
+.talent-pool-table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+
+.talent-pool-table th,
+.talent-pool-table td {
+  box-sizing: border-box;
+}
+
+
+/* Candidate Name */
+.talent-pool-table th:nth-child(1) {
+  width: 14%;
+}
+
+
+/* Phone */
+.talent-pool-table th:nth-child(2) {
+  width: 10%;
+}
+
+
+/* Email */
+.talent-pool-table th:nth-child(3) {
+  width: 17%;
+}
+
+
+/* Location */
+.talent-pool-table th:nth-child(4) {
+  width: 10%;
+}
+
+
+/* Current Role */
+.talent-pool-table th:nth-child(5) {
+  width: 16%;
+}
+
+
+/* Seniority */
+.talent-pool-table th:nth-child(6) {
+  width: 10%;
+}
+
+
+/* Talent Status */
+.talent-pool-table th:nth-child(7) {
+  width: 10%;
+}
+
+
+/* Last Updated */
+.talent-pool-table th:nth-child(8) {
+  width: 8%;
+}
+
+
+/* Action */
+.talent-pool-table th:nth-child(9) {
+  width: 5%;
+}
+
+
+/* =========================================================
+   TABLE HEADER FILTER TRIGGERS
+   ========================================================= */
+
+.talent-pool-filter-th {
+  position: relative;
+  vertical-align: middle;
+}
+
+
+.talent-pool-filter-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+
+  gap: 6px;
+
+  max-width: 100%;
+  padding: 0;
+
+  border: 0;
+  outline: 0;
+
+  background: transparent;
+  color: #52627A;
+
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+
+  line-height: 1.2;
+
+  white-space: nowrap;
+
+  cursor: pointer;
+}
+
+
+.talent-pool-filter-trigger:hover,
+.talent-pool-filter-trigger:focus {
+  color: #175AFF;
+}
+
+
+.talent-pool-filter-arrow {
+  display: inline-block;
+
+  flex: 0 0 auto;
+
+  color: #64748B;
+
+  font-size: 8px;
+  line-height: 1;
+
+  transform: translateY(1px);
+
+  transition:
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+
+.talent-pool-filter-trigger:hover
+.talent-pool-filter-arrow,
+.talent-pool-filter-trigger:focus
+.talent-pool-filter-arrow {
+  color: #175AFF;
+}
+
+
+/* =========================================================
+   ACTIVE FILTER STATE
+   Used later when a filter is selected
+   ========================================================= */
+
+.talent-pool-filter-trigger.is-filtered {
+  color: #175AFF;
+}
+
+
+.talent-pool-filter-trigger.is-filtered
+.talent-pool-filter-arrow {
+  color: #175AFF;
+}
+
+
+/* =========================================================
+   FUTURE FLOATING FILTER MENU
+   We will activate this in the next step.
+   ========================================================= */
+
+.talent-pool-filter-menu {
+  position: absolute;
+
+  top: calc(100% + 8px);
+  left: 0;
+
+  z-index: 1000;
+
+  min-width: 190px;
+  max-width: 280px;
+
+  /*
+   * Keep long filter lists inside
+   * their own scrollable container.
+   */
+  max-height: 320px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+
+  padding: 7px;
+
+  border: 1px solid #D8E0EE;
+  border-radius: 9px;
+
+  background: #FFFFFF;
+
+  box-shadow:
+    0 10px 28px rgba(28, 30, 102, 0.14);
+
+  display: none;
+}
+
+
+.talent-pool-filter-menu.is-open {
+  display: block;
+}
+
+
+.talent-pool-filter-option {
+  display: block;
+
+  width: 100%;
+
+  padding: 8px 10px;
+
+  border: 0;
+  border-radius: 6px;
+
+  background: transparent;
+  color: #1C1E66;
+
+  text-align: left;
+
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+
+  cursor: pointer;
+}
+
+
+.talent-pool-filter-option:hover {
+  background: #F3F6FF;
+  color: #175AFF;
+}
+
+
+.talent-pool-filter-option.active {
+  background: #EEF3FF;
+  color: #175AFF;
+  font-weight: 700;
+}
+
+
+/* =========================================================
+   RESPONSIVE SAFETY
+   ========================================================= */
+
+@media (max-width: 1200px) {
+
+  .talent-pool-table-toolbar {
+    grid-template-columns:
+      minmax(240px, 1fr)
+      auto
+      auto;
+  }
+
+  .talent-pool-toolbar-search {
+    max-width: 360px;
+  }
+
+}
+
+/* =========================================================
+   TALENT POOL — INDEPENDENT FIXED COLUMN HEADER
+   ========================================================= */
+
+.talent-pool-sticky-header {
+  display: none;
+
+  position: fixed;
+
+  /*
+   * Directly underneath the ATS navigation.
+   */
+  top: 72px;
+
+  /*
+   * Match the Talent Pool content area.
+   */
+  left: 10px;
+  right: 34px;
+
+  z-index: 90;
+
+  grid-template-columns:
+    14fr
+    10fr
+    17fr
+    10fr
+    16fr
+    10fr
+    10fr
+    8fr
+    5fr;
+
+  align-items: center;
+
+  min-height: 58px;
+
+  padding: 0 16px;
+
+  box-sizing: border-box;
+
+  background: #F7F9FC;
+
+  border: 1px solid #D8E0EE;
+  border-top: 2px solid #175AFF;
+  border-bottom: 2px solid #175AFF;
+
+  border-radius: 0 0 8px 8px;
+
+  box-shadow:
+    0 5px 14px rgba(23, 90, 255, 0.12);
+
+  color: #1C1E66;
+
+  font-size: 12px;
+  font-weight: 700;
+}
+
+
+.talent-pool-sticky-header.is-visible {
+  display: grid;
+}
+
+
+.talent-pool-sticky-header > div {
+  min-width: 0;
+
+  padding-right: 8px;
+
+  box-sizing: border-box;
+
+  overflow: visible;
+}
+
+
+/* =========================================================
+   FILTER CONTROLS INSIDE FIXED HEADER
+   ========================================================= */
+
+.talent-pool-sticky-filter-trigger {
+  display: inline-flex;
+  align-items: center;
+
+  gap: 6px;
+
+  max-width: 100%;
+
+  padding: 0;
+
+  border: 0;
+  outline: 0;
+
+  background: transparent;
+  color: #1C1E66;
+
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+
+  white-space: nowrap;
+
+  cursor: pointer;
+}
+
+
+.talent-pool-sticky-filter-trigger:hover,
+.talent-pool-sticky-filter-trigger:focus {
+  color: #175AFF;
+}
+
+
+.talent-pool-sticky-filter-trigger span:last-child {
+  flex: 0 0 auto;
+
+  color: #64748B;
+
+  font-size: 8px;
+}
+
+
+.talent-pool-sticky-filter-trigger:hover span:last-child,
+.talent-pool-sticky-filter-trigger:focus span:last-child {
+  color: #175AFF;
+}
+
+
+.talent-pool-sticky-filter-trigger.is-filtered {
+  color: #175AFF;
+}
+
+
+/* =========================================================
+   FIXED HEADER FILTER MENU
+   ========================================================= */
+
+.talent-pool-sticky-header
+.talent-pool-filter-menu {
+  z-index: 1100;
+
+  max-height: 300px;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  overscroll-behavior: contain;
+}
+
+
+</style>

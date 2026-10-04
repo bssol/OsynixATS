@@ -1,0 +1,1587 @@
+function generateSingleCandidatePdf(
+  sessionToken,
+  assessment
+) {
+  requireATSOperationalUser_(
+    sessionToken
+  );
+
+  if (!assessment) {
+    throw new Error(
+      'Assessment data is required.'
+    );
+  }
+
+  const logoBlob =
+    DriveApp
+      .getFileById(
+        '1foSlZS6F_60zmd3tBNN2lytU87jF2Ss4'
+      )
+      .getBlob();
+
+  const candidateName =
+    String(
+      assessment.candidate_name ||
+      'Candidate'
+    ).trim();
+
+  const refNo =
+    String(
+      assessment.refNo ||
+      ''
+    ).trim();
+
+  const position =
+    getPositionByRef_(
+      refNo
+    );
+
+  if (!position) {
+    throw new Error(
+      'Position not found for Ref #' +
+      refNo
+    );
+  }
+
+  const clientName =
+    position['Client'] ||
+    position.client ||
+    '—';
+
+  const positionName =
+    position['Position'] ||
+    position.position ||
+    '—';
+
+  const doc =
+    DocumentApp.create(
+      'Osynix Candidate Assessment Report'
+    );
+
+  const body =
+    doc.getBody();
+
+  body.clear();
+
+  body.setMarginTop(28);
+  body.setMarginBottom(28);
+  body.setMarginLeft(34);
+  body.setMarginRight(34);
+
+
+  /* =====================================================
+     BRAND HEADER
+     ===================================================== */
+
+  const logoParagraph =
+    body.appendParagraph('');
+
+  const logoImage =
+    logoParagraph.appendInlineImage(
+      logoBlob
+    );
+
+  sizeReportLogo_(
+  logoImage,
+  165
+);
+
+  logoParagraph.setAlignment(
+    DocumentApp.HorizontalAlignment.LEFT
+  );
+
+
+  const reportTitle =
+    body.appendParagraph(
+      'CANDIDATE ASSESSMENT REPORT'
+    );
+
+  reportTitle
+    .setBold(true)
+    .setFontSize(17)
+    .setForegroundColor(
+      '#1C1E66'
+    );
+
+
+  const positionLine =
+    body.appendParagraph(
+      clientName +
+      '  |  ' +
+      positionName +
+      '  |  Ref #' +
+      refNo
+    );
+
+  positionLine
+    .setFontSize(9)
+    .setForegroundColor(
+      '#667085'
+    );
+
+
+  body.appendParagraph('');
+
+
+  /* =====================================================
+     CANDIDATE SNAPSHOT
+     ===================================================== */
+
+  const candidateTable =
+    body.appendTable([
+      [
+        'CANDIDATE',
+        candidateName,
+        'LOCATION',
+        assessment.location || '—'
+      ],
+      [
+        'CURRENT ROLE',
+        assessment.current_designation || '—',
+        'CURRENT COMPANY',
+        assessment.current_company || '—'
+      ],
+      [
+        'TOTAL EXPERIENCE',
+        reportNumber_(
+          assessment.total_experience_years
+        ) + ' yrs',
+        'RELEVANT EXPERIENCE',
+        reportNumber_(
+          assessment
+            .relevant_industry_experience_years
+        ) + ' yrs'
+      ]
+    ]);
+
+  candidateTable.setBorderColor(
+    '#E5EAF2'
+  );
+
+  for (
+    let r = 0;
+    r < candidateTable.getNumRows();
+    r++
+  ) {
+    const row =
+      candidateTable.getRow(r);
+
+    for (
+      let c = 0;
+      c < row.getNumCells();
+      c++
+    ) {
+      const cell =
+        row.getCell(c);
+
+      cell.setPaddingTop(7);
+      cell.setPaddingBottom(7);
+      cell.setPaddingLeft(8);
+      cell.setPaddingRight(8);
+
+      const text =
+        cell.editAsText();
+
+      text.setFontSize(
+        c % 2 === 0
+          ? 8
+          : 9
+      );
+
+      if (c % 2 === 0) {
+        cell.setBackgroundColor(
+          '#F6F8FC'
+        );
+
+        text
+          .setBold(true)
+          .setForegroundColor(
+            '#667085'
+          );
+      } else {
+        text
+          .setBold(true)
+          .setForegroundColor(
+            '#1D2939'
+          );
+      }
+    }
+  }
+
+
+  body.appendParagraph('');
+
+
+  /* =====================================================
+     KPI SCORECARD
+     ===================================================== */
+
+  const kpiHeading =
+    body.appendParagraph(
+      'ASSESSMENT SCORECARD'
+    );
+
+  kpiHeading
+    .setBold(true)
+    .setFontSize(11)
+    .setForegroundColor(
+      '#1C1E66'
+    );
+
+
+  const kpiTable =
+    body.appendTable([
+      [
+        'ATS MATCH',
+        'MUST-HAVE FIT',
+        'CORE ROLE FIT',
+        'EVIDENCE',
+        'DECISION'
+      ],
+      [
+        reportPercent_(
+          assessment.ats_match_percent
+        ),
+        assessment.must_have_fit || '—',
+        reportScore10_(
+          assessment.core_role_fit_10
+        ),
+        reportScore10_(
+          assessment.evidence_strength_10
+        ),
+        assessment.decision || '—'
+      ]
+    ]);
+
+  kpiTable.setBorderColor(
+    '#DCE5F5'
+  );
+
+  const kpiLabelRow =
+    kpiTable.getRow(0);
+
+  const kpiValueRow =
+    kpiTable.getRow(1);
+
+  for (
+    let i = 0;
+    i < 5;
+    i++
+  ) {
+    const labelCell =
+      kpiLabelRow.getCell(i);
+
+    labelCell.setBackgroundColor(
+      '#F1F5FF'
+    );
+
+    labelCell
+      .editAsText()
+      .setFontSize(7)
+      .setBold(true)
+      .setForegroundColor(
+        '#526079'
+      );
+
+    const valueCell =
+      kpiValueRow.getCell(i);
+
+    valueCell.setBackgroundColor(
+      '#FFFFFF'
+    );
+
+    valueCell
+      .editAsText()
+      .setFontSize(12)
+      .setBold(true)
+      .setForegroundColor(
+        '#175AFF'
+      );
+
+    labelCell.setPaddingTop(6);
+    labelCell.setPaddingBottom(6);
+
+    valueCell.setPaddingTop(10);
+    valueCell.setPaddingBottom(10);
+  }
+
+
+  body.appendParagraph('');
+
+
+  /* =====================================================
+     CRITERIA SCORECARD
+     ===================================================== */
+
+  const criteriaHeading =
+    body.appendParagraph(
+      'CRITERIA SCORECARD'
+    );
+
+  criteriaHeading
+    .setBold(true)
+    .setFontSize(11)
+    .setForegroundColor(
+      '#1C1E66'
+    );
+
+
+  const criteriaRows = [
+    [
+      'Criterion',
+      'Weight',
+      'Score',
+      'Status',
+      'Confidence'
+    ]
+  ];
+
+  const criteria =
+    Array.isArray(
+      assessment.criterion_results
+    )
+      ? assessment.criterion_results
+      : [];
+
+  criteria.forEach(
+    function(item) {
+      criteriaRows.push([
+        item.criterion ||
+        'Criterion',
+
+        reportPercent_(
+          item.weight
+        ),
+
+        reportScore10_(
+          item.score10
+        ),
+
+        item.evidenceStatus ||
+        '—',
+
+        reportScore10_(
+          item.evidenceConfidence10
+        )
+      ]);
+    }
+  );
+
+
+  const criteriaTable =
+    body.appendTable(
+      criteriaRows
+    );
+
+  criteriaTable.setBorderColor(
+    '#E5EAF2'
+  );
+
+
+  for (
+    let r = 0;
+    r < criteriaTable.getNumRows();
+    r++
+  ) {
+    const row =
+      criteriaTable.getRow(r);
+
+    for (
+      let c = 0;
+      c < row.getNumCells();
+      c++
+    ) {
+      const cell =
+        row.getCell(c);
+
+      cell.setPaddingTop(5);
+      cell.setPaddingBottom(5);
+      cell.setPaddingLeft(5);
+      cell.setPaddingRight(5);
+
+      const text =
+        cell.editAsText();
+
+      if (r === 0) {
+        cell.setBackgroundColor(
+          '#1C1E66'
+        );
+
+        text
+          .setBold(true)
+          .setFontSize(7)
+          .setForegroundColor(
+            '#FFFFFF'
+          );
+      } else {
+        text.setFontSize(
+          c === 0
+            ? 7
+            : 8
+        );
+
+        if (c === 0) {
+          text
+            .setBold(true)
+            .setForegroundColor(
+              '#1D2939'
+            );
+        } else {
+          text.setForegroundColor(
+            '#475467'
+          );
+        }
+      }
+    }
+  }
+
+
+  body.appendParagraph('');
+
+
+  /* =====================================================
+     MANAGEMENT SUMMARY
+     ===================================================== */
+
+  const summaryHeading =
+    body.appendParagraph(
+      'MANAGEMENT SUMMARY'
+    );
+
+  summaryHeading
+    .setBold(true)
+    .setFontSize(11)
+    .setForegroundColor(
+      '#1C1E66'
+    );
+
+
+  const summaryTable =
+    body.appendTable([
+      [
+        'KEY STRENGTHS',
+        assessment.key_strengths ||
+        'No material strengths identified.'
+      ],
+      [
+        'KEY GAP / RISK',
+        assessment.key_gap_risk ||
+        'No material risk identified.'
+      ],
+      [
+        'EXECUTIVE ASSESSMENT',
+        assessment.executive_assessment ||
+        '—'
+      ]
+    ]);
+
+  summaryTable.setBorderColor(
+    '#E5EAF2'
+  );
+
+
+  for (
+    let r = 0;
+    r < summaryTable.getNumRows();
+    r++
+  ) {
+    const row =
+      summaryTable.getRow(r);
+
+    const labelCell =
+      row.getCell(0);
+
+    const valueCell =
+      row.getCell(1);
+
+    labelCell
+      .setBackgroundColor(
+        '#F6F8FC'
+      );
+
+    labelCell
+      .editAsText()
+      .setBold(true)
+      .setFontSize(7)
+      .setForegroundColor(
+        '#526079'
+      );
+
+    valueCell
+      .editAsText()
+      .setFontSize(8)
+      .setForegroundColor(
+        '#344054'
+      );
+
+    labelCell.setPaddingTop(7);
+    labelCell.setPaddingBottom(7);
+
+    valueCell.setPaddingTop(7);
+    valueCell.setPaddingBottom(7);
+  }
+
+
+  body.appendParagraph('');
+
+
+  /* =====================================================
+     FOOTER
+     ===================================================== */
+
+  const footer =
+    body.appendParagraph(
+      'Osynix Group ATS  •  Confidential Candidate Assessment'
+    );
+
+  footer
+    .setFontSize(7)
+    .setForegroundColor(
+      '#98A2B3'
+    )
+    .setAlignment(
+      DocumentApp.HorizontalAlignment.CENTER
+    );
+
+
+  doc.saveAndClose();
+
+
+  const file =
+    DriveApp.getFileById(
+      doc.getId()
+    );
+
+  const pdfBlob =
+    file
+      .getAs(
+        MimeType.PDF
+      )
+      .setName(
+        reportSafeFilename_(
+          candidateName +
+          '_Assessment_Report.pdf'
+        )
+      );
+
+  file.setTrashed(true);
+
+
+  return {
+    fileName:
+      pdfBlob.getName(),
+
+    mimeType:
+      'application/pdf',
+
+    base64:
+      Utilities.base64Encode(
+        pdfBlob.getBytes()
+      )
+  };
+}
+function generateBatchCandidatePdf(
+  sessionToken,
+  batchAssessments
+) {
+  requireATSOperationalUser_(
+    sessionToken
+  );
+
+  if (
+    !Array.isArray(batchAssessments) ||
+    batchAssessments.length === 0
+  ) {
+    throw new Error(
+      'Batch assessment data is required.'
+    );
+  }
+
+  if (batchAssessments.length > 5) {
+    throw new Error(
+      'Maximum 5 candidates are allowed per batch.'
+    );
+  }
+
+
+  const assessments =
+    batchAssessments.filter(
+      function(item) {
+        return item && typeof item === 'object';
+      }
+    );
+
+
+  if (assessments.length === 0) {
+    throw new Error(
+      'No valid candidate assessments were provided.'
+    );
+  }
+
+
+  const firstAssessment =
+    assessments[0];
+
+
+  const refNo =
+    String(
+      firstAssessment.refNo || ''
+    ).trim();
+
+
+  if (!refNo) {
+    throw new Error(
+      'Position reference number is required.'
+    );
+  }
+
+
+  const position =
+    getPositionByRef_(
+      refNo
+    );
+
+
+  if (!position) {
+    throw new Error(
+      'Position not found for Ref #' +
+      refNo
+    );
+  }
+
+
+  const clientName =
+    position['Client'] ||
+    position.client ||
+    '—';
+
+
+  const positionName =
+    position['Position'] ||
+    position.position ||
+    '—';
+
+
+  const logoBlob =
+    DriveApp
+      .getFileById(
+        '1foSlZS6F_60zmd3tBNN2lytU87jF2Ss4'
+      )
+      .getBlob();
+
+
+  const doc =
+    DocumentApp.create(
+      'Osynix Batch Candidate Assessment Report'
+    );
+
+
+  const body =
+    doc.getBody();
+
+
+  body.clear();
+
+  body.setMarginTop(28);
+  body.setMarginBottom(28);
+  body.setMarginLeft(34);
+  body.setMarginRight(34);
+
+
+  /* =====================================================
+     BRAND HEADER
+     ===================================================== */
+
+  const logoParagraph =
+    body.appendParagraph('');
+
+
+  const logoImage =
+    logoParagraph.appendInlineImage(
+      logoBlob
+    );
+
+
+  sizeReportLogo_(
+  logoImage,
+  165
+);
+
+
+  logoParagraph.setAlignment(
+    DocumentApp.HorizontalAlignment.LEFT
+  );
+
+
+  const reportTitle =
+    body.appendParagraph(
+      'BATCH CANDIDATE ASSESSMENT REPORT'
+    );
+
+
+  reportTitle
+    .setBold(true)
+    .setFontSize(17)
+    .setForegroundColor(
+      '#1C1E66'
+    );
+
+
+  const positionLine =
+    body.appendParagraph(
+      clientName +
+      '  |  ' +
+      positionName +
+      '  |  Ref #' +
+      refNo
+    );
+
+
+  positionLine
+    .setFontSize(9)
+    .setForegroundColor(
+      '#667085'
+    );
+
+
+  body.appendParagraph('');
+
+
+  /* =====================================================
+     BATCH SUMMARY
+     ===================================================== */
+
+  const summaryHeading =
+    body.appendParagraph(
+      'BATCH SUMMARY'
+    );
+
+
+  summaryHeading
+    .setBold(true)
+    .setFontSize(11)
+    .setForegroundColor(
+      '#1C1E66'
+    );
+
+
+  let totalScore = 0;
+  let scoredCandidates = 0;
+
+  const decisionCounts = {};
+
+
+  assessments.forEach(
+    function(assessment) {
+
+      const score =
+        Number(
+          String(
+            assessment.ats_match_percent || ''
+          )
+            .replace('%', '')
+            .trim()
+        );
+
+
+      if (!isNaN(score)) {
+        totalScore += score;
+        scoredCandidates++;
+      }
+
+
+      const decision =
+        String(
+          assessment.decision || 'Not Set'
+        ).trim();
+
+
+      decisionCounts[decision] =
+        (
+          decisionCounts[decision] || 0
+        ) + 1;
+    }
+  );
+
+
+  const averageScore =
+    scoredCandidates > 0
+      ? Math.round(
+          totalScore /
+          scoredCandidates
+        )
+      : 0;
+
+
+  const decisionSummary =
+    Object.keys(decisionCounts)
+      .map(
+        function(decision) {
+          return (
+            decision +
+            ': ' +
+            decisionCounts[decision]
+          );
+        }
+      )
+      .join('  |  ');
+
+
+  const batchSummaryTable =
+    body.appendTable([
+      [
+        'CANDIDATES',
+        String(assessments.length),
+
+        'AVG. ATS MATCH',
+        averageScore + '%'
+      ],
+      [
+        'POSITION',
+        positionName,
+
+        'REF #',
+        refNo
+      ],
+      [
+        'DECISIONS',
+        decisionSummary || '—',
+
+        'CLIENT',
+        clientName
+      ]
+    ]);
+
+
+  batchSummaryTable.setBorderColor(
+    '#E5EAF2'
+  );
+
+
+  for (
+    let r = 0;
+    r < batchSummaryTable.getNumRows();
+    r++
+  ) {
+
+    const row =
+      batchSummaryTable.getRow(r);
+
+
+    for (
+      let c = 0;
+      c < row.getNumCells();
+      c++
+    ) {
+
+      const cell =
+        row.getCell(c);
+
+
+      cell.setPaddingTop(7);
+      cell.setPaddingBottom(7);
+      cell.setPaddingLeft(8);
+      cell.setPaddingRight(8);
+
+
+      const text =
+        cell.editAsText();
+
+
+      if (c % 2 === 0) {
+
+        cell.setBackgroundColor(
+          '#F6F8FC'
+        );
+
+        text
+          .setBold(true)
+          .setFontSize(7)
+          .setForegroundColor(
+            '#667085'
+          );
+
+      } else {
+
+        text
+          .setBold(true)
+          .setFontSize(9)
+          .setForegroundColor(
+            '#1D2939'
+          );
+      }
+    }
+  }
+
+
+  body.appendParagraph('');
+
+
+  /* =====================================================
+     CANDIDATE SECTIONS
+     ===================================================== */
+
+  assessments.forEach(
+    function(assessment, index) {
+      if (index > 0) {
+        body.appendPageBreak();
+      }
+
+      const candidateName =
+        String(
+          assessment.candidate_name ||
+          'Candidate ' + (index + 1)
+        ).trim();
+
+
+      const candidateHeading =
+        body.appendParagraph(
+          (index + 1) +
+          '. ' +
+          candidateName
+        );
+
+
+      candidateHeading
+        .setBold(true)
+        .setFontSize(12)
+        .setForegroundColor(
+          '#1C1E66'
+        );
+
+
+      const candidateMeta =
+        body.appendTable([
+          [
+            'CURRENT ROLE',
+            assessment.current_designation ||
+            '—',
+
+            'LOCATION',
+            assessment.location ||
+            '—'
+          ],
+          [
+            'CURRENT COMPANY',
+            assessment.current_company ||
+            '—',
+
+            'RELEVANT EXP.',
+            reportNumber_(
+              assessment
+                .relevant_industry_experience_years
+            ) + ' yrs'
+          ]
+        ]);
+
+
+      candidateMeta.setBorderColor(
+        '#E5EAF2'
+      );
+
+
+      for (
+        let r = 0;
+        r < candidateMeta.getNumRows();
+        r++
+      ) {
+
+        const row =
+          candidateMeta.getRow(r);
+
+
+        for (
+          let c = 0;
+          c < row.getNumCells();
+          c++
+        ) {
+
+          const cell =
+            row.getCell(c);
+
+
+          cell.setPaddingTop(5);
+          cell.setPaddingBottom(5);
+          cell.setPaddingLeft(6);
+          cell.setPaddingRight(6);
+
+
+          const text =
+            cell.editAsText();
+
+
+          if (c % 2 === 0) {
+
+            cell.setBackgroundColor(
+              '#F6F8FC'
+            );
+
+            text
+              .setBold(true)
+              .setFontSize(7)
+              .setForegroundColor(
+                '#667085'
+              );
+
+          } else {
+
+            text
+              .setBold(true)
+              .setFontSize(8)
+              .setForegroundColor(
+                '#1D2939'
+              );
+          }
+        }
+      }
+
+
+      body.appendParagraph('');
+
+
+      /* -----------------------------
+         KPI SCORECARD
+         ----------------------------- */
+
+      const kpiTable =
+        body.appendTable([
+          [
+            'ATS MATCH',
+            'MUST-HAVE FIT',
+            'CORE ROLE FIT',
+            'EVIDENCE',
+            'DECISION'
+          ],
+          [
+            reportPercent_(
+              assessment.ats_match_percent
+            ),
+
+            assessment.must_have_fit ||
+            '—',
+
+            reportScore10_(
+              assessment.core_role_fit_10
+            ),
+
+            reportScore10_(
+              assessment.evidence_strength_10
+            ),
+
+            assessment.decision ||
+            '—'
+          ]
+        ]);
+
+
+      kpiTable.setBorderColor(
+        '#DCE5F5'
+      );
+
+
+      const kpiLabelRow =
+        kpiTable.getRow(0);
+
+
+      const kpiValueRow =
+        kpiTable.getRow(1);
+
+
+      for (
+        let i = 0;
+        i < 5;
+        i++
+      ) {
+
+        const labelCell =
+          kpiLabelRow.getCell(i);
+
+
+        labelCell.setBackgroundColor(
+          '#F1F5FF'
+        );
+
+
+        labelCell
+          .editAsText()
+          .setFontSize(7)
+          .setBold(true)
+          .setForegroundColor(
+            '#526079'
+          );
+
+
+        const valueCell =
+          kpiValueRow.getCell(i);
+
+
+        valueCell.setBackgroundColor(
+          '#FFFFFF'
+        );
+
+
+        valueCell
+          .editAsText()
+          .setFontSize(10)
+          .setBold(true)
+          .setForegroundColor(
+            '#175AFF'
+          );
+
+
+        labelCell.setPaddingTop(5);
+        labelCell.setPaddingBottom(5);
+
+        valueCell.setPaddingTop(7);
+        valueCell.setPaddingBottom(7);
+      }
+
+
+      body.appendParagraph('');
+
+
+      /* -----------------------------
+         CRITERIA SCORECARD
+         ----------------------------- */
+
+      const criteriaRows = [
+        [
+          'Criterion',
+          'Weight',
+          'Score',
+          'Status',
+          'Confidence'
+        ]
+      ];
+
+
+      const criteria =
+        Array.isArray(
+          assessment.criterion_results
+        )
+          ? assessment.criterion_results
+          : [];
+
+
+      criteria.forEach(
+        function(item) {
+
+          criteriaRows.push([
+            item.criterion ||
+            'Criterion',
+
+            reportPercent_(
+              item.weight
+            ),
+
+            reportScore10_(
+              item.score10
+            ),
+
+            item.evidenceStatus ||
+            '—',
+
+            reportScore10_(
+              item.evidenceConfidence10
+            )
+          ]);
+        }
+      );
+
+
+      const criteriaTable =
+        body.appendTable(
+          criteriaRows
+        );
+
+
+      criteriaTable.setBorderColor(
+        '#E5EAF2'
+      );
+
+
+      for (
+        let r = 0;
+        r < criteriaTable.getNumRows();
+        r++
+      ) {
+
+        const row =
+          criteriaTable.getRow(r);
+
+
+        for (
+          let c = 0;
+          c < row.getNumCells();
+          c++
+        ) {
+
+          const cell =
+            row.getCell(c);
+
+
+          cell.setPaddingTop(4);
+          cell.setPaddingBottom(4);
+          cell.setPaddingLeft(5);
+          cell.setPaddingRight(5);
+
+
+          const text =
+            cell.editAsText();
+
+
+          if (r === 0) {
+
+            cell.setBackgroundColor(
+              '#1C1E66'
+            );
+
+
+            text
+              .setBold(true)
+              .setFontSize(7)
+              .setForegroundColor(
+                '#FFFFFF'
+              );
+
+          } else {
+
+            text.setFontSize(
+              c === 0
+                ? 7
+                : 8
+            );
+
+
+            if (c === 0) {
+
+              text
+                .setBold(true)
+                .setForegroundColor(
+                  '#1D2939'
+                );
+
+            } else {
+
+              text.setForegroundColor(
+                '#475467'
+              );
+            }
+          }
+        }
+      }
+
+
+      body.appendParagraph('');
+
+
+      /* -----------------------------
+         MANAGEMENT SUMMARY
+         ----------------------------- */
+
+      const managementTable =
+        body.appendTable([
+          [
+            'KEY STRENGTHS',
+            assessment.key_strengths ||
+            'No material strengths identified.'
+          ],
+          [
+            'KEY GAP / RISK',
+            assessment.key_gap_risk ||
+            'No material risk identified.'
+          ],
+          [
+            'EXECUTIVE ASSESSMENT',
+            assessment.executive_assessment ||
+            '—'
+          ]
+        ]);
+
+
+      managementTable.setBorderColor(
+        '#E5EAF2'
+      );
+
+
+      for (
+        let r = 0;
+        r < managementTable.getNumRows();
+        r++
+      ) {
+
+        const row =
+          managementTable.getRow(r);
+
+
+        const labelCell =
+          row.getCell(0);
+
+
+        const valueCell =
+          row.getCell(1);
+
+
+        labelCell.setBackgroundColor(
+          '#F6F8FC'
+        );
+
+
+        labelCell
+          .editAsText()
+          .setBold(true)
+          .setFontSize(7)
+          .setForegroundColor(
+            '#526079'
+          );
+
+
+        valueCell
+          .editAsText()
+          .setFontSize(8)
+          .setForegroundColor(
+            '#344054'
+          );
+
+
+        labelCell.setPaddingTop(6);
+        labelCell.setPaddingBottom(6);
+
+        valueCell.setPaddingTop(6);
+        valueCell.setPaddingBottom(6);
+      }
+
+
+      /*
+       * Separate candidates clearly without
+       * forcing unnecessary blank pages.
+       */
+      
+    }
+  );
+
+
+  /* =====================================================
+     FOOTER
+     ===================================================== */
+
+  body.appendParagraph('');
+
+
+  const footer =
+    body.appendParagraph(
+      'Osynix Group ATS  •  Confidential Batch Candidate Assessment'
+    );
+
+
+  footer
+    .setFontSize(7)
+    .setForegroundColor(
+      '#98A2B3'
+    )
+    .setAlignment(
+      DocumentApp.HorizontalAlignment.CENTER
+    );
+
+
+  /* =====================================================
+     PDF EXPORT
+     ===================================================== */
+
+  doc.saveAndClose();
+
+
+  const file =
+    DriveApp.getFileById(
+      doc.getId()
+    );
+
+
+  const pdfBlob =
+    file
+      .getAs(
+        MimeType.PDF
+      )
+      .setName(
+        reportSafeFilename_(
+          'Batch_' +
+          refNo +
+          '_' +
+          positionName +
+          '_Assessment_Report.pdf'
+        )
+      );
+
+
+  file.setTrashed(true);
+
+
+  return {
+    fileName:
+      pdfBlob.getName(),
+
+    mimeType:
+      'application/pdf',
+
+    base64:
+      Utilities.base64Encode(
+        pdfBlob.getBytes()
+      )
+  };
+}
+
+function appendReportField_(
+  body,
+  label,
+  value
+) {
+  const paragraph =
+    body.appendParagraph('');
+
+  paragraph.appendText(
+    label + ': '
+  ).setBold(true);
+
+  paragraph.appendText(
+    String(
+      value === null ||
+      value === undefined ||
+      value === ''
+        ? '—'
+        : value
+    )
+  );
+}
+
+
+function appendReportSectionHeading_(
+  body,
+  text
+) {
+  const paragraph =
+    body.appendParagraph(
+      text
+    );
+
+  paragraph
+    .setHeading(
+      DocumentApp
+        .ParagraphHeading
+        .HEADING2
+    )
+    .setForegroundColor(
+      '#1C1E66'
+    )
+    .setBold(true);
+}
+
+
+function reportPercent_(value) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ''
+  ) {
+    return '—';
+  }
+
+  const numeric =
+    Number(
+      String(value)
+        .replace('%', '')
+        .trim()
+    );
+
+  return isNaN(numeric)
+    ? String(value)
+    : numeric + '%';
+}
+
+
+function reportScore10_(value) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ''
+  ) {
+    return '—';
+  }
+
+  return String(value) + '/10';
+}
+
+
+function reportNumber_(value) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ''
+  ) {
+    return '—';
+  }
+
+  return String(value);
+}
+
+
+function reportSafeFilename_(
+  fileName
+) {
+  return String(
+    fileName ||
+    'Osynix_Report.pdf'
+  )
+    .replace(
+      /[\\/:*?"<>|]+/g,
+      '_'
+    )
+    .trim();
+}
+function sizeReportLogo_(
+  logoImage,
+  targetWidth
+) {
+  const originalWidth =
+    logoImage.getWidth();
+
+  const originalHeight =
+    logoImage.getHeight();
+
+  if (
+    !originalWidth ||
+    !originalHeight
+  ) {
+    logoImage.setWidth(
+      targetWidth
+    );
+
+    return;
+  }
+
+  const aspectRatio =
+    originalHeight /
+    originalWidth;
+
+  logoImage.setWidth(
+    targetWidth
+  );
+
+  logoImage.setHeight(
+    Math.round(
+      targetWidth *
+      aspectRatio
+    )
+  );
+}
+
+function authorizeReportServices() {
+  DriveApp.getFileById(
+    '1foSlZS6F_60zmd3tBNN2lytU87jF2Ss4'
+  ).getName();
+
+  DocumentApp.create(
+    'Osynix ATS Authorization Test'
+  );
+}
+
+

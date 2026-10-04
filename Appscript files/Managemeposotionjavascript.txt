@@ -1,0 +1,421 @@
+<script>
+let mpData = null;
+let mpAllPositions = [];
+let mpFiltered = [];
+let mpPage = 1;
+let mpPageSize = 25;
+
+document.addEventListener('osynixUserReady', function() {
+mpLoad();
+}, { once: true });
+
+function mpSessionToken_() {
+let token = '';
+try { token = localStorage.getItem('OSYNIX_ATS_SESSION') || ''; } catch (error) { token = ''; }
+if (!token) {
+try { token = new URLSearchParams(window.location.search).get('session') || ''; } catch (error) { token = ''; }
+}
+if (!token) throw new Error('Your ATS session is missing. Please sign in again.');
+return token;
+}
+
+function mpLoad() {
+const loading = document.getElementById('mpLoading');
+const content = document.getElementById('mpContent');
+
+if (loading) {
+loading.textContent = 'Loading live position register...';
+loading.classList.remove('hidden');
+}
+if (content) content.classList.add('hidden');
+
+google.script.run
+.withSuccessHandler(function(result) {
+mpData = result || {};
+mpAllPositions = Array.isArray(mpData.positions) ? mpData.positions : [];
+mpRenderKpis_();
+mpRenderClientOptions_();
+mpApplyUrlStatus_();
+mpApplyFilters();
+if (loading) loading.classList.add('hidden');
+if (content) content.classList.remove('hidden');
+})
+.withFailureHandler(function(error) {
+if (loading) loading.textContent = mpError_(error);
+})
+.getManagePositionsData(mpSessionToken_());
+}
+
+function mpRefresh() { mpLoad(); }
+
+function mpRenderKpis_() {
+const container = document.getElementById('mpKpis');
+if (!container) return;
+
+const c = mpData.counts || {};
+const items = [
+{key:'', label:'Total Positions', value:c.total || 0, icon:'▣', bg:'#EAF1FF', color:'#175AFF'},
+{key:'Active', label:'Active', value:c.active || 0, icon:'▶', bg:'#E9F9F1', color:'#16A36A'},
+{key:'On Hold', label:'On Hold', value:c.onHold || 0, icon:'Ⅱ', bg:'#FFF6DD', color:'#F59E0B'},
+{key:'Filled', label:'Filled', value:c.filled || 0, icon:'✓', bg:'#EAF1FF', color:'#175AFF'},
+{key:'Closed', label:'Closed', value:c.closed || 0, icon:'×', bg:'#FEECEC', color:'#EF4444'},
+{key:'Cancelled', label:'Cancelled', value:c.cancelled || 0, icon:'−', bg:'#F1EBFF', color:'#7C4DED'}
+];
+
+container.innerHTML = items.map(function(item) {
+return `
+<button class="mp-kpi-card" type="button" data-status="${mpEscAttr_(item.key)}" onclick="mpSetStatus('${mpEscAttr_(item.key)}')" style="--kpi-bg:${item.bg};--kpi-color:${item.color}">
+<span class="mp-kpi-icon">${item.icon}</span>
+<span class="mp-kpi-copy">
+<span>${mpEsc_(item.label)}</span>
+<strong>${mpEsc_(item.value)}</strong>
+</span>
+</button>
+`;
+}).join('');
+}
+
+function mpRenderClientOptions_() {
+const select = document.getElementById('mpClient');
+if (!select) return;
+const clients = Array.isArray(mpData.clients) ? mpData.clients : [];
+select.innerHTML = '<option value="">All Clients</option>' + clients.map(function(client) {
+return `<option value="${mpEscAttr_(client)}">${mpEsc_(client)}</option>`;
+}).join('');
+}
+
+function mpApplyUrlStatus_() {
+const status = new URLSearchParams(window.location.search).get('status') || '';
+const select = document.getElementById('mpStatus');
+if (!select || !status) return;
+
+const valid = ['Active','On Hold','Filled','Closed','Cancelled'];
+const match = valid.find(function(item) {
+return mpNorm_(item) === mpNorm_(status);
+});
+if (match) select.value = match;
+}
+
+function mpSetStatus(status) {
+const select = document.getElementById('mpStatus');
+if (select) select.value = status || '';
+mpPage = 1;
+mpApplyFilters();
+}
+
+function mpApplyFilters() {
+const search = mpNorm_(document.getElementById('mpSearch').value);
+const status = document.getElementById('mpStatus').value;
+const client = document.getElementById('mpClient').value;
+const priority = document.getElementById('mpPriority').value;
+const sort = document.getElementById('mpSort').value;
+
+mpFiltered = mpAllPositions.filter(function(item) {
+const haystack = [item.refNo,item.position,item.client,item.location,item.status,item.priority].join(' ').toLowerCase();
+const searchOk = !search || haystack.includes(search);
+const statusOk = !status || mpNorm_(item.status) === mpNorm_(status);
+const clientOk = !client || mpNorm_(item.client) === mpNorm_(client);
+const priorityOk = !priority || mpNorm_(item.priority) === mpNorm_(priority);
+return searchOk && statusOk && clientOk && priorityOk;
+});
+
+mpSortPositions_(mpFiltered, sort);
+
+const maxPage = Math.max(1, Math.ceil(mpFiltered.length / mpPageSize));
+if (mpPage > maxPage) mpPage = maxPage;
+
+mpRenderActiveKpi_(status);
+mpRenderTable_();
+mpRenderPagination_();
+mpRenderResultCount_();
+}
+
+function mpSortPositions_(items, sort) {
+const priorityWeight = {high:1, medium:2, low:3};
+
+items.sort(function(a,b) {
+if (sort === 'ref-asc') return Number(a.refNo) - Number(b.refNo);
+if (sort === 'client-asc') return String(a.client).localeCompare(String(b.client));
+if (sort === 'position-asc') return String(a.position).localeCompare(String(b.position));
+if (sort === 'priority') return (priorityWeight[mpNorm_(a.priority)] || 9) - (priorityWeight[mpNorm_(b.priority)] || 9);
+return Number(b.refNo) - Number(a.refNo);
+});
+}
+
+function mpRenderActiveKpi_(status) {
+document.querySelectorAll('.mp-kpi-card').forEach(function(card) {
+card.classList.toggle('active-filter', mpNorm_(card.getAttribute('data-status')) === mpNorm_(status));
+});
+}
+
+function mpRenderTable_() {
+const wrap = document.getElementById('mpTableWrap');
+if (!wrap) return;
+
+if (!mpFiltered.length) {
+wrap.innerHTML = '<div class="mp-empty">No positions match the selected filters.</div>';
+return;
+}
+
+const start = (mpPage - 1) * mpPageSize;
+const rows = mpFiltered.slice(start, start + mpPageSize);
+
+wrap.innerHTML = `
+<table class="mp-table">
+<thead>
+<tr>
+<th>Ref #</th>
+<th>Position</th>
+<th>Client</th>
+<th>Status</th>
+<th>Screened</th>
+<th>Shortlisted</th>
+<th>Hired</th>
+<th>Priority</th>
+<th>Open Date</th>
+<th>Target</th>
+</tr>
+</thead>
+<tbody>
+${rows.map(function(item) {
+return `
+<tr onclick="mpOpenPosition('${mpEscAttr_(item.refNo)}')">
+<td><strong>#${mpEsc_(item.refNo)}</strong></td>
+<td><span class="mp-position-name">${mpEsc_(item.position || 'Untitled Position')}</span><span class="mp-ref">${mpEsc_(item.location || 'Location not provided')}</span></td>
+<td>${mpEsc_(item.client || '—')}</td>
+<td><span class="mp-status ${mpStatusClass_(item.status)}">${mpEsc_(item.status || '—')}</span></td>
+<td>${mpEsc_(item.screened || 0)}</td>
+<td>${mpEsc_(item.shortlisted || 0)}</td>
+<td>${mpEsc_(item.hired || 0)}</td>
+<td><span class="mp-priority ${mpNorm_(item.priority)}">${mpEsc_(item.priority || '—')}</span></td>
+<td>${mpEsc_(item.openDate || '—')}</td>
+<td>${mpEsc_(item.hiringTarget || 0)}</td>
+</tr>
+`;
+}).join('')}
+</tbody>
+</table>
+`;
+}
+
+function mpRenderResultCount_() {
+const el = document.getElementById('mpResultCount');
+if (!el) return;
+
+const total = mpFiltered.length;
+if (!total) {
+el.textContent = '0 positions';
+return;
+}
+
+const start = (mpPage - 1) * mpPageSize + 1;
+const end = Math.min(total, start + mpPageSize - 1);
+el.textContent = `Showing ${start}–${end} of ${total} positions`;
+}
+
+function mpRenderPagination_() {
+const container = document.getElementById('mpPagination');
+if (!container) return;
+
+const totalPages = Math.max(1, Math.ceil(mpFiltered.length / mpPageSize));
+if (totalPages <= 1) {
+container.innerHTML = '';
+return;
+}
+
+let html = `<button class="mp-page-btn" type="button" onclick="mpGoPage(${mpPage - 1})" ${mpPage === 1 ? 'disabled' : ''}>‹</button>`;
+
+const pages = mpPageNumbers_(totalPages, mpPage);
+pages.forEach(function(page) {
+if (page === '...') {
+html += '<span style="padding:0 4px;color:#94A3B8">…</span>';
+} else {
+html += `<button class="mp-page-btn ${page === mpPage ? 'active' : ''}" type="button" onclick="mpGoPage(${page})">${page}</button>`;
+}
+});
+
+html += `<button class="mp-page-btn" type="button" onclick="mpGoPage(${mpPage + 1})" ${mpPage === totalPages ? 'disabled' : ''}>›</button>`;
+container.innerHTML = html;
+}
+
+function mpPageNumbers_(total, current) {
+if (total <= 7) return Array.from({length:total}, function(_,i) { return i + 1; });
+const result = [1];
+if (current > 4) result.push('...');
+const start = Math.max(2, current - 1);
+const end = Math.min(total - 1, current + 1);
+for (let i = start; i <= end; i++) result.push(i);
+if (current < total - 3) result.push('...');
+result.push(total);
+return result;
+}
+
+function mpGoPage(page) {
+const totalPages = Math.max(1, Math.ceil(mpFiltered.length / mpPageSize));
+if (page < 1 || page > totalPages) return;
+mpPage = page;
+mpRenderTable_();
+mpRenderPagination_();
+mpRenderResultCount_();
+window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function mpChangePageSize() {
+mpPageSize = Number(document.getElementById('mpPageSize').value) || 25;
+mpPage = 1;
+mpApplyFilters();
+}
+
+function mpClearFilters() {
+document.getElementById('mpSearch').value = '';
+document.getElementById('mpStatus').value = '';
+document.getElementById('mpClient').value = '';
+document.getElementById('mpPriority').value = '';
+document.getElementById('mpSort').value = 'ref-desc';
+mpPage = 1;
+mpApplyFilters();
+}
+
+function mpOpenPosition(refNo) {
+const item = mpAllPositions.find(function(position) { return position.refNo === refNo; });
+if (!item) return;
+
+const statuses = ['Active','On Hold','Filled','Closed','Cancelled'];
+const priorities = ['High','Medium','Low'];
+
+mpShowDrawer_(item.position || ('Ref #' + item.refNo), `
+<div class="mp-detail-grid">
+${mpDetailCard_('Ref #', item.refNo)}
+${mpDetailCard_('Client', item.client || '—')}
+${mpDetailCard_('Status', item.status || '—')}
+${mpDetailCard_('Open Date', item.openDate || '—')}
+${mpDetailCard_('Screened', item.screened || 0)}
+${mpDetailCard_('Shortlisted', item.shortlisted || 0)}
+${mpDetailCard_('Client Interviews', item.interviews || 0)}
+${mpDetailCard_('Offers', item.offers || 0)}
+${mpDetailCard_('Hired', item.hired || 0)}
+${mpDetailCard_('Average ATS Match', (item.averageMatch || 0) + '%')}
+${mpDetailCard_('Closed By', item.closedBy || '—')}
+${mpDetailCard_('Closed Date', item.closedDate || '—')}
+</div>
+
+<section class="mp-edit-box">
+<span class="mp-eyebrow">POSITION MANAGEMENT</span>
+<h3>Edit Position</h3>
+<p>Changes are written directly to Positions Master. Reopening does not erase historical closure audit data.</p>
+
+<div class="mp-edit-grid">
+<div class="mp-edit-field full">
+<label for="mpEditStatus">Status</label>
+<select id="mpEditStatus">
+${statuses.map(function(status) {
+return `<option value="${mpEscAttr_(status)}" ${mpNorm_(status) === mpNorm_(item.status) ? 'selected' : ''}>${mpEsc_(status)}</option>`;
+}).join('')}
+</select>
+</div>
+
+<div class="mp-edit-field">
+<label for="mpEditPriority">Priority</label>
+<select id="mpEditPriority">
+${priorities.map(function(priority) {
+return `<option value="${mpEscAttr_(priority)}" ${mpNorm_(priority) === mpNorm_(item.priority) ? 'selected' : ''}>${mpEsc_(priority)}</option>`;
+}).join('')}
+</select>
+</div>
+
+<div class="mp-edit-field">
+<label for="mpEditTarget">Hiring Target</label>
+<input id="mpEditTarget" type="number" min="1" step="1" value="${mpEscAttr_(item.hiringTarget || 1)}">
+</div>
+</div>
+
+<div class="mp-save-row">
+<button id="mpSaveButton" class="mp-save" type="button" onclick="mpSavePosition('${mpEscAttr_(item.refNo)}')">Save Changes</button>
+<span id="mpSaveStatus" class="mp-save-status"></span>
+</div>
+</section>
+`);
+}
+
+function mpSavePosition(refNo) {
+const status = document.getElementById('mpEditStatus').value;
+const priority = document.getElementById('mpEditPriority').value;
+const hiringTarget = Number(document.getElementById('mpEditTarget').value);
+const button = document.getElementById('mpSaveButton');
+const message = document.getElementById('mpSaveStatus');
+
+if (!Number.isInteger(hiringTarget) || hiringTarget < 1) {
+message.textContent = 'Hiring Target must be a whole number of 1 or more.';
+message.className = 'mp-save-status error';
+return;
+}
+
+button.disabled = true;
+button.textContent = 'Saving...';
+message.textContent = 'Updating live ATS...';
+message.className = 'mp-save-status';
+
+google.script.run
+.withSuccessHandler(function(result) {
+message.textContent = result && result.message ? result.message : 'Position updated successfully.';
+message.className = 'mp-save-status success';
+setTimeout(function() {
+mpCloseDrawer();
+mpLoad();
+}, 450);
+})
+.withFailureHandler(function(error) {
+button.disabled = false;
+button.textContent = 'Save Changes';
+message.textContent = mpError_(error);
+message.className = 'mp-save-status error';
+})
+.updatePositionManagement(mpSessionToken_(), {
+refNo: refNo,
+status: status,
+priority: priority,
+hiringTarget: hiringTarget
+});
+}
+
+function mpDetailCard_(label, value) {
+return `<div class="mp-detail-card"><span>${mpEsc_(label)}</span><strong>${mpEsc_(value)}</strong></div>`;
+}
+
+function mpShowDrawer_(title, html) {
+const drawer = document.getElementById('mpDrawer');
+const backdrop = document.getElementById('mpDrawerBackdrop');
+document.getElementById('mpDrawerTitle').textContent = title || 'Position';
+document.getElementById('mpDrawerBody').innerHTML = html || '';
+backdrop.classList.remove('hidden');
+drawer.classList.add('open');
+drawer.setAttribute('aria-hidden','false');
+}
+
+function mpCloseDrawer() {
+const drawer = document.getElementById('mpDrawer');
+const backdrop = document.getElementById('mpDrawerBackdrop');
+if (drawer) { drawer.classList.remove('open'); drawer.setAttribute('aria-hidden','true'); }
+if (backdrop) backdrop.classList.add('hidden');
+}
+
+function mpStatusClass_(status) {
+return mpNorm_(status).replace(/\s+/g,'-');
+}
+
+function mpNorm_(value) {
+return String(value || '').trim().toLowerCase();
+}
+
+function mpError_(error) {
+return error && error.message ? error.message : String(error || 'Something went wrong.');
+}
+
+function mpEsc_(value) {
+return String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+
+function mpEscAttr_(value) {
+return mpEsc_(value).replace(/\r/g,' ').replace(/\n/g,' ');
+}
+</script>

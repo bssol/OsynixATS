@@ -1,0 +1,1364 @@
+<script>
+  let jdDraft = null;
+  let uploadedJDFile = null;
+let existingClients = [];
+let selectedExistingClient = '';
+
+let atsSessionTokenCache = '';
+
+function getATSSessionToken_() {
+  if (atsSessionTokenCache) {
+    return atsSessionTokenCache;
+  }
+
+  let token = '';
+
+  try {
+    token =
+      localStorage.getItem(
+        'OSYNIX_ATS_SESSION'
+      ) || '';
+  } catch (error) {
+    token = '';
+  }
+
+  if (!token) {
+    try {
+      const params =
+        new URLSearchParams(
+          window.location.search
+        );
+
+      token =
+        params.get(
+          'session'
+        ) || '';
+    } catch (error) {
+      token = '';
+    }
+  }
+
+  if (token) {
+    atsSessionTokenCache =
+      token;
+
+    try {
+      localStorage.setItem(
+        'OSYNIX_ATS_SESSION',
+        token
+      );
+    } catch (error) {
+      // Keep the in-memory token even if browser storage is unavailable.
+    }
+
+    return token;
+  }
+
+  throw new Error(
+    'Your ATS session is missing. Please sign in again.'
+  );
+}
+
+
+
+document.addEventListener(
+  'osynixUserReady',
+  function() {
+    loadExistingClients();
+  },
+  { once: true }
+);
+
+
+function loadExistingClients() {
+  google.script.run
+    .withSuccessHandler(
+      function(clients) {
+        existingClients =
+          Array.isArray(clients)
+            ? clients
+            : [];
+
+        existingClients.sort(
+          function(a, b) {
+            return String(a)
+              .localeCompare(
+                String(b)
+              );
+          }
+        );
+
+      document.getElementById(
+  'existingClientResults'
+).innerHTML = '';
+
+document.getElementById(
+  'existingClientResults'
+).classList.add('hidden');
+      }
+    )
+    .withFailureHandler(
+      function(error) {
+        const container =
+          document.getElementById(
+            'existingClientResults'
+          );
+
+        if (container) {
+          container.innerHTML =
+            '<div class="client-picker-error">' +
+            escapeHtml(
+              getErrorMessage(error)
+            ) +
+            '</div>';
+        }
+      }
+    )
+    .getExistingClients(
+      getATSSessionToken_()
+    );
+}
+
+
+function filterExistingClients() {
+  const search =
+    normalizeClientName(
+      document.getElementById(
+        'clientSearch'
+      ).value
+    );
+
+  const matches =
+    existingClients.filter(
+      function(client) {
+        return normalizeClientName(
+          client
+        ).includes(search);
+      }
+    );
+
+  renderExistingClients(
+    matches
+  );
+}
+
+
+function renderExistingClients(clients) {
+  const container =
+    document.getElementById(
+      'existingClientResults'
+    );
+
+  if (!container) {
+    return;
+  }
+
+  const search =
+    document.getElementById(
+      'clientSearch'
+    ).value.trim();
+
+  if (!search) {
+    container.innerHTML = '';
+    container.classList.add('hidden');
+    return;
+  }
+
+  if (!clients.length) {
+    container.innerHTML = `
+      <div class="client-picker-empty">
+        No existing client matches this search.
+      </div>
+    `;
+
+    container.classList.remove(
+      'hidden'
+    );
+
+    return;
+  }
+
+  container.innerHTML =
+    clients
+      .slice(0, 8)
+      .map(
+        function(client) {
+          return `
+            <button
+              type="button"
+              class="existing-client-item"
+              data-client="${escapeHtml(client)}"
+              onclick="selectExistingClient(this.dataset.client)"
+            >
+              ${escapeHtml(client)}
+            </button>
+          `;
+        }
+      )
+      .join('');
+
+  container.classList.remove(
+    'hidden'
+  );
+}
+
+
+function selectExistingClient(client) {
+  const clean =
+    String(client || '').trim();
+
+  if (!clean) {
+    return;
+  }
+
+  selectedExistingClient =
+    clean;
+
+  document.getElementById(
+    'client'
+  ).value =
+    clean;
+
+  document.getElementById(
+    'selectedClientName'
+  ).textContent =
+    clean;
+
+  document.getElementById(
+    'selectedClientPanel'
+  ).classList.remove(
+    'hidden'
+  );
+
+  document.getElementById(
+    'existingClientResults'
+  ).classList.add(
+    'hidden'
+  );
+
+  document.getElementById(
+    'clientSearch'
+  ).classList.add(
+    'hidden'
+  );
+
+  document.getElementById(
+    'newClientBtn'
+  ).classList.add(
+    'hidden'
+  );
+
+  document.getElementById(
+    'newClientPanel'
+  ).classList.add(
+    'hidden'
+  );
+}
+
+
+function clearClientSelection() {
+  selectedExistingClient = '';
+
+  document.getElementById(
+    'client'
+  ).value = '';
+
+  document.getElementById(
+    'selectedClientPanel'
+  ).classList.add(
+    'hidden'
+  );
+
+  document.getElementById(
+    'existingClientResults'
+  ).classList.remove(
+    'hidden'
+  );
+
+  document.getElementById(
+    'clientSearch'
+  ).classList.remove(
+    'hidden'
+  );
+
+  document.getElementById(
+    'newClientBtn'
+  ).classList.remove(
+    'hidden'
+  );
+
+  document.getElementById(
+    'clientSearch'
+  ).value = '';
+
+  renderExistingClients(
+    existingClients
+  );
+}
+
+
+function startNewClient() {
+  selectedExistingClient = '';
+
+  document.getElementById(
+    'client'
+  ).value = '';
+
+  document.getElementById(
+    'newClientName'
+  ).value =
+    document.getElementById(
+      'clientSearch'
+    ).value.trim();
+
+  document.getElementById(
+    'newClientPanel'
+  ).classList.remove(
+    'hidden'
+  );
+
+  document.getElementById(
+    'existingClientResults'
+  ).classList.add(
+    'hidden'
+  );
+
+  checkNewClientSimilarity();
+}
+
+
+function cancelNewClient() {
+  document.getElementById(
+    'newClientPanel'
+  ).classList.add(
+    'hidden'
+  );
+
+  document.getElementById(
+    'existingClientResults'
+  ).classList.remove(
+    'hidden'
+  );
+
+  document.getElementById(
+    'client'
+  ).value = '';
+
+  clearClientDuplicateWarning();
+}
+
+
+function checkNewClientSimilarity() {
+  const input =
+    document.getElementById(
+      'newClientName'
+    ).value.trim();
+
+  const warning =
+    document.getElementById(
+      'clientDuplicateWarning'
+    );
+
+  if (!input) {
+    clearClientDuplicateWarning();
+    return;
+  }
+
+  const exact =
+    existingClients.find(
+      function(client) {
+        return normalizeClientName(
+          client
+        ) ===
+        normalizeClientName(
+          input
+        );
+      }
+    );
+
+  if (exact) {
+    warning.innerHTML = `
+      <strong>This client already exists:</strong>
+      ${escapeHtml(exact)}
+      <br>
+      Please select the existing client instead.
+    `;
+
+    warning.classList.remove(
+      'hidden'
+    );
+
+    return;
+  }
+
+  const similar =
+    existingClients
+      .map(
+        function(client) {
+          return {
+            client: client,
+            score:
+              clientSimilarity(
+                input,
+                client
+              )
+          };
+        }
+      )
+      .filter(
+        function(item) {
+          return item.score >= 0.72;
+        }
+      )
+      .sort(
+        function(a, b) {
+          return b.score -
+            a.score;
+        }
+      )
+      .slice(0, 3);
+
+  if (similar.length) {
+    warning.innerHTML = `
+      <strong>Possible existing client:</strong>
+      ${similar
+        .map(
+          function(item) {
+            return escapeHtml(
+              item.client
+            );
+          }
+        )
+        .join(', ')}
+      <br>
+      Please check before creating a new client.
+    `;
+
+    warning.classList.remove(
+      'hidden'
+    );
+
+    return;
+  }
+
+  clearClientDuplicateWarning();
+}
+
+
+function confirmNewClient() {
+  const input =
+    document.getElementById(
+      'newClientName'
+    ).value.trim();
+
+  if (!input) {
+    alert(
+      'Please enter the new client name.'
+    );
+    return;
+  }
+
+  const exact =
+    existingClients.find(
+      function(client) {
+        return normalizeClientName(
+          client
+        ) ===
+        normalizeClientName(
+          input
+        );
+      }
+    );
+
+  if (exact) {
+    alert(
+      'This client already exists as "' +
+      exact +
+      '". Please select the existing client.'
+    );
+
+    cancelNewClient();
+
+    document.getElementById(
+      'clientSearch'
+    ).value =
+      exact;
+
+    filterExistingClients();
+
+    return;
+  }
+
+  selectExistingClient(
+    input
+  );
+}
+
+
+function clearClientDuplicateWarning() {
+  const warning =
+    document.getElementById(
+      'clientDuplicateWarning'
+    );
+
+  warning.innerHTML = '';
+
+  warning.classList.add(
+    'hidden'
+  );
+}
+
+
+function normalizeClientName(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(
+      /[^a-z0-9]+/g,
+      ' '
+    )
+    .replace(
+      /\s+/g,
+      ' '
+    )
+    .trim();
+}
+
+
+function clientSimilarity(a, b) {
+  const left =
+    normalizeClientName(a);
+
+  const right =
+    normalizeClientName(b);
+
+  if (!left || !right) {
+    return 0;
+  }
+
+  if (left === right) {
+    return 1;
+  }
+
+  if (
+    left.includes(right) ||
+    right.includes(left)
+  ) {
+    return 0.9;
+  }
+
+  const distance =
+    levenshteinDistance(
+      left,
+      right
+    );
+
+  return (
+    1 -
+    distance /
+      Math.max(
+        left.length,
+        right.length
+      )
+  );
+}
+
+
+function levenshteinDistance(a, b) {
+  const matrix = [];
+
+  for (
+    let i = 0;
+    i <= b.length;
+    i++
+  ) {
+    matrix[i] = [i];
+  }
+
+  for (
+    let j = 0;
+    j <= a.length;
+    j++
+  ) {
+    matrix[0][j] = j;
+  }
+
+  for (
+    let i = 1;
+    i <= b.length;
+    i++
+  ) {
+    for (
+      let j = 1;
+      j <= a.length;
+      j++
+    ) {
+      if (
+        b.charAt(i - 1) ===
+        a.charAt(j - 1)
+      ) {
+        matrix[i][j] =
+          matrix[i - 1][j - 1];
+      }
+      else {
+        matrix[i][j] =
+          Math.min(
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1
+          );
+      }
+    }
+  }
+
+  return matrix[b.length][a.length];
+}
+  function analyzeJD() {
+    clearStatus('analysisStatus');
+
+    const fileInput = document.getElementById('jdFile');
+    const file = fileInput.files[0];
+    uploadedJDFile = file;
+
+    if (!file) {
+      showStatus('analysisStatus', 'Please select a JD file first.', 'error');
+      return;
+    }
+
+    const client = document.getElementById('client').value.trim();
+
+    if (!client) {
+      showStatus('analysisStatus', 'Please select an existing client or confirm a new client first.','error');
+      return;
+    }
+
+    setAnalyzeBusy(true);
+
+    const reader = new FileReader();
+
+    reader.onload = function(event) {
+      const base64 = String(event.target.result).split(',')[1];
+
+      const payload = {
+        client: client,
+        position: document.getElementById('position').value.trim(),
+        location: document.getElementById('location').value.trim(),
+        fileName: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        fileBase64: base64
+      };
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          setAnalyzeBusy(false);
+          jdDraft = result;
+          renderDraft(result);
+        })
+        .withFailureHandler(function(error) {
+          setAnalyzeBusy(false);
+          showStatus('analysisStatus', getErrorMessage(error), 'error');
+        })
+        .analyzeJobDescription(
+          getATSSessionToken_(),
+          payload
+        );
+    };
+
+    reader.onerror = function() {
+      setAnalyzeBusy(false);
+      showStatus('analysisStatus', 'The JD file could not be read.', 'error');
+    };
+
+    reader.readAsDataURL(file);
+  }
+
+  function renderDraft(result) {
+    document.getElementById('reviewClient').value = result.client || '';
+    document.getElementById('reviewPosition').value = result.position || '';
+    document.getElementById('reviewLocation').value = result.location || '';
+    document.getElementById('positionSummary').value = result.position_summary || '';
+
+    renderCriteria(result.criteria || []);
+
+    document.getElementById('reviewSection').classList.remove('hidden');
+
+    showStatus(
+      'analysisStatus',
+      'JD analysis complete. Review and approve the draft below before creating the position.',
+      'info'
+    );
+
+    document.getElementById('reviewSection').scrollIntoView({
+      behavior: 'smooth',
+      block: 'start'
+    });
+  }
+
+  function renderCriteria(criteria) {
+    const container = document.getElementById('criteriaContainer');
+    container.innerHTML = '';
+
+    criteria.forEach(function(item) {
+      appendCriterionCard(item);
+    });
+
+    updateWeightTotal();
+  }
+
+  function appendCriterionCard(item) {
+    const container = document.getElementById('criteriaContainer');
+    const card = document.createElement('div');
+
+    card.className = 'criterion-card';
+
+    card._aiDraft = {
+      criterion: item.criterion || '',
+      weight_percent: Number(item.weight_percent || 0),
+      knockout: item.knockout || 'No',
+      evidence_expected: item.evidence_expected || '',
+      scoring_guidance: item.scoring_guidance || '',
+      notes: item.notes || '',
+      rationale: item.rationale || ''
+    };
+
+    card.innerHTML = `
+      <div class="criterion-row">
+
+        <div class="field">
+          <label>Criterion *</label>
+          <input
+            class="criterion-name"
+            type="text"
+            value="${escapeHtml(item.criterion || '')}"
+          >
+        </div>
+
+        <div class="field">
+          <label>Weight % *</label>
+          <input
+            class="criterion-weight"
+            type="number"
+            min="1"
+            max="100"
+            step="1"
+            value="${Number(item.weight_percent || 0)}"
+            oninput="updateWeightTotal()"
+          >
+        </div>
+
+        <div class="field">
+          <label>Knockout? *</label>
+          <select class="criterion-knockout">
+            <option value="No" ${item.knockout === 'Yes' ? '' : 'selected'}>No</option>
+            <option value="Yes" ${item.knockout === 'Yes' ? 'selected' : ''}>Yes</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Assessment Logic</label>
+          <button
+            class="secondary-btn"
+            type="button"
+            onclick="toggleLogic(this)"
+          >
+            View logic
+          </button>
+        </div>
+
+        <button
+          class="remove-btn"
+          type="button"
+          title="Remove criterion"
+          onclick="removeCriterion(this)"
+        >
+          ×
+        </button>
+
+      </div>
+
+      <details class="logic-details">
+        <summary>Assessment logic</summary>
+
+        <div class="logic-panel">
+
+          <div class="logic-warning">
+            Changes to Evidence Expected, Scoring Guidance or Notes
+            will affect how future candidates are evaluated against
+            this position after the criteria are saved to the live ATS.
+          </div>
+
+          <div class="criterion-detail-grid">
+
+            <div class="field">
+              <label>Evidence Expected *</label>
+              <textarea
+                class="criterion-evidence"
+                rows="4"
+              >${escapeHtml(item.evidence_expected || '')}</textarea>
+            </div>
+
+            <div class="field">
+              <label>Scoring Guidance *</label>
+              <textarea
+                class="criterion-guidance"
+                rows="4"
+              >${escapeHtml(item.scoring_guidance || '')}</textarea>
+            </div>
+
+            <div class="field full">
+              <label>Notes / Interpretation Rules</label>
+              <textarea
+                class="criterion-notes"
+                rows="3"
+              >${escapeHtml(item.notes || '')}</textarea>
+            </div>
+
+            <div class="field full">
+              <label>AI Rationale - Read Only</label>
+              <textarea
+                class="criterion-rationale"
+                rows="2"
+                readonly
+              >${escapeHtml(item.rationale || '')}</textarea>
+            </div>
+
+          </div>
+
+          <div class="logic-footer">
+            <button
+              class="reset-draft-btn"
+              type="button"
+              onclick="resetCriterionToAIDraft(this)"
+            >
+              Reset to AI Draft
+            </button>
+          </div>
+
+        </div>
+      </details>
+    `;
+
+    container.appendChild(card);
+  }
+
+  function toggleLogic(button) {
+    const card = button.closest('.criterion-card');
+    const details = card.querySelector('.logic-details');
+
+    details.open = !details.open;
+    button.textContent = details.open ? 'Hide logic' : 'View logic';
+  }
+
+  function resetCriterionToAIDraft(button) {
+    const card = button.closest('.criterion-card');
+    const draft = card._aiDraft;
+
+    if (!draft) return;
+
+    card.querySelector('.criterion-name').value = draft.criterion;
+    card.querySelector('.criterion-weight').value = draft.weight_percent;
+    card.querySelector('.criterion-knockout').value = draft.knockout;
+    card.querySelector('.criterion-evidence').value = draft.evidence_expected;
+    card.querySelector('.criterion-guidance').value = draft.scoring_guidance;
+    card.querySelector('.criterion-notes').value = draft.notes;
+    card.querySelector('.criterion-rationale').value = draft.rationale;
+
+    updateWeightTotal();
+  }
+
+  function addCriterion() {
+    const existingWeights = getWeightInputs();
+
+    if (existingWeights.length >= 10) {
+      alert('A position can contain a maximum of 10 criteria.');
+      return;
+    }
+
+    const newWeight = existingWeights.length ? 10 : 100;
+
+    if (existingWeights.length) {
+      scaleWeightInputsToTotal(existingWeights, 100 - newWeight);
+    }
+
+    appendCriterionCard({
+      criterion: '',
+      weight_percent: newWeight,
+      knockout: 'No',
+      evidence_expected: '',
+      scoring_guidance: '',
+      notes: '',
+      rationale: 'Recruiter-added criterion. No AI rationale was generated for this item.'
+    });
+
+    fixWeightRounding();
+    updateWeightTotal();
+  }
+
+  function removeCriterion(button) {
+    const cards = document.querySelectorAll('.criterion-card');
+
+    if (cards.length <= 4) {
+      alert('A position must have at least 4 criteria.');
+      return;
+    }
+
+    button.closest('.criterion-card').remove();
+
+    const remaining = getWeightInputs();
+    scaleWeightInputsToTotal(remaining, 100);
+    fixWeightRounding();
+    updateWeightTotal();
+  }
+
+  function scaleWeightInputsToTotal(inputs, targetTotal) {
+    if (!inputs.length) return;
+
+    let currentTotal = inputs.reduce(function(sum, input) {
+      return sum + Math.max(0, Number(input.value || 0));
+    }, 0);
+
+    if (currentTotal <= 0) {
+      const equal = targetTotal / inputs.length;
+
+      inputs.forEach(function(input) {
+        input.value = Math.max(1, Math.round(equal));
+      });
+
+      return;
+    }
+
+    inputs.forEach(function(input) {
+      const current = Math.max(0, Number(input.value || 0));
+      const scaled = (current / currentTotal) * targetTotal;
+      input.value = Math.max(1, Math.round(scaled));
+    });
+  }
+
+  function fixWeightRounding() {
+    const inputs = getWeightInputs();
+
+    if (!inputs.length) return;
+
+    const total = inputs.reduce(function(sum, input) {
+      return sum + Number(input.value || 0);
+    }, 0);
+
+    const difference = 100 - total;
+
+    if (difference === 0) return;
+
+    const sorted = [...inputs].sort(function(a, b) {
+      return Number(b.value || 0) - Number(a.value || 0);
+    });
+
+    const target = sorted[0];
+
+    target.value = Math.max(
+      1,
+      Number(target.value || 0) + difference
+    );
+  }
+
+  function getWeightInputs() {
+    return Array.from(
+      document.querySelectorAll('.criterion-weight')
+    );
+  }
+
+  function collectCriteria() {
+    const cards = document.querySelectorAll('.criterion-card');
+
+    return Array.from(cards).map(function(card) {
+      return {
+        criterion:
+          card.querySelector('.criterion-name').value.trim(),
+
+        weight_percent:
+          Number(card.querySelector('.criterion-weight').value || 0),
+
+        knockout:
+          card.querySelector('.criterion-knockout').value,
+
+        evidence_expected:
+          card.querySelector('.criterion-evidence').value.trim(),
+
+        scoring_guidance:
+          card.querySelector('.criterion-guidance').value.trim(),
+
+        notes:
+          card.querySelector('.criterion-notes').value.trim(),
+
+        rationale:
+          card.querySelector('.criterion-rationale').value.trim()
+      };
+    });
+  }
+
+  function updateWeightTotal() {
+    const weights = getWeightInputs();
+
+    let total = 0;
+
+    weights.forEach(function(input) {
+      total += Number(input.value || 0);
+    });
+
+    const label = document.getElementById('weightTotal');
+    label.textContent = total + '%';
+
+    const warning = document.getElementById('weightWarning');
+
+    warning.classList.remove('hidden', 'ok', 'bad');
+
+    if (total === 100) {
+      label.style.color = '#15803D';
+      warning.classList.add('ok');
+      warning.textContent = 'Weight allocation is valid. Total = 100%.';
+    }
+    else {
+      label.style.color = '#B42318';
+      warning.classList.add('bad');
+
+      if (total > 100) {
+        warning.textContent =
+          'Total weight is ' +
+          total +
+          '%. This exceeds 100%. Please reduce one or more criterion weights before saving.';
+      }
+      else {
+        warning.textContent =
+          'Total weight is ' +
+          total +
+          '%. Please allocate the remaining ' +
+          (100 - total) +
+          '% before saving.';
+      }
+    }
+  }
+
+  function createApprovedPosition() {
+    clearStatus('createStatus');
+
+    const confirmed =
+      document.getElementById('confirmReview').checked;
+
+    if (!confirmed) {
+      showStatus(
+        'createStatus',
+        'Please confirm that you reviewed the position and JD criteria.',
+        'error'
+      );
+      return;
+    }
+
+    const client =
+      document.getElementById('reviewClient').value.trim();
+
+    const position =
+      document.getElementById('reviewPosition').value.trim();
+
+    const location =
+      document.getElementById('reviewLocation').value.trim();
+
+    const criteria = collectCriteria();
+
+    if (!client || !position) {
+      showStatus(
+        'createStatus',
+        'Client and Position Title are required.',
+        'error'
+      );
+      return;
+    }
+
+    if (criteria.length < 4 || criteria.length > 10) {
+      showStatus(
+        'createStatus',
+        'Please keep the position between 4 and 10 criteria.',
+        'error'
+      );
+      return;
+    }
+
+    const totalWeight = criteria.reduce(function(sum, item) {
+      return sum + Number(item.weight_percent || 0);
+    }, 0);
+
+    if (totalWeight !== 100) {
+      showStatus(
+        'createStatus',
+        'Criterion weights must total exactly 100%. Current total: ' +
+          totalWeight +
+          '%.',
+        'error'
+      );
+      return;
+    }
+
+    const invalidCriterion = criteria.find(function(item) {
+      return (
+        !item.criterion ||
+        !item.evidence_expected ||
+        !item.scoring_guidance
+      );
+    });
+
+    if (invalidCriterion) {
+      showStatus(
+        'createStatus',
+        'Every criterion needs a name, Evidence Expected and Scoring Guidance. Open View logic for any incomplete criterion.',
+        'error'
+      );
+      return;
+    }
+
+    setCreateBusy(true);
+
+    const payload = {
+      client: client,
+      position: position,
+      location: location,
+      priority: document.getElementById('priority').value,
+      hiringTarget:
+        Number(document.getElementById('hiringTarget').value || 1),
+      notes:
+        document.getElementById('notes').value.trim(),
+      criteria: criteria,
+      sessionToken:
+        getATSSessionToken_()
+    };
+
+    if (!uploadedJDFile) {
+  showStatus(
+    'createStatus',
+    'The original JD file is no longer available. Please upload and analyze the JD again.',
+    'error'
+  );
+
+  setCreateBusy(false);
+  return;
+}
+
+const jdReader =
+  new FileReader();
+
+jdReader.onload =
+  function(event) {
+    const jdBase64 =
+      String(
+        event.target.result
+      ).split(',')[1];
+
+    payload.jdFile = {
+      fileName:
+        uploadedJDFile.name,
+
+      mimeType:
+        uploadedJDFile.type ||
+        'application/octet-stream',
+
+      fileBase64:
+        jdBase64
+    };
+
+    google.script.run
+      .withSuccessHandler(
+        function(result) {
+          setCreateBusy(false);
+          showCreateSuccess(result);
+        }
+      )
+      .withFailureHandler(
+        function(error) {
+          setCreateBusy(false);
+
+          showStatus(
+            'createStatus',
+            getErrorMessage(error),
+            'error'
+          );
+        }
+      )
+      .createPosition(
+        payload
+      );
+  };
+
+jdReader.onerror =
+  function() {
+    setCreateBusy(false);
+
+    showStatus(
+      'createStatus',
+      'The JD file could not be prepared for Drive storage.',
+      'error'
+    );
+  };
+
+jdReader.readAsDataURL(
+  uploadedJDFile
+);
+  }
+
+  function showCreateSuccess(result) {
+    document.getElementById('reviewSection')
+      .classList.add('hidden');
+
+    document.getElementById('successMessage').textContent =
+      'Ref #' +
+      result.refNo +
+      ' — ' +
+      result.position +
+      ' for ' +
+      result.client +
+      ' was created with ' +
+      result.criteriaCount +
+      ' approved JD criteria.';
+
+    document.getElementById('successSection')
+      .classList.remove('hidden');
+
+    document.getElementById('successSection')
+      .scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
+  }
+
+  function resetPositionForm() {
+    jdDraft = null;
+    uploadedJDFile = null;
+
+document.getElementById('client').value = '';
+
+selectedExistingClient = '';
+
+document.getElementById(
+  'clientSearch'
+).value = '';
+
+document.getElementById(
+  'newClientName'
+).value = '';
+
+document.getElementById(
+  'selectedClientPanel'
+).classList.add('hidden');
+
+document.getElementById(
+  'newClientPanel'
+).classList.add('hidden');
+
+document.getElementById(
+  'clientSearch'
+).classList.remove('hidden');
+
+document.getElementById(
+  'newClientBtn'
+).classList.remove('hidden');
+
+document.getElementById(
+  'existingClientResults'
+).classList.remove('hidden');
+
+clearClientDuplicateWarning();
+
+renderExistingClients(
+  existingClients
+);
+    document.getElementById('position').value = '';
+    document.getElementById('location').value = '';
+    document.getElementById('priority').value = 'Medium';
+    document.getElementById('hiringTarget').value = '1';
+    document.getElementById('notes').value = '';
+    document.getElementById('jdFile').value = '';
+    document.getElementById('confirmReview').checked = false;
+    document.getElementById('criteriaContainer').innerHTML = '';
+
+    document.getElementById('reviewSection').classList.add('hidden');
+    document.getElementById('successSection').classList.add('hidden');
+
+    clearStatus('analysisStatus');
+    clearStatus('createStatus');
+
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  }
+
+  function setAnalyzeBusy(isBusy) {
+    const button =
+      document.getElementById('analyzeBtn');
+
+    button.disabled = isBusy;
+
+    button.textContent =
+      isBusy
+        ? 'Analyzing JD...'
+        : 'Analyze JD';
+
+    if (isBusy) {
+      showStatus(
+        'analysisStatus',
+        'Reading the JD and preparing draft screening criteria...',
+        'info'
+      );
+    }
+  }
+
+  function setCreateBusy(isBusy) {
+    const button =
+      document.getElementById('createBtn');
+
+    button.disabled = isBusy;
+
+    button.textContent =
+      isBusy
+        ? 'Creating Position...'
+        : 'Create Position in Live ATS';
+  }
+
+  function showStatus(elementId, message, type) {
+    const element =
+      document.getElementById(elementId);
+
+    element.textContent = message;
+
+    element.className =
+      'status ' +
+      (
+        type === 'error'
+          ? 'error'
+          : 'info'
+      );
+  }
+
+  function clearStatus(elementId) {
+    const element =
+      document.getElementById(elementId);
+
+    element.textContent = '';
+    element.className = 'status hidden';
+  }
+
+  function getErrorMessage(error) {
+    if (!error) {
+      return 'An unknown error occurred.';
+    }
+
+    return (
+      error.message ||
+      String(error)
+    );
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+</script>

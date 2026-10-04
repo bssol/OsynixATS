@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<?!= include('ManagePositionsStyles'); ?>
+</head>
+<body>
+<?!= include('Navigation'); ?>
+
+<main class="mp-shell">
+<section class="mp-hero">
+<div>
+<div class="mp-eyebrow">POSITIONS</div>
+<h1>Manage Positions</h1>
+<p>View, filter and manage all open and historical positions across clients.</p>
+</div>
+
+<button class="mp-refresh" type="button" onclick="mpRefresh()">Refresh</button>
+</section>
+
+<section id="mpLoading" class="mp-loading">Loading live position register...</section>
+
+<section id="mpContent" class="mp-content hidden">
+<div id="mpKpis" class="mp-kpi-grid"></div>
+
+<section class="mp-filter-card">
+<div class="mp-filter-grid">
+<div class="mp-field mp-search-field">
+<label for="mpSearch">Search</label>
+<input id="mpSearch" type="search" placeholder="Search position, client, Ref # or location..." oninput="mpApplyFilters()">
+</div>
+
+<div class="mp-field">
+<label for="mpStatus">Status</label>
+<select id="mpStatus" onchange="mpApplyFilters()">
+<option value="">All Statuses</option>
+<option value="Active">Active</option>
+<option value="On Hold">On Hold</option>
+<option value="Filled">Filled</option>
+<option value="Closed">Closed</option>
+<option value="Cancelled">Cancelled</option>
+</select>
+</div>
+
+<div class="mp-field">
+<label for="mpClient">Client</label>
+<select id="mpClient" onchange="mpApplyFilters()">
+<option value="">All Clients</option>
+</select>
+</div>
+
+<div class="mp-field">
+<label for="mpPriority">Priority</label>
+<select id="mpPriority" onchange="mpApplyFilters()">
+<option value="">All Priorities</option>
+<option value="High">High</option>
+<option value="Medium">Medium</option>
+<option value="Low">Low</option>
+</select>
+</div>
+
+<div class="mp-field">
+<label for="mpSort">Sort by</label>
+<select id="mpSort" onchange="mpApplyFilters()">
+<option value="ref-desc">Ref # (Newest)</option>
+<option value="ref-asc">Ref # (Oldest)</option>
+<option value="client-asc">Client A–Z</option>
+<option value="position-asc">Position A–Z</option>
+<option value="priority">Priority</option>
+</select>
+</div>
+
+<div class="mp-filter-actions">
+<button class="mp-clear" type="button" onclick="mpClearFilters()">Clear Filters</button>
+</div>
+</div>
+</section>
+
+<section class="mp-register-card">
+<div class="mp-register-toolbar">
+<div id="mpResultCount" class="mp-result-count">0 positions</div>
+
+<div class="mp-page-size-wrap">
+<label for="mpPageSize">Show</label>
+<select id="mpPageSize" onchange="mpChangePageSize()">
+<option value="25">25</option>
+<option value="50">50</option>
+<option value="100">100</option>
+</select>
+<span>per page</span>
+</div>
+</div>
+
+<div id="mpTableWrap" class="mp-table-wrap"></div>
+<div id="mpPagination" class="mp-pagination"></div>
+</section>
+</section>
+</main>
+
+<div id="mpDrawerBackdrop" class="mp-drawer-backdrop hidden" onclick="mpCloseDrawer()"></div>
+<aside id="mpDrawer" class="mp-drawer" aria-hidden="true">
+<div class="mp-drawer-header">
+<div>
+<span class="mp-eyebrow">POSITION DETAIL</span>
+<h2 id="mpDrawerTitle">Position</h2>
+</div>
+<button class="mp-drawer-close" type="button" onclick="mpCloseDrawer()">×</button>
+</div>
+<div id="mpDrawerBody" class="mp-drawer-body"></div>
+</aside>
+
+<?!= include('ManagePositionsJavascript'); ?>
+<?!= include('AccessGuard'); ?>
+</body>
+</html>

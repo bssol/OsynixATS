@@ -1,0 +1,2472 @@
+<script>
+let dashboardData = null;
+let dashboardUser = null;
+
+
+document.addEventListener(
+  'osynixUserReady',
+  function(event) {
+    dashboardUser =
+      event.detail || {};
+
+    dashboardApplyUser_(
+      dashboardUser
+    );
+
+    dashboardLoad();
+  },
+  {
+    once: true
+  }
+);
+
+
+function dashboardSessionToken_() {
+  let token = '';
+
+  try {
+    token =
+      localStorage.getItem(
+        'OSYNIX_ATS_SESSION'
+      ) || '';
+  } catch (error) {
+    token = '';
+  }
+
+  if (!token) {
+    try {
+      token =
+        new URLSearchParams(
+          window.location.search
+        ).get(
+          'session'
+        ) || '';
+    } catch (error) {
+      token = '';
+    }
+  }
+
+  if (!token) {
+    throw new Error(
+      'Your ATS session is missing. Please sign in again.'
+    );
+  }
+
+  return token;
+}
+
+
+function dashboardApplyUser_(user) {
+  const greeting =
+    document.getElementById(
+      'dashboardGreeting'
+    );
+
+  if (greeting) {
+    const firstName =
+      String(
+        user.fullName ||
+        user.email ||
+        'User'
+      )
+        .trim()
+        .split(/\s+/)[0];
+
+    greeting.textContent =
+      dashboardGreetingPrefix_() +
+      ', ' +
+      firstName;
+  }
+
+  const createButton =
+    document.getElementById(
+      'dashboardCreatePosition'
+    );
+
+  if (
+    createButton &&
+    user.permissions &&
+    user.permissions
+      .canCreatePositions === false
+  ) {
+    createButton.style.display =
+      'none';
+  }
+}
+
+
+function dashboardGreetingPrefix_() {
+  const hour =
+    new Date().getHours();
+
+  if (hour < 12) {
+    return 'Good morning';
+  }
+
+  if (hour < 17) {
+    return 'Good afternoon';
+  }
+
+  return 'Good evening';
+}
+
+
+function dashboardLoad() {
+  const loading =
+    document.getElementById(
+      'dashboardLoading'
+    );
+
+  const content =
+    document.getElementById(
+      'dashboardContent'
+    );
+
+  if (loading) {
+    loading.textContent =
+      'Loading live ATS dashboard...';
+
+    loading.classList.remove(
+      'hidden'
+    );
+  }
+
+  if (content) {
+    content.classList.add(
+      'hidden'
+    );
+  }
+
+  google.script.run
+    .withSuccessHandler(
+      function(result) {
+        dashboardData =
+          result || {};
+
+        if (
+          result &&
+          result.user
+        ) {
+          dashboardUser =
+            result.user;
+
+          dashboardApplyUser_(
+            dashboardUser
+          );
+        }
+
+        dashboardRender();
+
+        if (loading) {
+          loading.classList.add(
+            'hidden'
+          );
+        }
+
+        if (content) {
+          content.classList.remove(
+            'hidden'
+          );
+        }
+      }
+    )
+    .withFailureHandler(
+      function(error) {
+        if (loading) {
+          loading.textContent =
+            dashboardErrorMessage_(
+              error
+            );
+        }
+      }
+    )
+    .getRecruiterDashboardData(
+      dashboardSessionToken_()
+    );
+}
+
+
+function dashboardRefresh() {
+  dashboardLoad();
+}
+
+
+function dashboardRender() {
+  dashboardRenderKpis_();
+  dashboardRenderPositionStatus_();
+  dashboardRenderFunnel_();
+  dashboardRenderDecisionMix_();
+  dashboardRenderPositions_();
+  dashboardRenderPending_();
+  dashboardRenderClients_();
+  dashboardRenderRecent_();
+  dashboardRenderTopTalent_();
+}
+
+
+function dashboardRenderKpis_() {
+  const container =
+    document.getElementById(
+      'dashboardKpis'
+    );
+
+  if (!container) {
+    return;
+  }
+
+  const kpis =
+    dashboardData.kpis || {};
+
+  const items = [
+    {
+      key:
+        'positions',
+
+      label:
+        'Active Positions',
+
+      value:
+        kpis.activePositions || 0,
+
+      subtitle:
+        'Across all clients',
+
+      tint:
+        '#EAF1FF'
+    },
+    {
+      key:
+        'candidates',
+
+      label:
+        'Total Candidates',
+
+      value:
+        kpis.totalCandidates || 0,
+
+      subtitle:
+        'Active positions only',
+
+      tint:
+        '#F2ECFF'
+    },
+    {
+      key:
+        'shortlisted',
+
+      label:
+        'Shortlisted',
+
+      value:
+        kpis.shortlisted || 0,
+
+      subtitle:
+        'Current shortlist',
+
+      tint:
+        '#E9F9F1'
+    },
+    {
+      key:
+        'interviews',
+
+      label:
+        'Client Interviews',
+
+      value:
+        kpis.interviews || 0,
+
+      subtitle:
+        'Interview activity',
+
+      tint:
+        '#FFF6DE'
+    },
+    {
+      key:
+        'offers',
+
+      label:
+        'Offers',
+
+      value:
+        kpis.offers || 0,
+
+      subtitle:
+        'Offer activity',
+
+      tint:
+        '#FFF0E5'
+    },
+    {
+      key:
+        'hired',
+
+      label:
+        'Hired',
+
+      value:
+        kpis.hired || 0,
+
+      subtitle:
+        'Successful placements',
+
+      tint:
+        '#FEEDEE'
+    }
+  ];
+
+  container.innerHTML =
+    items.map(
+      function(item) {
+        return `
+          <button
+            type="button"
+            class="kpi-card"
+            style="--kpi-tint:${item.tint}"
+            onclick="dashboardOpenList('${item.key}')"
+          >
+            <span class="kpi-label">
+              ${dashboardEscape_(
+                item.label
+              )}
+            </span>
+
+            <strong class="kpi-value">
+              ${dashboardEscape_(
+                item.value
+              )}
+            </strong>
+
+            <span class="kpi-subtitle">
+              ${dashboardEscape_(
+                item.subtitle
+              )}
+            </span>
+          </button>
+        `;
+      }
+    )
+    .join('');
+}
+
+function dashboardRenderPositionStatus_() {
+  const container =
+    document.getElementById(
+      'dashboardPositionStatus'
+    );
+
+  if (!container) {
+    return;
+  }
+
+  const positions =
+    Array.isArray(
+      dashboardData.allPositions
+    )
+      ? dashboardData.allPositions
+      : [];
+
+  function countStatus(status) {
+    return positions.filter(
+      function(item) {
+        return (
+          dashboardNormalize_(
+            item.status
+          ) ===
+          dashboardNormalize_(
+            status
+          )
+        );
+      }
+    ).length;
+  }
+
+  const items = [
+    {
+      label: 'Total Positions',
+      status: '',
+      value: positions.length
+    },
+    {
+      label: 'Active',
+      status: 'Active',
+      value: countStatus('Active')
+    },
+    {
+      label: 'On Hold',
+      status: 'On Hold',
+      value: countStatus('On Hold')
+    },
+    {
+      label: 'Filled',
+      status: 'Filled',
+      value: countStatus('Filled')
+    },
+    {
+      label: 'Closed',
+      status: 'Closed',
+      value: countStatus('Closed')
+    },
+    {
+      label: 'Cancelled',
+      status: 'Cancelled',
+      value: countStatus('Cancelled')
+    }
+  ];
+
+  container.innerHTML =
+    items.map(
+      function(item) {
+        return `
+          <button
+            class="position-status-card"
+            type="button"
+            onclick="dashboardGoToManagePositions_('${dashboardEscapeAttr_(
+              item.status
+            )}')"
+          >
+            <span>
+              ${dashboardEscape_(
+                item.label
+              )}
+            </span>
+
+            <strong>
+              ${dashboardEscape_(
+                item.value
+              )}
+            </strong>
+          </button>
+        `;
+      }
+    ).join('');
+}
+
+
+function dashboardGoToManagePositions_(status) {
+  navigateATS(
+    'managepositions',
+    status
+      ? { status: status }
+      : {}
+  );
+}
+
+
+function dashboardRenderFunnel_() {
+  const container =
+    document.getElementById(
+      'dashboardFunnel'
+    );
+
+  if (!container) {
+    return;
+  }
+
+  const items =
+    Array.isArray(
+      dashboardData.funnel
+    )
+      ? dashboardData.funnel
+      : [];
+
+  const max =
+    Math.max(
+      1,
+      ...items.map(
+        function(item) {
+          return Number(
+            item.count || 0
+          );
+        }
+      )
+    );
+
+  container.innerHTML =
+    items.map(
+      function(item) {
+        const height =
+          Math.max(
+            8,
+            Math.round(
+              Number(
+                item.count || 0
+              ) /
+              max *
+              100
+            )
+          );
+
+        return `
+          <div
+            class="funnel-item"
+            onclick="dashboardOpenFunnel('${dashboardEscapeAttr_(
+              item.key
+            )}')"
+          >
+            <span class="funnel-number">
+              ${dashboardEscape_(
+                item.count || 0
+              )}
+            </span>
+
+            <div class="funnel-track">
+              <div
+                class="funnel-bar"
+                style="height:${height}%"
+              ></div>
+            </div>
+
+            <span class="funnel-label">
+              ${dashboardEscape_(
+                item.label
+              )}
+            </span>
+          </div>
+        `;
+      }
+    )
+    .join('');
+}
+
+
+function dashboardRenderDecisionMix_() {
+  const container =
+    document.getElementById(
+      'dashboardDecisionMix'
+    );
+
+  if (!container) {
+    return;
+  }
+
+  const items =
+    Array.isArray(
+      dashboardData.decisionMix
+    )
+      ? dashboardData.decisionMix
+      : [];
+
+  const total =
+    Math.max(
+      1,
+      items.reduce(
+        function(sum, item) {
+          return sum +
+            Number(
+              item.count || 0
+            );
+        },
+        0
+      )
+    );
+
+  const degrees = [];
+  let running = 0;
+
+  items.forEach(
+    function(item) {
+      running +=
+        Number(
+          item.count || 0
+        ) /
+        total *
+        360;
+
+      degrees.push(
+        Math.round(
+          running
+        ) +
+        'deg'
+      );
+    }
+  );
+
+  while (
+    degrees.length < 4
+  ) {
+    degrees.push(
+      '360deg'
+    );
+  }
+
+  const colors = [
+    '#175AFF',
+    '#F59E0B',
+    '#EF4444',
+    '#16A36A'
+  ];
+
+  container.innerHTML = `
+    <div
+      class="donut"
+      style="
+        --s1:${degrees[0]};
+        --s2:${degrees[1]};
+        --s3:${degrees[2]};
+      "
+    >
+      <div class="donut-center">
+        <strong>
+          ${dashboardEscape_(
+            total
+          )}
+        </strong>
+
+        <span>
+          decisions
+        </span>
+      </div>
+    </div>
+
+    <div class="legend-list">
+      ${items.map(
+        function(
+          item,
+          index
+        ) {
+          const percent =
+            Math.round(
+              Number(
+                item.count || 0
+              ) /
+              total *
+              100
+            );
+
+          return `
+            <div
+              class="legend-item"
+              onclick="dashboardOpenDecision('${dashboardEscapeAttr_(
+                item.key
+              )}')"
+            >
+              <span
+                class="legend-dot"
+                style="background:${colors[index] || '#94A3B8'}"
+              ></span>
+
+              <span>
+                ${dashboardEscape_(
+                  item.label
+                )}
+              </span>
+
+              <strong>
+                ${dashboardEscape_(
+                  item.count || 0
+                )}
+                (${percent}%)
+              </strong>
+            </div>
+          `;
+        }
+      ).join('')}
+    </div>
+  `;
+}
+
+
+function dashboardRenderPositions_() {
+  const container =
+    document.getElementById(
+      'dashboardPositions'
+    );
+
+  if (!container) {
+    return;
+  }
+
+  const items =
+    Array.isArray(
+      dashboardData.activePositions
+    )
+      ? dashboardData.activePositions
+      : [];
+
+  container.innerHTML =
+    dashboardPositionTable_(
+      items.slice(
+        0,
+        6
+      )
+    );
+}
+
+
+function dashboardPositionTable_(
+  items,
+  showStatus
+) {
+  if (!items.length) {
+    return `
+      <div class="empty-state">
+        No positions found.
+      </div>
+    `;
+  }
+
+  return `
+    <table class="dashboard-table">
+      <thead>
+        <tr>
+          <th>Position</th>
+          <th>Client</th>
+          ${showStatus
+            ? '<th>Status</th>'
+            : ''
+          }
+          <th>Screened</th>
+          <th>Shortlisted</th>
+          <th>Hired</th>
+          <th>Priority</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        ${items.map(
+          function(item) {
+            return `
+              <tr
+                onclick="dashboardOpenPosition('${dashboardEscapeAttr_(
+                  item.refNo
+                )}')"
+              >
+                <td>
+                  <span class="table-primary">
+                    ${dashboardEscape_(
+                      item.position
+                    )}
+                  </span>
+
+                  <br>
+
+                  <small>
+                    Ref #${dashboardEscape_(
+                      item.refNo
+                    )}
+                  </small>
+                </td>
+
+                <td>
+                  ${dashboardEscape_(
+                    item.client
+                  )}
+                </td>
+
+                ${showStatus
+                  ? `
+                    <td>
+                      <span class="status-pill ${dashboardStatusClass_(
+                        item.status
+                      )}">
+                        ${dashboardEscape_(
+                          item.status
+                        )}
+                      </span>
+                    </td>
+                  `
+                  : ''
+                }
+
+                <td>
+                  ${dashboardEscape_(
+                    item.screened
+                  )}
+                </td>
+
+                <td>
+                  ${dashboardEscape_(
+                    item.shortlisted
+                  )}
+                </td>
+
+                <td>
+                  ${dashboardEscape_(
+                    item.hired
+                  )}
+                </td>
+
+                <td>
+                  <span class="priority-pill ${dashboardPriorityClass_(
+                    item.priority
+                  )}">
+                    ${dashboardEscape_(
+                      item.priority
+                    )}
+                  </span>
+                </td>
+              </tr>
+            `;
+          }
+        ).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+
+function dashboardRenderPending_() {
+  const container =
+    document.getElementById(
+      'dashboardPending'
+    );
+
+  if (!container) {
+    return;
+  }
+
+  const items =
+    Array.isArray(
+      dashboardData.pendingActions
+    )
+      ? dashboardData.pendingActions
+      : [];
+
+  container.innerHTML =
+    items.map(
+      function(item) {
+        return `
+          <button
+            class="pending-row"
+            type="button"
+            onclick="dashboardOpenPending('${dashboardEscapeAttr_(
+              item.key
+            )}')"
+          >
+            <span>
+              ${dashboardEscape_(
+                item.label
+              )}
+            </span>
+
+            <strong class="pending-count">
+              ${dashboardEscape_(
+                item.count || 0
+              )}
+            </strong>
+          </button>
+        `;
+      }
+    )
+    .join('');
+}
+
+
+function dashboardRenderClients_() {
+  const container =
+    document.getElementById(
+      'dashboardClients'
+    );
+
+  if (!container) {
+    return;
+  }
+
+  const items =
+    Array.isArray(
+      dashboardData.clientPortfolio
+    )
+      ? dashboardData.clientPortfolio
+      : [];
+
+  if (!items.length) {
+    container.innerHTML =
+      '<div class="empty-state">No client data found.</div>';
+
+    return;
+  }
+
+  container.innerHTML = `
+    <table class="dashboard-table">
+      <thead>
+        <tr>
+          <th>Client</th>
+          <th>Total Positions</th>
+          <th>Active</th>
+          <th>Filled</th>
+          <th>Hiring Target</th>
+          <th>Screened</th>
+          <th>Shortlisted</th>
+          <th>Interviews</th>
+          <th>Offers</th>
+          <th>Hired</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        ${items.map(
+          function(item) {
+            return `
+              <tr
+                onclick="dashboardOpenClient('${dashboardEscapeAttr_(
+                  item.client
+                )}')"
+              >
+                <td>
+                  <span class="table-primary">
+                    ${dashboardEscape_(
+                      item.client
+                    )}
+                  </span>
+                </td>
+
+                <td>${dashboardEscape_(item.totalPositions)}</td>
+                <td>${dashboardEscape_(item.activePositions)}</td>
+                <td>${dashboardEscape_(item.filledPositions)}</td>
+                <td>${dashboardEscape_(item.hiringTarget)}</td>
+                <td>${dashboardEscape_(item.screened)}</td>
+                <td>${dashboardEscape_(item.shortlisted)}</td>
+                <td>${dashboardEscape_(item.interviews)}</td>
+                <td>${dashboardEscape_(item.offers)}</td>
+                <td>${dashboardEscape_(item.hired)}</td>
+              </tr>
+            `;
+          }
+        ).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+
+function dashboardRenderRecent_() {
+  const container =
+    document.getElementById(
+      'dashboardRecent'
+    );
+
+  if (!container) {
+    return;
+  }
+
+  const items =
+    Array.isArray(
+      dashboardData.recentActivity
+    )
+      ? dashboardData.recentActivity
+      : [];
+
+  container.innerHTML =
+    dashboardCandidateTable_(
+      items
+    );
+}
+
+
+function dashboardCandidateTable_(items) {
+  if (!items.length) {
+    return `
+      <div class="empty-state">
+        No candidate records found.
+      </div>
+    `;
+  }
+
+  return `
+    <table class="dashboard-table">
+      <thead>
+        <tr>
+          <th>Candidate</th>
+          <th>Position</th>
+          <th>Decision</th>
+          <th>Stage</th>
+          <th>ATS</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        ${items.map(
+          function(item) {
+            return `
+              <tr
+                onclick="dashboardOpenCandidate('${dashboardEscapeAttr_(
+                  item.candidateId
+                )}','${dashboardEscapeAttr_(
+                  item.refNo
+                )}')"
+              >
+                <td>
+                  <span class="table-primary">
+                    ${dashboardEscape_(
+                      item.name ||
+                      'Unnamed candidate'
+                    )}
+                  </span>
+                </td>
+
+                <td>
+                  ${dashboardEscape_(
+                    item.position ||
+                    (
+                      'Ref #' +
+                      item.refNo
+                    )
+                  )}
+                </td>
+
+                <td>
+                  ${dashboardEscape_(
+                    item.decision ||
+                    '—'
+                  )}
+                </td>
+
+                <td>
+                  ${dashboardEscape_(
+                    item.stage ||
+                    '—'
+                  )}
+                </td>
+
+                <td>
+                  <strong>
+                    ${dashboardEscape_(
+                      item.atsMatch || 0
+                    )}%
+                  </strong>
+                </td>
+              </tr>
+            `;
+          }
+        ).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+
+function dashboardRenderTopTalent_() {
+  const container =
+    document.getElementById(
+      'dashboardTopTalent'
+    );
+
+  if (!container) {
+    return;
+  }
+
+  const items =
+    Array.isArray(
+      dashboardData.topShortlisted
+    )
+      ? dashboardData.topShortlisted
+      : [];
+
+  if (!items.length) {
+    container.innerHTML =
+      '<div class="empty-state">No shortlisted candidates yet.</div>';
+
+    return;
+  }
+
+  container.innerHTML =
+    items.map(
+      function(item) {
+        return `
+          <div
+            class="talent-item"
+            onclick="dashboardOpenCandidate('${dashboardEscapeAttr_(
+              item.candidateId
+            )}','${dashboardEscapeAttr_(
+              item.refNo
+            )}')"
+          >
+            <div class="talent-avatar">
+              ${dashboardInitials_(
+                item.name
+              )}
+            </div>
+
+            <div>
+              <div class="talent-name">
+                ${dashboardEscape_(
+                  item.name
+                )}
+              </div>
+
+              <div class="talent-meta">
+                ${dashboardEscape_(
+                  item.position ||
+                  (
+                    'Ref #' +
+                    item.refNo
+                  )
+                )}
+              </div>
+            </div>
+
+            <div class="talent-score">
+              ${dashboardEscape_(
+                item.atsMatch || 0
+              )}%
+            </div>
+          </div>
+        `;
+      }
+    )
+    .join('');
+}
+
+
+function dashboardOpenManagePositions() {
+  const items =
+    Array.isArray(
+      dashboardData.allPositions
+    )
+      ? dashboardData.allPositions
+      : [];
+
+  dashboardShowDrawer_(
+    'Manage Positions',
+    `
+      <input
+        id="drawerPositionSearch"
+        class="drawer-search"
+        type="search"
+        placeholder="Search client, position, Ref # or status..."
+        oninput="dashboardFilterManagePositions()"
+      >
+
+      <div id="drawerPositionResults">
+        ${dashboardPositionTable_(
+          items,
+          true
+        )}
+      </div>
+    `
+  );
+
+  window.dashboardDrawerPositions =
+    items.slice();
+}
+
+
+function dashboardFilterManagePositions() {
+  const input =
+    document.getElementById(
+      'drawerPositionSearch'
+    );
+
+  const results =
+    document.getElementById(
+      'drawerPositionResults'
+    );
+
+  if (
+    !input ||
+    !results
+  ) {
+    return;
+  }
+
+  const query =
+    dashboardNormalize_(
+      input.value
+    );
+
+  const items =
+    (
+      window
+        .dashboardDrawerPositions ||
+      []
+    )
+      .filter(
+        function(item) {
+          const haystack =
+            [
+              item.refNo,
+              item.client,
+              item.position,
+              item.status,
+              item.priority,
+              item.location
+            ]
+              .join(' ')
+              .toLowerCase();
+
+          return haystack.includes(
+            query
+          );
+        }
+      );
+
+  results.innerHTML =
+    dashboardPositionTable_(
+      items,
+      true
+    );
+}
+
+
+function dashboardOpenList(type) {
+  if (!dashboardData) {
+    return;
+  }
+
+  if (type === 'positions') {
+    dashboardShowDrawer_(
+      'All Active Positions',
+      dashboardPositionTable_(
+        dashboardData.activePositions ||
+        [],
+        false
+      )
+    );
+
+    return;
+  }
+
+  let candidates =
+    dashboardData.candidates ||
+    [];
+
+  let title =
+    'Candidate Database — Active Positions';
+
+  if (
+    type ===
+    'shortlisted'
+  ) {
+    title =
+      'Shortlisted Candidates — Active Positions';
+
+    candidates =
+      candidates.filter(
+        function(item) {
+          return (
+            dashboardNormalize_(
+              item.stage
+            ) === 'shortlisted'
+          );
+        }
+      );
+  }
+
+  if (
+    type ===
+    'interviews'
+  ) {
+    title =
+      'Interview Activity — Active Positions';
+
+    candidates =
+      candidates.filter(
+        function(item) {
+          return !!item.interviewStatus;
+        }
+      );
+  }
+
+  if (
+    type ===
+    'offers'
+  ) {
+    title =
+      'Offer Activity — Active Positions';
+
+    candidates =
+      candidates.filter(
+        function(item) {
+          const stage =
+            dashboardNormalize_(
+              item.stage
+            );
+
+          return (
+            stage ===
+              'offer sent' ||
+            stage ===
+              'offered' ||
+            stage ===
+              'offer'
+          );
+        }
+      );
+  }
+
+  if (
+    type ===
+    'hired'
+  ) {
+    title =
+      'Hired Candidates — Active Positions';
+
+    candidates =
+      candidates.filter(
+        function(item) {
+          return (
+            dashboardNormalize_(
+              item.stage
+            ) === 'hired'
+          );
+        }
+      );
+  }
+
+  dashboardShowCandidateDatabase_(
+    title,
+    candidates
+  );
+}
+
+
+function dashboardShowCandidateDatabase_(
+  title,
+  items
+) {
+  const id =
+    'drawerCandidateSearch';
+
+  dashboardShowDrawer_(
+    title,
+    `
+      <input
+        id="${id}"
+        class="drawer-search"
+        type="search"
+        placeholder="Search candidate, client, position, email..."
+        oninput="dashboardFilterDrawerCandidates()"
+      >
+
+      <div id="drawerCandidateResults">
+        ${dashboardCandidateTable_(
+          items
+        )}
+      </div>
+    `
+  );
+
+  window.dashboardDrawerCandidates =
+    items.slice();
+}
+
+
+function dashboardFilterDrawerCandidates() {
+  const input =
+    document.getElementById(
+      'drawerCandidateSearch'
+    );
+
+  const results =
+    document.getElementById(
+      'drawerCandidateResults'
+    );
+
+  if (
+    !input ||
+    !results
+  ) {
+    return;
+  }
+
+  const query =
+    dashboardNormalize_(
+      input.value
+    );
+
+  const items =
+    (
+      window
+        .dashboardDrawerCandidates ||
+      []
+    )
+      .filter(
+        function(item) {
+          const haystack =
+            [
+              item.name,
+              item.email,
+              item.phone,
+              item.client,
+              item.position,
+              item.refNo,
+              item.company,
+              item.designation
+            ]
+              .join(' ')
+              .toLowerCase();
+
+          return haystack.includes(
+            query
+          );
+        }
+      );
+
+  results.innerHTML =
+    dashboardCandidateTable_(
+      items
+    );
+}
+
+
+function dashboardOpenClient(client) {
+  const positions =
+    (
+      dashboardData.activePositions ||
+      []
+    )
+      .filter(
+        function(item) {
+          return (
+            dashboardNormalize_(
+              item.client
+            ) ===
+            dashboardNormalize_(
+              client
+            )
+          );
+        }
+      );
+
+  const candidates =
+    (
+      dashboardData.candidates ||
+      []
+    )
+      .filter(
+        function(item) {
+          return (
+            dashboardNormalize_(
+              item.client
+            ) ===
+            dashboardNormalize_(
+              client
+            )
+          );
+        }
+      );
+
+  dashboardShowDrawer_(
+    client,
+    `
+      <div class="candidate-detail-grid">
+        ${dashboardSummaryCard_(
+          'Active Positions',
+          positions.length
+        )}
+
+        ${dashboardSummaryCard_(
+          'Candidates',
+          candidates.length
+        )}
+
+        ${dashboardSummaryCard_(
+          'Shortlisted',
+          candidates.filter(
+            function(item) {
+              return (
+                dashboardNormalize_(
+                  item.stage
+                ) ===
+                'shortlisted'
+              );
+            }
+          ).length
+        )}
+
+        ${dashboardSummaryCard_(
+          'Hired',
+          candidates.filter(
+            function(item) {
+              return (
+                dashboardNormalize_(
+                  item.stage
+                ) ===
+                'hired'
+              );
+            }
+          ).length
+        )}
+      </div>
+
+      <h3>
+        Active Positions
+      </h3>
+
+      ${dashboardPositionTable_(
+        positions,
+        false
+      )}
+    `
+  );
+}
+
+
+function dashboardFindPosition_(refNo) {
+  const all =
+    Array.isArray(
+      dashboardData.allPositions
+    )
+      ? dashboardData.allPositions
+      : [];
+
+  return all.find(
+    function(item) {
+      return (
+        item.refNo ===
+        refNo
+      );
+    }
+  );
+}
+
+
+function dashboardOpenPosition(refNo) {
+  const position =
+    dashboardFindPosition_(
+      refNo
+    );
+
+  if (!position) {
+    return;
+  }
+
+  const candidates =
+    (
+      dashboardData.candidates ||
+      []
+    )
+      .filter(
+        function(item) {
+          return (
+            item.refNo ===
+            refNo
+          );
+        }
+      );
+
+  dashboardShowDrawer_(
+    position.position,
+    `
+      <div class="candidate-detail-grid">
+        ${dashboardSummaryCard_(
+          'Client',
+          position.client
+        )}
+
+        ${dashboardSummaryCard_(
+          'Ref #',
+          position.refNo
+        )}
+
+        ${dashboardSummaryCard_(
+          'Current Status',
+          position.status
+        )}
+
+        ${dashboardSummaryCard_(
+          'Screened',
+          position.screened
+        )}
+
+        ${dashboardSummaryCard_(
+          'Shortlisted',
+          position.shortlisted
+        )}
+
+        ${dashboardSummaryCard_(
+          'Hired',
+          position.hired
+        )}
+      </div>
+
+      ${dashboardPositionManagementHtml_(
+        position
+      )}
+
+      ${
+        dashboardNormalize_(
+          position.status
+        ) === 'active'
+          ? `
+            <h3>
+              Candidates — Active Position
+            </h3>
+
+            ${dashboardCandidateTable_(
+              candidates
+            )}
+          `
+          : `
+            <div class="empty-state">
+              This position is currently ${dashboardEscape_(
+                position.status
+              )}.
+              Dashboard candidate views intentionally show active-position candidates only.
+            </div>
+          `
+      }
+    `
+  );
+}
+
+
+function dashboardPositionManagementHtml_(
+  position
+) {
+  const statuses = [
+    'Active',
+    'On Hold',
+    'Closed',
+    'Filled',
+    'Cancelled'
+  ];
+
+  const priorities = [
+    'High',
+    'Medium',
+    'Low'
+  ];
+
+  return `
+    <section class="position-management">
+      <div class="position-management-header">
+        <div>
+          <span class="card-kicker">
+            POSITION MANAGEMENT
+          </span>
+
+          <h3>
+            Update Position
+          </h3>
+        </div>
+      </div>
+
+      <p class="position-management-note">
+        Changes are written directly to Positions Master.
+        Closing, filling or cancelling a position removes it from active dashboard views.
+        Reopening preserves historical closure audit data.
+      </p>
+
+      <div class="position-form-grid">
+        <div class="position-form-field full">
+          <label for="managePositionStatus">
+            Status
+          </label>
+
+          <select id="managePositionStatus">
+            ${statuses.map(
+              function(status) {
+                return `
+                  <option
+                    value="${dashboardEscapeAttr_(
+                      status
+                    )}"
+                    ${
+                      dashboardNormalize_(
+                        status
+                      ) ===
+                      dashboardNormalize_(
+                        position.status
+                      )
+                        ? 'selected'
+                        : ''
+                    }
+                  >
+                    ${dashboardEscape_(
+                      status
+                    )}
+                  </option>
+                `;
+              }
+            ).join('')}
+          </select>
+        </div>
+
+        <div class="position-form-field">
+          <label for="managePositionPriority">
+            Priority
+          </label>
+
+          <select id="managePositionPriority">
+            ${priorities.map(
+              function(priority) {
+                return `
+                  <option
+                    value="${dashboardEscapeAttr_(
+                      priority
+                    )}"
+                    ${
+                      dashboardNormalize_(
+                        priority
+                      ) ===
+                      dashboardNormalize_(
+                        position.priority
+                      )
+                        ? 'selected'
+                        : ''
+                    }
+                  >
+                    ${dashboardEscape_(
+                      priority
+                    )}
+                  </option>
+                `;
+              }
+            ).join('')}
+          </select>
+        </div>
+
+        <div class="position-form-field">
+          <label for="managePositionTarget">
+            Hiring Target
+          </label>
+
+          <input
+            id="managePositionTarget"
+            type="number"
+            min="1"
+            step="1"
+            value="${dashboardEscapeAttr_(
+              position.hiringTarget || 1
+            )}"
+          >
+        </div>
+      </div>
+
+      <div class="position-management-actions">
+        <button
+          id="managePositionSaveButton"
+          class="position-save-button"
+          type="button"
+          onclick="dashboardSavePosition('${dashboardEscapeAttr_(
+            position.refNo
+          )}')"
+        >
+          Save Changes
+        </button>
+
+        <span
+          id="managePositionSaveStatus"
+          class="position-save-status"
+        ></span>
+      </div>
+    </section>
+  `;
+}
+
+
+function dashboardSavePosition(
+  refNo
+) {
+  const statusEl =
+    document.getElementById(
+      'managePositionStatus'
+    );
+
+  const priorityEl =
+    document.getElementById(
+      'managePositionPriority'
+    );
+
+  const targetEl =
+    document.getElementById(
+      'managePositionTarget'
+    );
+
+  const button =
+    document.getElementById(
+      'managePositionSaveButton'
+    );
+
+  const statusMessage =
+    document.getElementById(
+      'managePositionSaveStatus'
+    );
+
+  if (
+    !statusEl ||
+    !priorityEl ||
+    !targetEl
+  ) {
+    return;
+  }
+
+  const hiringTarget =
+    Number(
+      targetEl.value
+    );
+
+  if (
+    !Number.isInteger(
+      hiringTarget
+    ) ||
+    hiringTarget < 1
+  ) {
+    if (statusMessage) {
+      statusMessage.textContent =
+        'Hiring Target must be a whole number of 1 or more.';
+
+      statusMessage.className =
+        'position-save-status error';
+    }
+
+    return;
+  }
+
+  if (button) {
+    button.disabled =
+      true;
+
+    button.textContent =
+      'Saving...';
+  }
+
+  if (statusMessage) {
+    statusMessage.textContent =
+      'Updating live ATS...';
+
+    statusMessage.className =
+      'position-save-status';
+  }
+
+  const payload = {
+    refNo:
+      refNo,
+
+    status:
+      statusEl.value,
+
+    priority:
+      priorityEl.value,
+
+    hiringTarget:
+      hiringTarget
+  };
+
+  google.script.run
+    .withSuccessHandler(
+      function(result) {
+        if (statusMessage) {
+          statusMessage.textContent =
+            result &&
+            result.message
+              ? result.message
+              : 'Position updated successfully.';
+
+          statusMessage.className =
+            'position-save-status success';
+        }
+
+        // Reload all live dashboard data so the
+        // active-position view responds immediately.
+        dashboardCloseDrawer();
+        dashboardLoad();
+      }
+    )
+    .withFailureHandler(
+      function(error) {
+        if (button) {
+          button.disabled =
+            false;
+
+          button.textContent =
+            'Save Changes';
+        }
+
+        if (statusMessage) {
+          statusMessage.textContent =
+            dashboardErrorMessage_(
+              error
+            );
+
+          statusMessage.className =
+            'position-save-status error';
+        }
+      }
+    )
+    .updatePositionManagement(
+      dashboardSessionToken_(),
+      payload
+    );
+}
+
+
+function dashboardOpenCandidate(
+  candidateId,
+  refNo
+) {
+  const candidate =
+    (
+      dashboardData.candidates ||
+      []
+    )
+      .find(
+        function(item) {
+          return (
+            item.candidateId ===
+              candidateId &&
+            item.refNo ===
+              refNo
+          );
+        }
+      );
+
+  if (!candidate) {
+    return;
+  }
+
+  dashboardShowDrawer_(
+    candidate.name ||
+    candidate.candidateId,
+    `
+      <div class="candidate-detail-grid">
+        ${dashboardSummaryCard_(
+          'Candidate ID',
+          candidate.candidateId
+        )}
+
+        ${dashboardSummaryCard_(
+          'Ref #',
+          candidate.refNo
+        )}
+
+        ${dashboardSummaryCard_(
+          'Position',
+          candidate.position || '—'
+        )}
+
+        ${dashboardSummaryCard_(
+          'Client',
+          candidate.client || '—'
+        )}
+
+        ${dashboardSummaryCard_(
+          'ATS Match',
+          (
+            candidate.atsMatch || 0
+          ) +
+          '%'
+        )}
+
+        ${dashboardSummaryCard_(
+          'Must-Have Fit',
+          candidate.mustHave || '—'
+        )}
+
+        ${dashboardSummaryCard_(
+          'Stage',
+          candidate.stage || '—'
+        )}
+
+        ${dashboardSummaryCard_(
+          'Decision',
+          candidate.decision || '—'
+        )}
+
+        ${dashboardSummaryCard_(
+          'Current Role',
+          candidate.designation || '—'
+        )}
+
+        ${dashboardSummaryCard_(
+          'Current Company',
+          candidate.company || '—'
+        )}
+
+        ${dashboardSummaryCard_(
+          'Email',
+          candidate.email ||
+          'Not provided'
+        )}
+
+        ${dashboardSummaryCard_(
+          'Phone',
+          candidate.phone ||
+          'Not provided'
+        )}
+      </div>
+    `
+  );
+}
+
+
+function dashboardOpenPending(key) {
+  if (
+    key ===
+      'zero-screened' ||
+    key ===
+      'high-priority'
+  ) {
+    let positions =
+      dashboardData.activePositions ||
+      [];
+
+    if (
+      key ===
+      'zero-screened'
+    ) {
+      positions =
+        positions.filter(
+          function(item) {
+            return (
+              item.screened === 0
+            );
+          }
+        );
+    }
+
+    if (
+      key ===
+      'high-priority'
+    ) {
+      positions =
+        positions.filter(
+          function(item) {
+            return (
+              dashboardNormalize_(
+                item.priority
+              ) === 'high'
+            );
+          }
+        );
+    }
+
+    dashboardShowDrawer_(
+      key ===
+        'zero-screened'
+        ? 'Positions with Zero Screened'
+        : 'High-Priority Positions',
+      dashboardPositionTable_(
+        positions,
+        false
+      )
+    );
+
+    return;
+  }
+
+  let candidates =
+    dashboardData.candidates ||
+    [];
+
+  if (key === 'hold') {
+    candidates =
+      candidates.filter(
+        function(item) {
+          return (
+            dashboardNormalize_(
+              item.stage
+            ) === 'hold'
+          );
+        }
+      );
+  }
+
+  if (
+    key ===
+    'shortlisted-no-interview'
+  ) {
+    candidates =
+      candidates.filter(
+        function(item) {
+          return (
+            dashboardNormalize_(
+              item.stage
+            ) ===
+              'shortlisted' &&
+            !item.interviewStatus
+          );
+        }
+      );
+  }
+
+  if (
+    key ===
+    'client-status'
+  ) {
+    candidates =
+      candidates.filter(
+        function(item) {
+          return (
+            dashboardNormalize_(
+              item.clientStatus
+            ) === 'pending'
+          );
+        }
+      );
+  }
+
+  if (key === 'offers') {
+    candidates =
+      candidates.filter(
+        function(item) {
+          const stage =
+            dashboardNormalize_(
+              item.stage
+            );
+
+          return (
+            stage ===
+              'offer sent' ||
+            stage ===
+              'offered' ||
+            stage ===
+              'offer'
+          );
+        }
+      );
+  }
+
+  dashboardShowCandidateDatabase_(
+    'Pending Action — Active Positions',
+    candidates
+  );
+}
+
+
+function dashboardOpenFunnel(key) {
+  if (
+    key ===
+    'screened'
+  ) {
+    dashboardOpenList(
+      'candidates'
+    );
+
+    return;
+  }
+
+  if (
+    key ===
+    'shortlisted'
+  ) {
+    dashboardOpenList(
+      'shortlisted'
+    );
+
+    return;
+  }
+
+  if (
+    key ===
+    'interview'
+  ) {
+    dashboardOpenList(
+      'interviews'
+    );
+
+    return;
+  }
+
+  if (
+    key ===
+    'offer'
+  ) {
+    dashboardOpenList(
+      'offers'
+    );
+
+    return;
+  }
+
+  if (
+    key ===
+    'hired'
+  ) {
+    dashboardOpenList(
+      'hired'
+    );
+  }
+}
+
+
+function dashboardOpenDecision(key) {
+  if (
+    key ===
+    'shortlisted'
+  ) {
+    dashboardOpenList(
+      'shortlisted'
+    );
+
+    return;
+  }
+
+  let candidates =
+    dashboardData.candidates ||
+    [];
+
+  candidates =
+    candidates.filter(
+      function(item) {
+        return (
+          dashboardNormalize_(
+            item.stage
+          ) === key
+        );
+      }
+    );
+
+  dashboardShowCandidateDatabase_(
+    key.charAt(0)
+      .toUpperCase() +
+    key.slice(1) +
+    ' Candidates — Active Positions',
+    candidates
+  );
+}
+
+
+function dashboardSummaryCard_(
+  label,
+  value
+) {
+  return `
+    <div class="candidate-detail-card">
+      <span>
+        ${dashboardEscape_(
+          label
+        )}
+      </span>
+
+      <strong>
+        ${dashboardEscape_(
+          value
+        )}
+      </strong>
+    </div>
+  `;
+}
+
+
+function dashboardShowDrawer_(
+  title,
+  html
+) {
+  const drawer =
+    document.getElementById(
+      'dashboardDrawer'
+    );
+
+  const backdrop =
+    document.getElementById(
+      'dashboardDrawerBackdrop'
+    );
+
+  const titleEl =
+    document.getElementById(
+      'dashboardDrawerTitle'
+    );
+
+  const body =
+    document.getElementById(
+      'dashboardDrawerBody'
+    );
+
+  if (
+    !drawer ||
+    !backdrop ||
+    !titleEl ||
+    !body
+  ) {
+    return;
+  }
+
+  titleEl.textContent =
+    title ||
+    'Details';
+
+  body.innerHTML =
+    html || '';
+
+  backdrop.classList.remove(
+    'hidden'
+  );
+
+  drawer.classList.add(
+    'open'
+  );
+
+  drawer.setAttribute(
+    'aria-hidden',
+    'false'
+  );
+}
+
+
+function dashboardCloseDrawer() {
+  const drawer =
+    document.getElementById(
+      'dashboardDrawer'
+    );
+
+  const backdrop =
+    document.getElementById(
+      'dashboardDrawerBackdrop'
+    );
+
+  if (drawer) {
+    drawer.classList.remove(
+      'open'
+    );
+
+    drawer.setAttribute(
+      'aria-hidden',
+      'true'
+    );
+  }
+
+  if (backdrop) {
+    backdrop.classList.add(
+      'hidden'
+    );
+  }
+}
+
+
+function dashboardPriorityClass_(
+  priority
+) {
+  const clean =
+    dashboardNormalize_(
+      priority
+    );
+
+  if (
+    clean === 'high'
+  ) {
+    return 'priority-high';
+  }
+
+  if (
+    clean === 'low'
+  ) {
+    return 'priority-low';
+  }
+
+  return 'priority-medium';
+}
+
+
+function dashboardStatusClass_(
+  status
+) {
+  const clean =
+    dashboardNormalize_(
+      status
+    );
+
+  if (
+    clean === 'active'
+  ) {
+    return 'status-active';
+  }
+
+  if (
+    clean === 'on hold'
+  ) {
+    return 'status-hold';
+  }
+
+  if (
+    clean === 'filled'
+  ) {
+    return 'status-filled';
+  }
+
+  if (
+    clean === 'cancelled'
+  ) {
+    return 'status-cancelled';
+  }
+
+  return 'status-closed';
+}
+
+
+function dashboardNormalize_(value) {
+  return String(
+    value || ''
+  )
+    .trim()
+    .toLowerCase();
+}
+
+
+function dashboardInitials_(name) {
+  const clean =
+    String(
+      name || ''
+    ).trim();
+
+  if (!clean) {
+    return '—';
+  }
+
+  return clean
+    .split(/\s+/)
+    .slice(
+      0,
+      2
+    )
+    .map(
+      function(part) {
+        return part
+          .charAt(0)
+          .toUpperCase();
+      }
+    )
+    .join('');
+}
+
+
+function dashboardErrorMessage_(error) {
+  if (!error) {
+    return (
+      'Dashboard could not be loaded.'
+    );
+  }
+
+  return (
+    error.message ||
+    String(
+      error
+    )
+  );
+}
+
+
+function dashboardEscape_(value) {
+  return String(
+    value ?? ''
+  )
+    .replace(
+      /&/g,
+      '&amp;'
+    )
+    .replace(
+      /</g,
+      '&lt;'
+    )
+    .replace(
+      />/g,
+      '&gt;'
+    )
+    .replace(
+      /"/g,
+      '&quot;'
+    )
+    .replace(
+      /'/g,
+      '&#039;'
+    );
+}
+
+
+function dashboardEscapeAttr_(value) {
+  return dashboardEscape_(
+    value
+  )
+    .replace(
+      /\r/g,
+      ' '
+    )
+    .replace(
+      /\n/g,
+      ' '
+    );
+}
+</script>

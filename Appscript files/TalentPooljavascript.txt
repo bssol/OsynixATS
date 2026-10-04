@@ -1,0 +1,1386 @@
+<script>
+
+/* =========================================================
+   TALENT POOL DATABASE
+   ========================================================= */
+
+let talentPoolData = null;
+
+let talentPoolCandidates = [];
+let talentPoolFilteredCandidates = [];
+
+let talentPoolCurrentPage = 1;
+
+const talentPoolPageSize = 25;
+
+
+/* =========================================================
+   INITIAL LOAD
+   ========================================================= */
+
+document.addEventListener(
+  'DOMContentLoaded',
+  function() {
+
+    initialiseTalentPoolFilters_();
+
+    loadTalentPool();
+
+  }
+);
+
+
+function loadTalentPool() {
+
+  const body =
+    document.getElementById(
+      'talentPoolBody'
+    );
+
+
+  if (body) {
+
+    body.innerHTML =
+      '<tr>' +
+        '<td colspan="9" ' +
+        'class="candidate-db-loading-cell">' +
+          'Loading Talent Pool...' +
+        '</td>' +
+      '</tr>';
+
+  }
+
+
+  const sessionToken =
+    localStorage.getItem(
+      'OSYNIX_ATS_SESSION'
+    );
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(data) {
+
+        talentPoolData =
+          data || {};
+
+
+        talentPoolCandidates =
+          Array.isArray(
+            talentPoolData.candidates
+          )
+            ? talentPoolData.candidates
+            : [];
+
+
+        talentPoolFilteredCandidates =
+          talentPoolCandidates.slice();
+
+
+        talentPoolCurrentPage = 1;
+
+
+        renderTalentPoolPage_();
+
+      }
+    )
+
+    .withFailureHandler(
+      function(error) {
+
+        console.error(
+          'Talent Pool load failed:',
+          error
+        );
+
+
+        if (body) {
+
+          body.innerHTML =
+            '<tr>' +
+              '<td colspan="9" ' +
+              'class="candidate-db-loading-cell">' +
+                'Unable to load Talent Pool.' +
+              '</td>' +
+            '</tr>';
+
+        }
+
+
+        const count =
+          document.getElementById(
+            'talentPoolRecordCount'
+          );
+
+
+        if (count) {
+
+          count.textContent =
+            'Unable to load candidates';
+
+        }
+
+      }
+    )
+
+    .getCandidateDatabaseData(
+      sessionToken
+    );
+
+}
+
+
+/* =========================================================
+   PAGE RENDERING
+   ========================================================= */
+
+function renderTalentPoolPage_() {
+
+  const totalRecords =
+    talentPoolFilteredCandidates.length;
+
+
+  const totalPages =
+    Math.max(
+      1,
+      Math.ceil(
+        totalRecords /
+        talentPoolPageSize
+      )
+    );
+
+
+  if (
+    talentPoolCurrentPage >
+    totalPages
+  ) {
+
+    talentPoolCurrentPage =
+      totalPages;
+
+  }
+
+
+  const startIndex =
+    (
+      talentPoolCurrentPage - 1
+    ) *
+    talentPoolPageSize;
+
+
+  const endIndex =
+    startIndex +
+    talentPoolPageSize;
+
+
+  const pageCandidates =
+    talentPoolFilteredCandidates.slice(
+      startIndex,
+      endIndex
+    );
+
+
+  renderTalentPoolTable_(
+    pageCandidates
+  );
+
+
+  renderTalentPoolPagination_(
+    totalRecords,
+    totalPages,
+    startIndex,
+    pageCandidates.length
+  );
+
+}
+
+
+/* =========================================================
+   TABLE
+   ========================================================= */
+
+function renderTalentPoolTable_(
+  candidates
+) {
+
+  const body =
+    document.getElementById(
+      'talentPoolBody'
+    );
+
+
+  if (!body) {
+    return;
+  }
+
+
+  const rows =
+    Array.isArray(candidates)
+      ? candidates
+      : [];
+
+
+  if (!rows.length) {
+
+    body.innerHTML =
+      '<tr>' +
+        '<td colspan="9" ' +
+        'class="candidate-db-loading-cell">' +
+          'No candidates found.' +
+        '</td>' +
+      '</tr>';
+
+    return;
+
+  }
+
+
+  body.innerHTML =
+    rows.map(
+      function(candidate) {
+
+        const candidateId =
+          candidate.candidateId ||
+          '';
+
+
+        const candidateName =
+          candidate.candidateName ||
+          'Unnamed Candidate';
+
+
+        const phone =
+          candidate.mobile ||
+          candidate.phone ||
+          candidate.mobileNumber ||
+          '—';
+
+
+        const email =
+          candidate.email ||
+          candidate.emailId ||
+          '—';
+
+
+        const location =
+          candidate.location ||
+          '—';
+
+
+        const designation =
+          candidate.currentDesignation ||
+          '—';
+
+
+        const company =
+          candidate.currentCompany ||
+          '';
+
+
+        const seniority =
+          candidate.seniorityLevel ||
+          '—';
+
+
+        const talentStatus =
+          candidate.talentPoolStatus ||
+          '—';
+
+
+        const lastUpdated =
+          candidate.lastUpdated ||
+          '—';
+
+
+        return (
+          '<tr>' +
+
+            '<td>' +
+              '<strong>' +
+                escapeTalentPoolHtml_(
+                  candidateName
+                ) +
+              '</strong>' +
+            '</td>' +
+
+
+            '<td>' +
+              escapeTalentPoolHtml_(
+                phone
+              ) +
+            '</td>' +
+
+
+            '<td>' +
+              escapeTalentPoolHtml_(
+                email
+              ) +
+            '</td>' +
+
+
+            '<td>' +
+              escapeTalentPoolHtml_(
+                location
+              ) +
+            '</td>' +
+
+
+            '<td>' +
+
+              '<strong>' +
+                escapeTalentPoolHtml_(
+                  designation
+                ) +
+              '</strong>' +
+
+              (
+                company
+                  ? '<br><small>' +
+                      escapeTalentPoolHtml_(
+                        company
+                      ) +
+                    '</small>'
+                  : ''
+              ) +
+
+            '</td>' +
+
+
+            '<td>' +
+              escapeTalentPoolHtml_(
+                seniority
+              ) +
+            '</td>' +
+
+
+            '<td>' +
+              escapeTalentPoolHtml_(
+                talentStatus
+              ) +
+            '</td>' +
+
+
+            '<td>' +
+              escapeTalentPoolHtml_(
+                lastUpdated
+              ) +
+            '</td>' +
+
+
+            '<td>' +
+
+              '<button ' +
+                'type="button" ' +
+                'class="candidate-db-secondary-btn" ' +
+                'onclick="viewTalentPoolCandidate_(\'' +
+                  escapeTalentPoolJs_(
+                    candidateId
+                  ) +
+                '\')">' +
+                  'View' +
+              '</button>' +
+
+            '</td>' +
+
+
+          '</tr>'
+        );
+
+      }
+    )
+    .join('');
+
+}
+
+
+/* =========================================================
+   PAGINATION
+   ========================================================= */
+
+function renderTalentPoolPagination_(
+  totalRecords,
+  totalPages,
+  startIndex,
+  visibleCount
+) {
+
+  const count =
+    document.getElementById(
+      'talentPoolRecordCount'
+    );
+
+
+  const pagination =
+    document.getElementById(
+      'talentPoolPagination'
+    );
+
+
+  if (count) {
+
+    if (!totalRecords) {
+
+      count.textContent =
+        'Showing 0 candidates';
+
+    } else {
+
+      const firstRecord =
+        startIndex + 1;
+
+
+      const lastRecord =
+        startIndex +
+        visibleCount;
+
+
+      count.textContent =
+        'Showing ' +
+        firstRecord +
+        '–' +
+        lastRecord +
+        ' of ' +
+        totalRecords +
+        ' candidates';
+
+    }
+
+  }
+
+
+  if (!pagination) {
+    return;
+  }
+
+
+  if (
+    totalPages <= 1 ||
+    totalRecords === 0
+  ) {
+
+    pagination.innerHTML = '';
+    return;
+
+  }
+
+
+  let html = '';
+
+
+  html +=
+    '<button ' +
+      'type="button" ' +
+      'class="candidate-reactive-page-btn" ' +
+      (
+        talentPoolCurrentPage === 1
+          ? 'disabled '
+          : ''
+      ) +
+      'onclick="changeTalentPoolPage_(' +
+        (
+          talentPoolCurrentPage - 1
+        ) +
+      ')">' +
+        'Previous' +
+    '</button>';
+
+
+  for (
+    let page = 1;
+    page <= totalPages;
+    page++
+  ) {
+
+    html +=
+      '<button ' +
+        'type="button" ' +
+        'class="candidate-reactive-page-btn' +
+        (
+          page === talentPoolCurrentPage
+            ? ' active'
+            : ''
+        ) +
+        '" ' +
+        'onclick="changeTalentPoolPage_(' +
+          page +
+        ')">' +
+          page +
+      '</button>';
+
+  }
+
+
+  html +=
+    '<button ' +
+      'type="button" ' +
+      'class="candidate-reactive-page-btn" ' +
+      (
+        talentPoolCurrentPage ===
+        totalPages
+          ? 'disabled '
+          : ''
+      ) +
+      'onclick="changeTalentPoolPage_(' +
+        (
+          talentPoolCurrentPage + 1
+        ) +
+      ')">' +
+        'Next' +
+    '</button>';
+
+
+  pagination.innerHTML =
+    html;
+
+}
+
+
+function changeTalentPoolPage_(
+  page
+) {
+
+  const totalPages =
+    Math.max(
+      1,
+      Math.ceil(
+        talentPoolFilteredCandidates.length /
+        talentPoolPageSize
+      )
+    );
+
+
+  if (
+    page < 1 ||
+    page > totalPages
+  ) {
+    return;
+  }
+
+
+  talentPoolCurrentPage =
+    page;
+
+
+  renderTalentPoolPage_();
+
+
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth'
+  });
+
+}
+/* =========================================================
+   TALENT POOL FILTERING
+   ========================================================= */
+
+let talentPoolActiveLocation = '';
+let talentPoolActiveSeniority = '';
+let talentPoolActiveStatus = '';
+
+
+function initialiseTalentPoolFilters_() {
+
+  const search =
+    document.getElementById(
+      'talentPoolSearch'
+    );
+
+  const locationTrigger =
+    document.getElementById(
+      'talentPoolLocationTrigger'
+    );
+
+  const seniorityTrigger =
+    document.getElementById(
+      'talentPoolSeniorityTrigger'
+    );
+
+  const statusTrigger =
+    document.getElementById(
+      'talentPoolStatusTrigger'
+    );
+  const stickyLocationTrigger =
+    document.getElementById(
+      'talentPoolStickyLocationTrigger'
+    );
+
+  const stickySeniorityTrigger =
+    document.getElementById(
+      'talentPoolStickySeniorityTrigger'
+    );
+
+  const stickyStatusTrigger =
+    document.getElementById(
+      'talentPoolStickyStatusTrigger'
+    );
+
+  if (search) {
+
+    search.addEventListener(
+      'input',
+      function() {
+
+        talentPoolCurrentPage = 1;
+
+        applyTalentPoolFilters_();
+
+      }
+    );
+
+  }
+
+
+  if (locationTrigger) {
+
+    locationTrigger.addEventListener(
+      'click',
+      function(event) {
+
+        event.stopPropagation();
+
+        openTalentPoolFilterMenu_(
+          locationTrigger,
+          'location'
+        );
+
+      }
+    );
+
+  }
+
+
+  if (seniorityTrigger) {
+
+    seniorityTrigger.addEventListener(
+      'click',
+      function(event) {
+
+        event.stopPropagation();
+
+        openTalentPoolFilterMenu_(
+          seniorityTrigger,
+          'seniority'
+        );
+
+      }
+    );
+
+  }
+
+
+  if (statusTrigger) {
+
+    statusTrigger.addEventListener(
+      'click',
+      function(event) {
+
+        event.stopPropagation();
+
+        openTalentPoolFilterMenu_(
+          statusTrigger,
+          'status'
+        );
+
+      }
+    );
+
+  }
+  if (stickyLocationTrigger) {
+
+    stickyLocationTrigger.addEventListener(
+      'click',
+      function(event) {
+
+        event.stopPropagation();
+
+        openTalentPoolFilterMenu_(
+          stickyLocationTrigger,
+          'location'
+        );
+
+      }
+    );
+
+  }
+
+
+  if (stickySeniorityTrigger) {
+
+    stickySeniorityTrigger.addEventListener(
+      'click',
+      function(event) {
+
+        event.stopPropagation();
+
+        openTalentPoolFilterMenu_(
+          stickySeniorityTrigger,
+          'seniority'
+        );
+
+      }
+    );
+
+  }
+
+
+  if (stickyStatusTrigger) {
+
+    stickyStatusTrigger.addEventListener(
+      'click',
+      function(event) {
+
+        event.stopPropagation();
+
+        openTalentPoolFilterMenu_(
+          stickyStatusTrigger,
+          'status'
+        );
+
+      }
+    );
+
+  }
+
+  document.addEventListener(
+    'click',
+    function() {
+
+      closeTalentPoolFilterMenus_();
+
+    }
+  );
+
+}
+
+
+function applyTalentPoolFilters_() {
+
+  const searchElement =
+    document.getElementById(
+      'talentPoolSearch'
+    );
+
+
+  const searchTerm =
+    searchElement
+      ? String(
+          searchElement.value || ''
+        )
+          .trim()
+          .toLowerCase()
+      : '';
+
+
+  talentPoolFilteredCandidates =
+    talentPoolCandidates.filter(
+      function(candidate) {
+
+        const location =
+          String(
+            candidate.location || ''
+          ).trim();
+
+
+        const seniority =
+          String(
+            candidate.seniorityLevel || ''
+          ).trim();
+
+
+        const talentStatus =
+          String(
+            candidate.talentPoolStatus || ''
+          ).trim();
+
+
+        if (
+          talentPoolActiveLocation &&
+          location !== talentPoolActiveLocation
+        ) {
+          return false;
+        }
+
+
+        if (
+          talentPoolActiveSeniority &&
+          seniority !== talentPoolActiveSeniority
+        ) {
+          return false;
+        }
+
+
+        if (
+          talentPoolActiveStatus &&
+          talentStatus !== talentPoolActiveStatus
+        ) {
+          return false;
+        }
+
+
+        if (!searchTerm) {
+          return true;
+        }
+
+
+        const searchableValues = [
+
+          candidate.candidateName,
+
+          candidate.mobile,
+          candidate.phone,
+          candidate.mobileNumber,
+
+          candidate.email,
+          candidate.emailId,
+
+          candidate.location,
+
+          candidate.currentDesignation,
+          candidate.currentCompany,
+
+          candidate.seniorityLevel,
+          candidate.talentPoolStatus,
+
+          candidate.primaryFunction,
+          candidate.secondaryFunction,
+
+          candidate.industries,
+          candidate.domains,
+
+          candidate.coreSkills,
+          candidate.systemsTools,
+
+          candidate.geographicMarketExposure
+
+        ];
+
+
+        const searchableText =
+          searchableValues
+            .filter(
+              function(value) {
+
+                return (
+                  value !== undefined &&
+                  value !== null
+                );
+
+              }
+            )
+            .map(
+              function(value) {
+
+                return String(value);
+
+              }
+            )
+            .join(' ')
+            .toLowerCase();
+
+
+        return searchableText.includes(
+          searchTerm
+        );
+
+      }
+    );
+
+
+  talentPoolCurrentPage = 1;
+
+  renderTalentPoolPage_();
+
+}
+
+
+function openTalentPoolFilterMenu_(
+  trigger,
+  type
+) {
+
+  closeTalentPoolFilterMenus_();
+
+
+  let values = [];
+  let activeValue = '';
+  let allLabel = 'All';
+
+
+  if (type === 'location') {
+
+    values =
+      getTalentPoolUniqueValues_(
+        'location'
+      );
+
+    activeValue =
+      talentPoolActiveLocation;
+
+    allLabel =
+      'All Locations';
+
+  }
+
+
+  if (type === 'seniority') {
+
+    values =
+      getTalentPoolUniqueValues_(
+        'seniorityLevel'
+      );
+
+    activeValue =
+      talentPoolActiveSeniority;
+
+    allLabel =
+      'All Seniority';
+
+  }
+
+
+  if (type === 'status') {
+
+    values =
+      getTalentPoolUniqueValues_(
+        'talentPoolStatus'
+      );
+
+    activeValue =
+      talentPoolActiveStatus;
+
+    allLabel =
+      'All Statuses';
+
+  }
+
+
+  const menu =
+    document.createElement(
+      'div'
+    );
+
+
+  menu.className =
+    'talent-pool-filter-menu is-open';
+
+
+  menu.addEventListener(
+    'click',
+    function(event) {
+
+      event.stopPropagation();
+
+    }
+  );
+
+
+  menu.appendChild(
+    createTalentPoolFilterOption_(
+      allLabel,
+      '',
+      type,
+      activeValue === ''
+    )
+  );
+
+
+  values.forEach(
+    function(value) {
+
+      menu.appendChild(
+        createTalentPoolFilterOption_(
+          value,
+          value,
+          type,
+          activeValue === value
+        )
+      );
+
+    }
+  );
+
+
+    const normalParent =
+    trigger.closest(
+      '.talent-pool-filter-th'
+    );
+
+
+  const stickyParent =
+    trigger.closest(
+      '.talent-pool-sticky-header > div'
+    );
+
+
+  const parent =
+    normalParent ||
+    stickyParent;
+
+
+  if (!parent) {
+    return;
+  }
+
+
+  /*
+   * The normal table filter remains anchored
+   * to its existing TH.
+   *
+   * The floating-header filter is anchored
+   * directly to its own fixed-header column.
+   */
+  if (stickyParent) {
+
+    stickyParent.style.position =
+      'relative';
+
+  }
+
+
+  parent.appendChild(
+    menu
+  );
+
+}
+
+
+function createTalentPoolFilterOption_(
+  label,
+  value,
+  type,
+  isActive
+) {
+
+  const button =
+    document.createElement(
+      'button'
+    );
+
+
+  button.type =
+    'button';
+
+
+  button.className =
+    'talent-pool-filter-option' +
+    (
+      isActive
+        ? ' active'
+        : ''
+    );
+
+
+  button.textContent =
+    label;
+
+
+  button.addEventListener(
+    'click',
+    function() {
+
+      setTalentPoolFilter_(
+        type,
+        value
+      );
+
+    }
+  );
+
+
+  return button;
+
+}
+
+
+function setTalentPoolFilter_(
+  type,
+  value
+) {
+
+  if (type === 'location') {
+
+    talentPoolActiveLocation =
+      value;
+
+  }
+
+
+  if (type === 'seniority') {
+
+    talentPoolActiveSeniority =
+      value;
+
+  }
+
+
+  if (type === 'status') {
+
+    talentPoolActiveStatus =
+      value;
+
+  }
+
+
+  updateTalentPoolFilterTriggers_();
+
+  closeTalentPoolFilterMenus_();
+
+  applyTalentPoolFilters_();
+
+}
+
+
+function getTalentPoolUniqueValues_(
+  propertyName
+) {
+
+  const values =
+    talentPoolCandidates
+      .map(
+        function(candidate) {
+
+          return String(
+            candidate[propertyName] || ''
+          ).trim();
+
+        }
+      )
+      .filter(
+        function(value) {
+
+          return value !== '';
+
+        }
+      );
+
+
+  return Array.from(
+    new Set(values)
+  ).sort(
+    function(a, b) {
+
+      return a.localeCompare(b);
+
+    }
+  );
+
+}
+
+
+function updateTalentPoolFilterTriggers_() {
+
+  updateTalentPoolFilterTrigger_(
+    'talentPoolLocationTrigger',
+    'Location',
+    talentPoolActiveLocation
+  );
+
+
+  updateTalentPoolFilterTrigger_(
+    'talentPoolSeniorityTrigger',
+    'Seniority',
+    talentPoolActiveSeniority
+  );
+
+
+  updateTalentPoolFilterTrigger_(
+    'talentPoolStatusTrigger',
+    'Talent Status',
+    talentPoolActiveStatus
+  );
+
+}
+
+
+function updateTalentPoolFilterTrigger_(
+  triggerId,
+  defaultLabel,
+  activeValue
+) {
+
+  const trigger =
+    document.getElementById(
+      triggerId
+    );
+
+
+  if (!trigger) {
+    return;
+  }
+
+
+  const label =
+    trigger.querySelector(
+      'span:first-child'
+    );
+
+
+  if (label) {
+
+    label.textContent =
+      activeValue ||
+      defaultLabel;
+
+  }
+
+
+  trigger.classList.toggle(
+    'is-filtered',
+    Boolean(activeValue)
+  );
+
+}
+
+
+function closeTalentPoolFilterMenus_() {
+
+  document
+    .querySelectorAll(
+      '.talent-pool-filter-menu'
+    )
+    .forEach(
+      function(menu) {
+
+        menu.remove();
+
+      }
+    );
+
+}
+
+/* =========================================================
+   CANDIDATE PROFILE
+   ========================================================= */
+
+function viewTalentPoolCandidate_(
+  candidateId
+) {
+
+  console.log(
+    'Talent Pool candidate requested:',
+    candidateId
+  );
+
+
+  /*
+   * The detailed Candidate Profile panel
+   * will be connected in the next phase.
+   */
+
+}
+
+
+/* =========================================================
+   SAFE OUTPUT
+   ========================================================= */
+
+function escapeTalentPoolHtml_(
+  value
+) {
+
+  return String(
+    value === undefined ||
+    value === null
+      ? ''
+      : value
+  )
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
+}
+
+
+function escapeTalentPoolJs_(
+  value
+) {
+
+  return String(value || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'");
+
+}
+/* =========================================================
+   TALENT POOL — FIXED TABLE HEADER
+   ========================================================= */
+
+function updateTalentPoolStickyHeader_() {
+
+  const stickyHeader =
+    document.getElementById(
+      'talentPoolStickyHeader'
+    );
+
+  const table =
+    document.querySelector(
+      '.talent-pool-table'
+    );
+
+  const normalHeader =
+    document.querySelector(
+      '.talent-pool-table thead'
+    );
+
+
+  if (
+    !stickyHeader ||
+    !table ||
+    !normalHeader
+  ) {
+    return;
+  }
+
+
+  const tableRect =
+    table.getBoundingClientRect();
+
+  const headerRect =
+    normalHeader.getBoundingClientRect();
+
+
+  /*
+   * Same principle used by the working
+   * Candidate Database reactive table.
+   *
+   * Show the independent header only after
+   * the normal table header passes beneath
+   * the ATS navigation.
+   */
+
+  const navigationBottom = 72;
+
+  const stickyHeaderHeight = 58;
+
+
+  const shouldShow =
+    headerRect.bottom <= navigationBottom &&
+    tableRect.bottom >
+      navigationBottom + stickyHeaderHeight;
+
+
+  stickyHeader.classList.toggle(
+    'is-visible',
+    shouldShow
+  );
+
+}
+
+
+window.addEventListener(
+  'scroll',
+  updateTalentPoolStickyHeader_,
+  { passive: true }
+);
+
+
+window.addEventListener(
+  'resize',
+  updateTalentPoolStickyHeader_
+);
+
+
+</script>

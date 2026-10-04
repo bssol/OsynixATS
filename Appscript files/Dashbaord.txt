@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <?!= include('DashboardStyles'); ?>
+</head>
+
+<body>
+  <?!= include('Navigation'); ?>
+
+  <main class="dashboard-shell">
+    <section class="dashboard-hero">
+      <div>
+        <div class="eyebrow">
+          RECRUITMENT OVERVIEW
+        </div>
+
+        <h1 id="dashboardGreeting">
+          Good day
+        </h1>
+
+        <p>
+          Live recruitment activity across all clients and active positions.
+        </p>
+      </div>
+
+      <div class="dashboard-hero-actions">
+  <button
+    class="secondary-action"
+    type="button"
+    onclick="dashboardRefresh()"
+  >
+    Refresh
+  </button>
+</div>
+    </section>
+
+    <section
+      id="dashboardLoading"
+      class="dashboard-loading"
+    >
+      Loading live ATS dashboard...
+    </section>
+
+    <section
+      id="dashboardContent"
+      class="dashboard-content hidden"
+    >
+      <div
+        id="dashboardKpis"
+        class="kpi-grid"
+      ></div>
+<div
+  id="dashboardPositionStatus"
+  class="position-status-grid"
+></div>
+
+      <div class="analytics-grid">
+        <article class="dashboard-card">
+          <div class="card-heading">
+            <div>
+              <span class="card-kicker">
+                PIPELINE
+              </span>
+
+              <h2>
+                Hiring Funnel
+              </h2>
+            </div>
+          </div>
+
+          <div
+            id="dashboardFunnel"
+            class="funnel-chart"
+          ></div>
+        </article>
+
+        <article class="dashboard-card">
+          <div class="card-heading">
+            <div>
+              <span class="card-kicker">
+                CANDIDATES
+              </span>
+
+              <h2>
+                Candidate Decision Mix
+              </h2>
+            </div>
+          </div>
+
+          <div
+            id="dashboardDecisionMix"
+            class="decision-mix"
+          ></div>
+        </article>
+      </div>
+
+      <div class="dashboard-main-grid">
+        <article class="dashboard-card">
+          <div class="card-heading">
+            <div>
+              <span class="card-kicker">
+                VACANCIES
+              </span>
+
+              <h2>
+                Active Positions
+              </h2>
+            </div>
+
+            <button
+              class="text-action"
+              type="button"
+              onclick="dashboardOpenList('positions')"
+            >
+              View all
+            </button>
+          </div>
+
+          <div
+            id="dashboardPositions"
+            class="data-table-wrap"
+          ></div>
+        </article>
+
+        <article class="dashboard-card">
+          <div class="card-heading">
+            <div>
+              <span class="card-kicker">
+                ATTENTION
+              </span>
+
+              <h2>
+                Pending Actions
+              </h2>
+            </div>
+          </div>
+
+          <div
+            id="dashboardPending"
+            class="pending-list"
+          ></div>
+        </article>
+      </div>
+
+      <article class="dashboard-card client-portfolio-card">
+        <div class="card-heading">
+          <div>
+            <span class="card-kicker">
+              CLIENT PORTFOLIO
+            </span>
+
+            <h2>
+              Hiring Activity by Client
+            </h2>
+          </div>
+
+          <span class="card-help">
+            Click a client to drill into its active positions.
+          </span>
+        </div>
+
+        <div
+          id="dashboardClients"
+          class="data-table-wrap"
+        ></div>
+      </article>
+
+      <div class="dashboard-main-grid dashboard-bottom-grid">
+        <article class="dashboard-card">
+          <div class="card-heading">
+            <div>
+              <span class="card-kicker">
+                ACTIVITY
+              </span>
+
+              <h2>
+                Recent Candidate Activity
+              </h2>
+            </div>
+
+            <button
+              class="text-action"
+              type="button"
+              onclick="dashboardOpenList('candidates')"
+            >
+              Candidate database
+            </button>
+          </div>
+
+          <div
+            id="dashboardRecent"
+            class="data-table-wrap"
+          ></div>
+        </article>
+
+        <article class="dashboard-card">
+          <div class="card-heading">
+            <div>
+              <span class="card-kicker">
+                TOP TALENT
+              </span>
+
+              <h2>
+                Top Shortlisted Candidates
+              </h2>
+            </div>
+          </div>
+
+          <div
+            id="dashboardTopTalent"
+            class="talent-list"
+          ></div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <div
+    id="dashboardDrawerBackdrop"
+    class="drawer-backdrop hidden"
+    onclick="dashboardCloseDrawer()"
+  ></div>
+
+  <aside
+    id="dashboardDrawer"
+    class="dashboard-drawer"
+    aria-hidden="true"
+  >
+    <div class="drawer-header">
+      <div>
+        <span class="card-kicker">
+          LIVE ATS DATA
+        </span>
+
+        <h2 id="dashboardDrawerTitle">
+          Details
+        </h2>
+      </div>
+
+      <button
+        class="drawer-close"
+        type="button"
+        onclick="dashboardCloseDrawer()"
+      >
+        ×
+      </button>
+    </div>
+
+    <div
+      id="dashboardDrawerBody"
+      class="drawer-body"
+    ></div>
+  </aside>
+
+  <?!= include('DashboardJavascript'); ?>
+  <?!= include('AccessGuard'); ?>
+</body>
+</html>

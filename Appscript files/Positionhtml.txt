@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <?!= include('PositionStyles'); ?>
+
+  <style>
+    .criterion-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 130px 135px 130px 42px;
+      gap: 12px;
+      align-items: end;
+    }
+
+    .logic-details {
+      margin-top: 14px;
+      border-top: 1px solid var(--border);
+      padding-top: 14px;
+    }
+
+    .logic-details summary {
+      cursor: pointer;
+      color: var(--blue);
+      font-weight: 800;
+      user-select: none;
+    }
+
+    .logic-panel {
+      margin-top: 14px;
+    }
+
+    .logic-warning {
+      margin-bottom: 14px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: #FFF8E7;
+      border: 1px solid #F5D98B;
+      color: #7A5A00;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .logic-footer {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 12px;
+    }
+
+    .reset-draft-btn {
+      border: 1px solid #C9D5E7;
+      background: #FFFFFF;
+      color: var(--navy);
+      padding: 9px 13px;
+    }
+
+    .weight-warning {
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .weight-warning.ok {
+      background: #F0FDF4;
+      border: 1px solid #BBF7D0;
+      color: #15803D;
+    }
+
+    .weight-warning.bad {
+      background: #FFF6F5;
+      border: 1px solid #F1C0BC;
+      color: #B42318;
+    }
+
+    @media (max-width: 900px) {
+      .criterion-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <?!= include('AccessGuard'); ?>
+  <?!= include('Navigation'); ?>
+  <div class="app-shell">
+
+    <main class="container">
+
+      <section class="card">
+        <div class="step-title">1. Position Information</div>
+
+        <div class="form-grid">
+<div class="field wide">
+  <label>Client *</label>
+
+  <div class="client-picker-shell">
+
+    <div class="client-search-row">
+      <input
+        id="clientSearch"
+        type="text"
+        autocomplete="off"
+        placeholder="Search existing client..."
+        oninput="filterExistingClients()"
+      >
+
+      <button
+        id="newClientBtn"
+        class="secondary-btn client-new-btn"
+        type="button"
+        onclick="startNewClient()"
+      >
+        + Create New Client
+      </button>
+    </div>
+
+    <div
+      id="existingClientResults"
+      class="existing-client-results"
+    >
+      <div class="client-picker-loading">
+        Loading existing clients...
+      </div>
+    </div>
+
+    <div
+      id="selectedClientPanel"
+      class="selected-client-panel hidden"
+    >
+      <div>
+        <span class="selected-client-label">
+          Selected Client
+        </span>
+
+        <strong id="selectedClientName"></strong>
+      </div>
+
+      <button
+        type="button"
+        class="client-change-btn"
+        onclick="clearClientSelection()"
+      >
+        Change
+      </button>
+    </div>
+
+    <div
+      id="newClientPanel"
+      class="new-client-panel hidden"
+    >
+      <label>New Client Name</label>
+
+      <input
+        id="newClientName"
+        type="text"
+        autocomplete="off"
+        placeholder="Enter the new client name"
+        oninput="checkNewClientSimilarity()"
+      >
+
+      <div
+        id="clientDuplicateWarning"
+        class="client-duplicate-warning hidden"
+      ></div>
+
+      <div class="new-client-actions">
+        <button
+          type="button"
+          class="primary-btn"
+          onclick="confirmNewClient()"
+        >
+          Use This New Client
+        </button>
+
+        <button
+          type="button"
+          class="secondary-btn"
+          onclick="cancelNewClient()"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+
+    <input
+      id="client"
+      type="hidden"
+      value=""
+    >
+
+  </div>
+</div>
+
+          <div class="field">
+            <label>Position Title</label>
+            <input id="position" type="text" placeholder="Optional - AI can read it from the JD">
+          </div>
+
+          <div class="field">
+            <label>Location</label>
+            <input id="location" type="text" placeholder="e.g. Lahore">
+          </div>
+
+          <div class="field">
+            <label>Priority</label>
+            <select id="priority">
+              <option value="High">High</option>
+              <option value="Medium" selected>Medium</option>
+              <option value="Low">Low</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>Hiring Target</label>
+            <input id="hiringTarget" type="number" min="1" value="1">
+          </div>
+
+          <div class="field wide">
+            <label>Internal Notes</label>
+            <textarea id="notes" rows="3" placeholder="Optional internal notes for this vacancy"></textarea>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="step-title">2. Upload Job Description</div>
+
+        <div class="upload-box">
+          <input id="jdFile" type="file" accept=".pdf,.doc,.docx,.txt">
+          <div class="upload-help">
+            Upload the client JD. The AI will create draft screening criteria only.
+            Nothing is written to the live ATS at this stage.
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="analyzeBtn" class="primary-btn" onclick="analyzeJD()">
+            Analyze JD
+          </button>
+        </div>
+
+        <div id="analysisStatus" class="status hidden"></div>
+      </section>
+
+      <section id="reviewSection" class="card hidden">
+        <div class="step-title">3. Review AI Draft</div>
+
+        <div class="notice">
+          <strong>AI-generated draft.</strong>
+          Recruiter review and direct client knowledge take precedence before saving.
+          You may change criteria, weights, knockout requirements and the assessment logic.
+        </div>
+
+        <div class="form-grid">
+          <div class="field">
+            <label>Client *</label>
+            <input id="reviewClient" type="text" readonly>
+          </div>
+
+          <div class="field">
+            <label>Position Title *</label>
+            <input id="reviewPosition" type="text">
+          </div>
+
+          <div class="field">
+            <label>Location</label>
+            <input id="reviewLocation" type="text">
+          </div>
+
+          <div class="field wide">
+            <label>AI Position Summary</label>
+            <textarea id="positionSummary" rows="4" readonly></textarea>
+          </div>
+        </div>
+
+        <div class="criteria-header">
+          <div>
+            <h3>JD Criteria</h3>
+            <p>
+              Core recruiter controls are shown by default.
+              Open “View logic” when you want to review or amend the assessment logic.
+            </p>
+          </div>
+
+          <div class="weight-box">
+            Total Weight:
+            <strong id="weightTotal">0%</strong>
+          </div>
+        </div>
+
+        <div id="weightWarning" class="weight-warning hidden"></div>
+
+        <div id="criteriaContainer"></div>
+
+        <div class="criteria-actions">
+          <button class="secondary-btn" type="button" onclick="addCriterion()">
+            + Add Criterion
+          </button>
+        </div>
+
+        <div class="final-check">
+          <label class="checkbox-row">
+            <input id="confirmReview" type="checkbox">
+            <span>
+              I have reviewed the position details, criteria, weights,
+              knockout requirements and any logic changes I made.
+            </span>
+          </label>
+        </div>
+
+        <div class="actions">
+          <button id="createBtn" class="primary-btn" onclick="createApprovedPosition()">
+            Create Position in Live ATS
+          </button>
+
+          <button class="secondary-btn" type="button" onclick="resetPositionForm()">
+            Cancel / Start Again
+          </button>
+        </div>
+
+        <div id="createStatus" class="status hidden"></div>
+      </section>
+
+      <section id="successSection" class="card success-card hidden">
+        <div class="success-icon">✓</div>
+        <h2>Position Created</h2>
+        <p id="successMessage"></p>
+
+        <div class="actions center">
+
+  <button
+    class="primary-btn"
+    type="button"
+    onclick="navigateATS('candidate')"
+  >
+    Assess Candidates
+  </button>
+
+  <button
+    class="secondary-btn"
+    type="button"
+    onclick="navigateATS('position')"
+  >
+    Create Another Position
+  </button>
+
+</div>
+      </section>
+
+    </main>
+  </div>
+
+  <?!= include('PositionJavascript'); ?>
+  <script>
+  document.addEventListener(
+    'DOMContentLoaded',
+    function() {
+      const button =
+        document.getElementById(
+          'navPosition'
+        );
+
+      if (button) {
+        button.classList.add(
+          'active'
+        );
+      }
+    }
+  );
+</script>
+</body>
+</html>

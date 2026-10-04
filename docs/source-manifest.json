@@ -1,0 +1,97 @@
+[
+  {
+    "source": "AccessGuard.txt",
+    "sha256": "e63ae77ef8db2b13f0ab1573f87bc7e5058c5e95b32de9f54d6b4f343a41becc",
+    "bytes": 2956
+  },
+  {
+    "source": "CANDIDATEDATABASESERVICE(1).txt",
+    "sha256": "953246d454e5580a71e9974187921449a2e402ef0e0bf36abd5e376df817e84f",
+    "bytes": 14307
+  },
+  {
+    "source": "CandidateService(4).txt",
+    "sha256": "d50310ddca2d0940960ae51e5049d66e1d1e65de38236169bf5bc02654af11e9",
+    "bytes": 51129
+  },
+  {
+    "source": "Candidatedatabasejavascript(2).txt",
+    "sha256": "f43bcf046a1f649b1bd24299a38d03ff52d5043ec51371c9149e6033e1c270a3",
+    "bytes": 91508
+  },
+  {
+    "source": "Candidateprofileservice(1).txt",
+    "sha256": "66ef3187307de01ff8fcf65de0e57e4aef801659bbf0b27c9b52bac924d2409c",
+    "bytes": 16997
+  },
+  {
+    "source": "Code.txt",
+    "sha256": "1a6df1d13b98d1ba8411d89964b0da1fc8061fdf543c5f3c21222878a91c87d0",
+    "bytes": 6746
+  },
+  {
+    "source": "Codegs(1).txt",
+    "sha256": "1f76ee3e96e49c2b26081126a6ddd9143a95a234e0daf7bc646e19c10b381d92",
+    "bytes": 6924
+  },
+  {
+    "source": "Config.txt",
+    "sha256": "5245aa3f8757985e53d702416d50c773089806bbf437039b0d2731f7ee2fb075",
+    "bytes": 759
+  },
+  {
+    "source": "Index(1).txt",
+    "sha256": "d756868b8917addb96e29e200cf281ecc4698ee3e806e58401cc68bc9cbd4292",
+    "bytes": 10047
+  },
+  {
+    "source": "Javascripthtml(6).txt",
+    "sha256": "a13500f406eb388faa6afbe23d4413b0aa9776b60707a9b73363ec7b84b3e031",
+    "bytes": 47321
+  },
+  {
+    "source": "LoginJavascript.txt",
+    "sha256": "bd0dc85abb827069d4ec3ef111c93e17e6f9d05262b1839b26380c1cc6f43a13",
+    "bytes": 12857
+  },
+  {
+    "source": "OpenAI(4).txt",
+    "sha256": "7045847e6ec3942eed3b9f035006d51ec00f1cc572f125343759184c22ea21b0",
+    "bytes": 27687
+  },
+  {
+    "source": "Positionsjavascript.txt",
+    "sha256": "ffdee280c0a1e5e4c00f9d0055ab312eb94f72a37d7b41d9a2f82f78853929ca",
+    "bytes": 29713
+  },
+  {
+    "source": "candidatedatabasehtml(2).txt",
+    "sha256": "875f6b0c0ead522c0a44e3a7e546d12b8ecdb92b5fa0b48001fbea8a7ffcc2bf",
+    "bytes": 18939
+  },
+  {
+    "source": "candidatedatbaseSTYLE.txt",
+    "sha256": "6eeca85872e580e1b3ac54efb00058f1937eddae30026924352cb62005d1ea90",
+    "bytes": 40683
+  },
+  {
+    "source": "managepositionservice.txt",
+    "sha256": "8b92876ba81e37b1fcdfe078505971e3395d9326cb555c8f2c676ba5558539b1",
+    "bytes": 3899
+  },
+  {
+    "source": "navigationhtml.txt",
+    "sha256": "79f419e7ac54c83f4f30d85e4cd78d32e825bd54deb8cc5bcb60bcbfeeaeec06",
+    "bytes": 144510
+  },
+  {
+    "source": "positionserive.txt",
+    "sha256": "77b61316a745d8937b09502513daf16c2af8209b84df6aeb3c3ccf9a96b7af25",
+    "bytes": 31563
+  },
+  {
+    "source": "reportservice.txt",
+    "sha256": "8cb2348009443d3a00eb250727e296759e08ed2e16bdbf34b3fc001063599746",
+    "bytes": 12072
+  }
+]

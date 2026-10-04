@@ -1,0 +1,12 @@
+@page "/import"
+@attribute [Authorize(Roles="Admin")]
+@inherits PageBase
+@inject WorkbookImport Importer
+<PageTitle>Import workbook · Osynix ATS</PageTitle>
+<div class="page-heading"><div><div class="eyebrow">DATA MIGRATION</div><h1>Bring your ATS data across.</h1><p class="muted">Export the current Google Sheet as an Excel workbook (.xlsx), then preview it here.</p></div></div><Feedback Error="Error" Notice="Notice" Busy="Busy" /><section class="panel"><label class="upload-zone">Select workbook<InputFile OnChange="Choose" accept=".xlsx" /><small>Maximum 25 MB · Import is allowed only into an empty ATS database.</small></label></section>
+@if(preview is not null){<section class="panel"><h2>Import preview</h2><table><thead><tr><th>Sheet</th><th>Non-empty data rows</th></tr></thead><tbody>@foreach(var sheet in preview.Rows){<tr><td>@sheet.Key</td><td>@sheet.Value</td></tr>}</tbody></table><ul>@foreach(var warning in preview.Warnings){<li>@warning</li>}</ul><p>All imported row values are retained for reconciliation. A failed commit rolls back the entire import.</p><label class="check"><input type="checkbox" @bind="confirmed" /> I have checked this workbook and want to import it into this empty database.</label><button disabled="@(Busy||!confirmed)" @onclick="Commit">Import workbook</button></section>}
+@code{
+byte[] bytes=[];WorkbookPreview? preview;bool confirmed;
+Task Choose(InputFileChangeEventArgs e)=>Run(async()=>{preview=null;confirmed=false;using var stream=new MemoryStream();await e.File.OpenReadStream(25*1024*1024).CopyToAsync(stream);bytes=stream.ToArray();preview=await Importer.Preview(bytes);});
+Task Commit()=>Run(async()=>{Notice=await Importer.Commit(bytes);preview=null;bytes=[];confirmed=false;});
+}

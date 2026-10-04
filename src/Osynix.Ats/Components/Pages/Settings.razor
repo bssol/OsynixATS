@@ -1,0 +1,17 @@
+@page "/settings"
+@attribute [Authorize(Roles="Admin")]
+@inherits PageBase
+@inject AtsService Ats
+@inject AdminService Admin
+<PageTitle>Settings · Osynix ATS</PageTitle>
+<div class="page-heading"><div><div class="eyebrow">ADMINISTRATION</div><h1>Rules, users &amp; audit</h1></div></div><Feedback Error="Error" Notice="Notice" Busy="Busy" />
+<section class="panel"><div class="section-heading"><h2>Decision rules</h2><button class="secondary" @onclick="()=>rules.Add(new DecisionRule())">+ Rule</button></div><p class="muted">Must-have Fail always produces Reject. Insufficient Evidence always remains Insufficient Evidence. Other decisions use the highest matching threshold below. No matching rule means Hold.</p><table><thead><tr><th>Must-have fit</th><th>Minimum match %</th><th>Decision</th><th></th></tr></thead><tbody>@foreach(var r in rules){<tr><td><select @bind="r.MustHaveFit"><option>Pass</option><option>Partial</option></select></td><td><input type="number" min="0" max="100" @bind="r.MinimumMatch" /></td><td><select @bind="r.Decision">@foreach(var s in Choices.Decisions){<option>@s</option>}</select></td><td><button class="secondary" @onclick="()=>rules.Remove(r)">Remove</button></td></tr>}</tbody></table><button disabled="Busy" @onclick="SaveRules">Save rules</button></section>
+<div class="two-col"><section class="panel"><h2>Add user</h2><label>Email<input type="email" @bind="email" /></label><label>Initial password<input type="password" autocomplete="new-password" @bind="password" /></label><p class="muted small">Minimum 12 characters, including upper/lowercase, a number and a symbol. No credentials are emailed.</p><label>Role<select @bind="role"><option>Recruiter</option><option>Admin</option></select></label><button disabled="Busy" @onclick="CreateUser">Create user</button></section><section class="panel"><h2>Workspace users</h2>@foreach(var u in users){<p>@u</p>}<h3>Server configuration</h3><p>API credentials, model selection and the original report logo are configured on the server. See README for setup. Credentials are never shown in the browser.</p></section></div>
+<section class="panel table-wrap"><h2>Latest audit events</h2><table><thead><tr><th>UTC time</th><th>Action</th><th>User</th><th>Entity</th></tr></thead><tbody>@foreach(var a in audit){<tr><td>@a.CreatedUtc.ToString("yyyy-MM-dd HH:mm")</td><td>@a.Action</td><td>@a.UserId</td><td>@a.EntityId</td></tr>}</tbody></table></section>
+@code{
+List<DecisionRule> rules=[];List<string> users=[];List<AuditEntry> audit=[];string email="",password="",role="Recruiter";
+protected override Task OnInitializedAsync()=>Run(Load);
+async Task Load(){rules=await Ats.Rules();users=await Admin.Users();audit=await Admin.Audit();}
+Task SaveRules()=>Run(async()=>{await Ats.SaveRules(rules);await Load();Notice="Decision rules saved. Existing assessments are unchanged.";});
+Task CreateUser()=>Run(async()=>{await Admin.CreateUser(email,password,role);email=password="";await Load();Notice="User created.";});
+}

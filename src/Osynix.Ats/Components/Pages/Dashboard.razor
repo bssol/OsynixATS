@@ -1,0 +1,13 @@
+@page "/"
+@attribute [Authorize(Roles="Admin,Recruiter")]
+@inherits PageBase
+@inject AtsService Ats
+<PageTitle>Dashboard · Osynix ATS</PageTitle>
+<div class="page-heading"><div><div class="eyebrow">RECRUITMENT OVERVIEW</div><h1>Your hiring, in focus.</h1><p class="muted">A live view of positions, talent and recruitment progress.</p></div><a class="button" href="assessment">+ Assess candidates</a></div>
+<Feedback Error="Error" Notice="Notice" Busy="Busy" />
+<div class="kpis"><a class="kpi" href="positions"><span>Active positions</span><strong>@positions.Count(p=>p.Status=="Active")</strong><small>Open opportunities →</small></a><a class="kpi" href="candidates"><span>Talent pool</span><strong>@candidates.Count</strong><small>Explore candidates →</small></a><a class="kpi" href="pipeline?stage=Shortlisted"><span>Shortlisted</span><strong>@saved.Count(a=>a.Stage=="Shortlisted")</strong><small>Review next steps →</small></a><a class="kpi" href="pipeline?stage=Hired"><span>Hired</span><strong>@saved.Count(a=>a.Stage=="Hired")</strong><small>Successful placements →</small></a></div>
+<div class="two-col"><section class="panel"><h2>Recruitment stages</h2>@foreach(var group in saved.GroupBy(x=>x.Stage).OrderByDescending(g=>g.Count())){<a class="bar-row" href="@($"pipeline?stage={Uri.EscapeDataString(group.Key)}")"><span>@group.Key</span><div class="bar-track"><div style="@($"width:{100d*group.Count()/Math.Max(1,saved.Count):0.##}%")"></div></div><b>@group.Count()</b></a>}@if(saved.Count==0){<p class="empty">Save your first candidate assessment to see pipeline activity.</p>}</section><section class="panel"><h2>Recent assessments</h2>@foreach(var a in saved.Take(6)){<a class="recent" href="@($"assessment/{a.Id}")"><span><b>@a.CandidateName</b><small>@a.Position?.Title · Ref #@a.Position?.Reference</small></span><DecisionBadge Value="a.Decision" /></a>}@if(saved.Count==0){<p class="empty">No assessments yet.</p>}</section></div>
+@code{
+List<Position> positions=[];List<Candidate> candidates=[];List<Assessment> saved=[];
+protected override Task OnInitializedAsync()=>Run(async()=>{positions=await Ats.Positions();candidates=await Ats.Candidates();saved=(await Ats.Assessments()).Where(x=>x.State=="Saved").ToList();});
+}

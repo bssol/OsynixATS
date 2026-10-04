@@ -1,0 +1,24 @@
+@page "/assessment"
+@attribute [Authorize(Roles="Admin,Recruiter")]
+@inherits PageBase
+@inject AtsService Ats
+@inject AiService Ai
+<PageTitle>Candidate assessment · Osynix ATS</PageTitle>
+<div class="page-heading"><div><div class="eyebrow">EVIDENCE-BASED SCREENING</div><h1>Find the right fit.</h1><p class="muted">Assess one CV or a batch of up to five against a locked position.</p></div></div>
+<Feedback Error="Error" Notice="Notice" Busy="Busy" />
+<section class="panel"><div class="form-grid"><label>Position<select @bind="positionId"><option value="">Select an active position</option>@foreach(var p in positions.Where(x=>x.Status=="Active"&&x.CriteriaLocked)){<option value="@p.Id">@p.Reference — @p.Title · @p.Client</option>}</select></label><label>Mode<select @bind="batch"><option value="false">Single CV</option><option value="true">Batch CV (maximum 5)</option></select></label></div><label class="upload-zone">Upload candidate CVs<InputFile OnChange="Choose" multiple="@batch" accept=".pdf,.docx,.txt" /> <small>PDF, DOCX or TXT · 10 MB each</small></label><ul>@foreach(var file in files){<li>@file.Name</li>}</ul><p class="muted small">Starting assessment sends these CVs to the configured OpenAI API account and incurs API usage charges. Results are drafts until saved to ATS.</p><button disabled="@(Busy||files.Count==0||positionId is null)" @onclick="AssessFiles">@(Busy?"Assessing…":"Run assessment")</button></section>
+<section class="panel"><div class="section-heading"><h2>Assessment workspace</h2><div><button class="secondary" disabled="Busy" @onclick="SaveAll">Save visible drafts</button> @if(results.Count>0){<a class="button secondary" target="_blank" href="@ReportUrl">Batch PDF</a>}</div></div><p class="muted small">Drafts persist across refreshes. Existing Candidate Name + Ref # records are never silently overwritten.</p><div class="table-wrap"><table><thead><tr><th>Candidate</th><th>Reference</th><th>Match</th><th>Must-have</th><th>Decision</th><th>State</th><th>Actions</th></tr></thead><tbody>@foreach(var a in results.Take(50)){<tr class="@Choices.Tone(a.Decision)"><td>@a.CandidateName</td><td>@a.Position?.Reference</td><td>@a.MatchPercent%</td><td>@a.MustHaveFit</td><td>@a.Decision</td><td>@a.State</td><td><a href="@($"assessment/{a.Id}")">View</a> @if(a.State=="Draft"){<button class="secondary" disabled="Busy" @onclick="()=>Save(a.Id)">Save to ATS</button>}</td></tr>}</tbody></table></div></section>
+@code{
+List<Position> positions=[];List<Assessment> results=[];IReadOnlyList<IBrowserFile> files=[];Guid? positionId;bool batch;
+string ReportUrl=>"/reports?format=pdf&ids="+string.Join(',',results.Take(50).Select(a=>a.Id));
+protected override Task OnInitializedAsync()=>Run(async()=>{positions=await Ats.Positions();await Reload();});
+async Task Reload(){results=await Ats.Assessments();}
+void Choose(InputFileChangeEventArgs e){try{files=e.GetMultipleFiles(batch?5:1);Error="";}catch(InvalidOperationException){files=[];Error=batch?"Select at most five CVs.":"Select one CV.";}}
+Task AssessFiles()=>Run(async()=>{
+    var failures=new List<string>();var count=0;
+    foreach(var file in files){try{using var stream=new MemoryStream();await file.OpenReadStream(AiService.MaxFileSize).CopyToAsync(stream);await Ai.Assess(positionId!.Value,file.Name,stream.ToArray());count++;}catch(Exception e){failures.Add(file.Name+": "+(e is InvalidOperationException?e.Message:"Upload or provider request failed."));}}
+    await Reload();Notice=$"{count} draft(s) created.";Error=string.Join(" | ",failures);files=[];
+});
+Task Save(Guid id)=>Run(async()=>{await Ats.SaveDraft(id);await Reload();Notice="Candidate saved to ATS.";});
+Task SaveAll()=>Run(async()=>{var errors=new List<string>();foreach(var a in results.Take(50).Where(a=>a.State=="Draft")){try{await Ats.SaveDraft(a.Id);}catch(InvalidOperationException e){errors.Add(a.CandidateName+": "+e.Message);}}await Reload();Notice="Draft save completed.";Error=string.Join(" | ",errors);});
+}

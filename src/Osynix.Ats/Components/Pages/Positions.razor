@@ -1,0 +1,31 @@
+@page "/positions"
+@attribute [Authorize(Roles="Admin,Recruiter")]
+@inherits PageBase
+@inject AtsService Ats
+@inject AiService Ai
+<PageTitle>Positions · Osynix ATS</PageTitle>
+<div class="page-heading"><div><div class="eyebrow">VACANCIES &amp; CRITERIA</div><h1>Manage positions</h1></div><button @onclick="New">+ Create position</button></div>
+<Feedback Error="Error" Notice="Notice" Busy="Busy" />
+<div class="toolbar"><input aria-label="Search positions" placeholder="Search title, client or reference…" @bind="search" @bind:event="oninput" /><select aria-label="Position status" @bind="status"><option value="">All statuses</option>@foreach(var s in new[]{"Active","On Hold","Filled","Cancelled"}){<option>@s</option>}</select></div>
+<div class="panel table-wrap"><table><thead><tr><th>Reference</th><th>Position / client</th><th>Location</th><th>Status</th><th>Criteria</th><th></th></tr></thead><tbody>@foreach(var p in positions.Where(p=>(status==""||p.Status==status)&&$"{p.Title} {p.Client} {p.Reference}".Contains(search,StringComparison.OrdinalIgnoreCase))){<tr><td>#@p.Reference</td><td><b>@p.Title</b><small>@p.Client</small></td><td>@p.Location</td><td>@p.Status</td><td>@(p.CriteriaLocked?"Locked":"Review required")</td><td><button class="secondary" @onclick="()=>Edit(p)">Open</button></td></tr>}</tbody></table>@if(positions.Count==0){<p class="empty">Create a position or import your workbook to begin.</p>}</div>
+@if(edit is not null){
+<div class="overlay"><section class="drawer wide" role="dialog" aria-modal="true" aria-label="Position editor"><div class="drawer-head"><h2>@(positions.Any(p=>p.Id==edit.Id)?"Edit position":"New position")</h2><button class="secondary" @onclick="()=>edit=null">Close</button></div><Feedback Error="Error" Busy="Busy" />
+<div class="form-grid"><label>Reference<InputText @bind-Value="edit.Reference" /></label><label>Position title<InputText @bind-Value="edit.Title" /></label><label>Client<InputText @bind-Value="edit.Client" /></label><label>Location<InputText @bind-Value="edit.Location" /></label><label>Salary range<InputText @bind-Value="edit.SalaryRange" /></label><label>Employment type<InputText @bind-Value="edit.EmploymentType" /></label></div>
+<label>Job description<textarea rows="7" @bind="edit.JobDescription" disabled="edit.CriteriaLocked"></textarea></label><label>Client-specific requirements<textarea rows="3" @bind="edit.ClientNotes" disabled="edit.CriteriaLocked"></textarea></label>
+<div class="section-heading"><h2>Assessment criteria <small>@edit.Criteria.Sum(c=>c.Weight)% / 100%</small></h2><div><button class="secondary" disabled="@(Busy||edit.CriteriaLocked)" @onclick="Analyze">Analyze JD with AI</button> <button class="secondary" disabled="edit.CriteriaLocked" @onclick="()=>edit.Criteria.Add(new Criterion())">+ Criterion</button></div></div>
+<p class="muted small">Review all criteria before locking. AI analysis uses your configured API account. Locked criteria cannot be changed; create a new reference for revised requirements.</p>
+@foreach(var c in edit.Criteria){<div class="criterion-editor" @key="c.Id"><div class="form-grid"><label>Criterion<input @bind="c.Name" disabled="edit.CriteriaLocked" /></label><label>Weight %<input type="number" min="1" max="100" @bind="c.Weight" disabled="edit.CriteriaLocked" /></label></div><label class="check"><input type="checkbox" @bind="c.Knockout" disabled="edit.CriteriaLocked" /> Must-have / knockout</label><label>Evidence expected<textarea @bind="c.EvidenceExpected" disabled="edit.CriteriaLocked"></textarea></label><label>Scoring guidance<textarea @bind="c.ScoringGuidance" disabled="edit.CriteriaLocked"></textarea></label><label>Interpretation notes<textarea @bind="c.Notes" disabled="edit.CriteriaLocked"></textarea></label><button class="danger secondary" disabled="edit.CriteriaLocked" @onclick="()=>edit.Criteria.Remove(c)">Remove</button></div>}
+<label class="check"><input type="checkbox" @bind="lockOnSave" disabled="edit.CriteriaLocked" /> @(edit.CriteriaLocked?"Criteria are locked":"I reviewed the criteria — lock on save")</label>
+<div class="form-grid"><label>Status<select @bind="edit.Status">@foreach(var s in new[]{"Active","On Hold","Filled","Cancelled"}){<option>@s</option>}</select></label><label>Closure reason<input @bind="edit.ClosureReason" placeholder="Use Client-filled if hired outside ATS" /></label></div>
+@if(edit.Status=="Filled"){<label>Hired candidate<select @bind="edit.HiredCandidateId"><option value="">No ATS candidate (Client-filled)</option>@foreach(var a in assessments.Where(a=>a.PositionId==edit.Id&&a.State=="Saved")){<option value="@a.CandidateId">@a.CandidateName</option>}</select></label>}
+<div class="drawer-actions"><button disabled="Busy" @onclick="Save">Save position</button></div></section></div>
+}
+@code{
+List<Position> positions=[];List<Assessment> assessments=[];Position? edit;string search="",status="";bool lockOnSave;
+protected override Task OnInitializedAsync()=>Run(Load);
+async Task Load(){positions=await Ats.Positions();assessments=await Ats.Assessments();}
+void New(){edit=new Position();lockOnSave=false;Error="";}
+void Edit(Position p){edit=JsonSerializer.Deserialize<Position>(JsonSerializer.Serialize(p));lockOnSave=p.CriteriaLocked;Error="";}
+Task Analyze()=>Run(async()=>{edit!.Criteria=await Ai.AnalyzeJd(edit.JobDescription,edit.ClientNotes);});
+Task Save()=>Run(async()=>{edit!.CriteriaLocked=lockOnSave;await Ats.SavePosition(edit);edit=null;await Load();Notice="Position saved.";});
+}

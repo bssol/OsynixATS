@@ -1,0 +1,4 @@
+@if(!string.IsNullOrEmpty(Error)){<div class="error" role="alert">@Error</div>}
+@if(!string.IsNullOrEmpty(Notice)){<div class="notice" role="status">@Notice</div>}
+@if(Busy){<p class="muted" role="status">Working…</p>}
+@code{[Parameter] public string Error{get;set;}="";[Parameter] public string Notice{get;set;}="";[Parameter] public bool Busy{get;set;}}

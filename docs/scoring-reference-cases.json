@@ -1,0 +1,367 @@
+{
+  "rules": [
+    {
+      "mustHaveFit": "Pass",
+      "minAtsMatch": 75.0,
+      "decision": "Priority Shortlist"
+    },
+    {
+      "mustHaveFit": "Pass",
+      "minAtsMatch": 60.0,
+      "decision": "Shortlist"
+    },
+    {
+      "mustHaveFit": "Pass",
+      "minAtsMatch": 0.0,
+      "decision": "Hold"
+    },
+    {
+      "mustHaveFit": "Partial",
+      "minAtsMatch": 70.0,
+      "decision": "Shortlist"
+    },
+    {
+      "mustHaveFit": "Partial",
+      "minAtsMatch": 55.0,
+      "decision": "Hold"
+    },
+    {
+      "mustHaveFit": "Partial",
+      "minAtsMatch": 0.0,
+      "decision": "Reject"
+    },
+    {
+      "mustHaveFit": "Fail",
+      "minAtsMatch": 0.0,
+      "decision": "Reject"
+    },
+    {
+      "mustHaveFit": "Insufficient Evidence",
+      "minAtsMatch": 0.0,
+      "decision": "Insufficient Evidence"
+    }
+  ],
+  "cases": [
+    {
+      "name": "Pass at 75",
+      "criteria": [
+        {
+          "criterion": "Criterion 1",
+          "weight": 75,
+          "knockout": "Yes"
+        },
+        {
+          "criterion": "Criterion 2",
+          "weight": 25,
+          "knockout": "No"
+        }
+      ],
+      "evidence": [
+        {
+          "criterion": "Criterion 1",
+          "score_10": 8,
+          "evidence_confidence_10": 8,
+          "evidence_found": "Audit fixture evidence",
+          "assessment_rationale": "Audit fixture rationale"
+        },
+        {
+          "criterion": "Criterion 2",
+          "score_10": 6,
+          "evidence_confidence_10": 8,
+          "evidence_found": "Audit fixture evidence",
+          "assessment_rationale": "Audit fixture rationale"
+        }
+      ]
+    },
+    {
+      "name": "Pass at 60",
+      "criteria": [
+        {
+          "criterion": "Criterion 1",
+          "weight": 50,
+          "knockout": "Yes"
+        },
+        {
+          "criterion": "Criterion 2",
+          "weight": 50,
+          "knockout": "No"
+        }
+      ],
+      "evidence": [
+        {
+          "criterion": "Criterion 1",
+          "score_10": 6,
+          "evidence_confidence_10": 8,
+          "evidence_found": "Audit fixture evidence",
+          "assessment_rationale": "Audit fixture rationale"
+        },
+        {
+          "criterion": "Criterion 2",
+          "score_10": 6,
+          "evidence_confidence_10": 8,
+          "evidence_found": "Audit fixture evidence",
+          "assessment_rationale": "Audit fixture rationale"
+        }
+      ]
+    },
+    {
+      "name": "Knockout failure overrides 92",
+      "criteria": [
+        {
+          "criterion": "Criterion 1",
+          "weight": 10,
+          "knockout": "Yes"
+        },
+        {
+          "criterion": "Criterion 2",
+          "weight": 90,
+          "knockout": "No"
+        }
+      ],
+      "evidence": [
+        {
+          "criterion": "Criterion 1",
+          "score_10": 2,
+          "evidence_confidence_10": 8,
+          "evidence_found": "Audit fixture evidence",
+          "assessment_rationale": "Audit fixture rationale"
+        },
+        {
+          "criterion": "Criterion 2",
+          "score_10": 10,
+          "evidence_confidence_10": 8,
+          "evidence_found": "Audit fixture evidence",
+          "assessment_rationale": "Audit fixture rationale"
+        }
+      ]
+    },
+    {
+      "name": "Missing knockout evidence",
+      "criteria": [
+        {
+          "criterion": "Criterion 1",
+          "weight": 10,
+          "knockout": "Yes"
+        },
+        {
+          "criterion": "Criterion 2",
+          "weight": 90,
+          "knockout": "No"
+        }
+      ],
+      "evidence": [
+        {
+          "criterion": "Criterion 2",
+          "score_10": 10,
+          "evidence_confidence_10": 8,
+          "evidence_found": "Audit fixture evidence",
+          "assessment_rationale": "Audit fixture rationale"
+        }
+      ]
+    },
+    {
+      "name": "Partial at 70",
+      "criteria": [
+        {
+          "criterion": "Criterion 1",
+          "weight": 50,
+          "knockout": "Yes"
+        },
+        {
+          "criterion": "Criterion 2",
+          "weight": 50,
+          "knockout": "No"
+        }
+      ],
+      "evidence": [
+        {
+          "criterion": "Criterion 1",
+          "score_10": 4,
+          "evidence_confidence_10": 8,
+          "evidence_found": "Audit fixture evidence",
+          "assessment_rationale": "Audit fixture rationale"
+        },
+        {
+          "criterion": "Criterion 2",
+          "score_10": 10,
+          "evidence_confidence_10": 8,
+          "evidence_found": "Audit fixture evidence",
+          "assessment_rationale": "Audit fixture rationale"
+        }
+      ]
+    },
+    {
+      "name": "Partial at 55",
+      "criteria": [
+        {
+          "criterion": "Criterion 1",
+          "weight": 25,
+          "knockout": "Yes"
+        },
+        {
+          "criterion": "Criterion 2",
+          "weight": 75,
+          "knockout": "No"
+        }
+      ],
+      "evidence": [
+        {
+          "criterion": "Criterion 1",
+          "score_10": 4,
+          "evidence_confidence_10": 8,
+          "evidence_found": "Audit fixture evidence",
+          "assessment_rationale": "Audit fixture rationale"
+        },
+        {
+          "criterion": "Criterion 2",
+          "score_10": 6,
+          "evidence_confidence_10": 8,
+          "evidence_found": "Audit fixture evidence",
+          "assessment_rationale": "Audit fixture rationale"
+        }
+      ]
+    },
+    {
+      "name": "Partial at 54",
+      "criteria": [
+        {
+          "criterion": "Criterion 1",
+          "weight": 23,
+          "knockout": "Yes"
+        },
+        {
+          "criterion": "Criterion 2",
+          "weight": 56,
+          "knockout": "No"
+        },
+        {
+          "criterion": "Criterion 3",
+          "weight": 21,
+          "knockout": "No"
+        }
+      ],
+      "evidence": [
+        {
+          "criterion": "Criterion 1",
+          "score_10": 4,
+          "evidence_confidence_10": 8,
+          "evidence_found": "Audit fixture evidence",
+          "assessment_rationale": "Audit fixture rationale"
+        },
+        {
+          "criterion": "Criterion 2",
+          "score_10": 8,
+          "evidence_confidence_10": 8,
+          "evidence_found": "Audit fixture evidence",
+          "assessment_rationale": "Audit fixture rationale"
+        },
+        {
+          "criterion": "Criterion 3",
+          "score_10": 0,
+          "evidence_confidence_10": 8,
+          "evidence_found": "Audit fixture evidence",
+          "assessment_rationale": "Audit fixture rationale"
+        }
+      ]
+    },
+    {
+      "name": "Criterion punctuation normalization",
+      "criteria": [
+        {
+          "criterion": "Direct-industry experience",
+          "weight": 60,
+          "knockout": "Yes"
+        },
+        {
+          "criterion": "Criterion 2",
+          "weight": 40,
+          "knockout": "No"
+        }
+      ],
+      "evidence": [
+        {
+          "criterion": "Direct industry experience",
+          "score_10": 8,
+          "evidence_confidence_10": 8,
+          "evidence_found": "Audit fixture evidence",
+          "assessment_rationale": "Audit fixture rationale"
+        },
+        {
+          "criterion": "Criterion 2",
+          "score_10": 6,
+          "evidence_confidence_10": 8,
+          "evidence_found": "Audit fixture evidence",
+          "assessment_rationale": "Audit fixture rationale"
+        }
+      ]
+    },
+    {
+      "name": "Core fit midpoint rounding",
+      "criteria": [
+        {
+          "criterion": "Criterion 1",
+          "weight": 20,
+          "knockout": "Yes"
+        },
+        {
+          "criterion": "Criterion 2",
+          "weight": 19,
+          "knockout": "No"
+        },
+        {
+          "criterion": "Criterion 3",
+          "weight": 20,
+          "knockout": "No"
+        },
+        {
+          "criterion": "Criterion 4",
+          "weight": 40,
+          "knockout": "No"
+        },
+        {
+          "criterion": "Criterion 5",
+          "weight": 1,
+          "knockout": "No"
+        }
+      ],
+      "evidence": [
+        {
+          "criterion": "Criterion 1",
+          "score_10": 8,
+          "evidence_confidence_10": 8,
+          "evidence_found": "Audit fixture evidence",
+          "assessment_rationale": "Audit fixture rationale"
+        },
+        {
+          "criterion": "Criterion 2",
+          "score_10": 4,
+          "evidence_confidence_10": 8,
+          "evidence_found": "Audit fixture evidence",
+          "assessment_rationale": "Audit fixture rationale"
+        },
+        {
+          "criterion": "Criterion 3",
+          "score_10": 8,
+          "evidence_confidence_10": 8,
+          "evidence_found": "Audit fixture evidence",
+          "assessment_rationale": "Audit fixture rationale"
+        },
+        {
+          "criterion": "Criterion 4",
+          "score_10": 6,
+          "evidence_confidence_10": 8,
+          "evidence_found": "Audit fixture evidence",
+          "assessment_rationale": "Audit fixture rationale"
+        },
+        {
+          "criterion": "Criterion 5",
+          "score_10": 8,
+          "evidence_confidence_10": 8,
+          "evidence_found": "Audit fixture evidence",
+          "assessment_rationale": "Audit fixture rationale"
+        }
+      ]
+    }
+  ],
+  "reference_implementation": "Appscript files/OpenAI.txt; functions isolated and executed locally; workbook thresholds normalized from formatted percentage semantics."
+}

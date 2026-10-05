@@ -2,12 +2,20 @@
 @attribute [Authorize(Roles="Admin,Recruiter")]
 @inherits PageBase
 @inject AtsService Ats
-<PageTitle>Assessment report · Osynix ATS</PageTitle>
-<Feedback Error="Error" Notice="Notice" Busy="Busy" />
-@if(a is not null&&snap is not null){<div class="page-heading"><div><a href="/assessment">← Assessment workspace</a><h1>@a.CandidateName</h1><p class="muted">@snap.PositionTitle · @snap.Client · Ref #@snap.Reference</p></div><div><a class="button secondary" target="_blank" href="@($"/reports?ids={a.Id}")">Print preview</a> <a class="button" href="@($"/reports?format=pdf&ids={a.Id}")">Download PDF</a></div></div><div class="kpis"><div class="kpi"><span>ATS match</span><strong>@a.MatchPercent%</strong></div><div class="kpi"><span>Must-have fit</span><strong class="small-value">@a.MustHaveFit</strong></div><div class="kpi"><span>Core role fit</span><strong>@a.CoreRoleFit/10</strong></div><div class="kpi"><span>Evidence strength</span><strong>@a.EvidenceStrength/10</strong></div></div><section class="panel"><h2><DecisionBadge Value="a.Decision" /></h2><p>@snap.Summary</p><div class="two-col"><div><h3>Strengths</h3><p class="preserve">@snap.Strengths</p></div><div><h3>Gaps / risks</h3><p class="preserve">@snap.Gaps</p></div></div><div class="table-wrap"><table><thead><tr><th>Criterion</th><th>Weight</th><th>Score</th><th>Evidence</th><th>Rationale</th></tr></thead><tbody>@foreach(var c in snap.Criteria){<tr><td>@c.Name @if(c.Knockout){<small>Must-have</small>}</td><td>@c.Weight%</td><td>@c.Score/10<small>@c.Status</small></td><td>@c.Found</td><td>@c.Rationale</td></tr>}</tbody></table></div></section><section class="panel"><h2>Candidate message</h2><p class="muted small">Review and copy manually; no message is sent automatically.</p><textarea rows="8" readonly>@ScoringEngine.Message(a.CandidateName,snap.PositionTitle,a.Decision)</textarea></section><p class="muted">Screening recommendation only. Recruiter review and evidence verification are required.</p>@if(a.State=="Draft"){<button disabled="Busy" @onclick="Save">Save to ATS</button>}}
+@inject NavigationManager Nav
+<PageTitle>Assessment · Osynix ATS</PageTitle>
+<Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
+@if(a is not null&&view is not null&&snapshot is not null){<div class="page-heading"><div><a href="/assessment">← Assessment workspace</a><h1>@a.CandidateName</h1><p class="muted">@snapshot.PositionTitle · @snapshot.Client · #@snapshot.Reference</p></div><a class="button" href="@ReportUrl">Download PDF</a></div>
+@if(versions.Count>0){<label>Assessment history<select @bind="number" @bind:after="SelectVersion">@foreach(var v in versions){<option value="@v.Number">Version @v.Number · @v.CreatedUtc.ToString("yyyy-MM-dd") · @v.Decision</option>}</select></label>}
+<AssessmentSummary Application="view" Snapshot="snapshot" Framework="@(a.Position?.Criteria??[])" />
+@if(a.State=="Saved"){<section class="panel"><h2>Current recruitment progress</h2><LifecycleEditor Application="a" OnSaved="Load" /><p><a href="@($"/candidates?id={a.CandidateId}")">Open permanent candidate profile</a></p></section>}
+<section class="panel"><h2>Candidate message</h2><p class="muted small">Review and copy manually.</p><textarea rows="8" readonly>@ScoringEngine.Message(a.CandidateName,snapshot.PositionTitle,view.Decision)</textarea></section>
+@if(a.State=="Draft"){<button disabled="@Busy" @onclick="Save">Save to ATS</button>}}
 @code{
-[Parameter]public Guid Id{get;set;}Assessment? a;AssessmentSnapshot? snap;
+[Parameter]public Guid Id{get;set;}Assessment? a,view;AssessmentSnapshot? snapshot;List<AssessmentVersion> versions=[];int number;
+string ReportUrl=>$"/reports?format=pdf&ids={a?.Id}"+(a?.State=="Saved"?$"&version={number}":"");
 protected override Task OnParametersSetAsync()=>Run(Load);
-async Task Load(){a=(await Ats.Assessments()).SingleOrDefault(x=>x.Id==Id);if(a is null){Error="Assessment not found.";return;}snap=JsonSerializer.Deserialize<AssessmentSnapshot>(a.SnapshotJson);}
-Task Save()=>Run(async()=>{await Ats.SaveDraft(Id);await Load();Notice="Saved to ATS.";});
+async Task Load(){a=(await Ats.Assessments()).SingleOrDefault(x=>x.Id==Id);if(a is null){Error="Assessment not found.";return;}if(a.ReplacedByAssessmentId is not null){Nav.NavigateTo($"/assessment/{a.ReplacedByAssessmentId}",replace:true);return;}a.Position=(await Ats.Positions()).Single(x=>x.Id==a.PositionId);versions=await Ats.Versions(a.Id);number=a.VersionNumber;SelectVersion();}
+void SelectVersion(){if(a is null)return;view=JsonSerializer.Deserialize<Assessment>(JsonSerializer.Serialize(a));var v=versions.FirstOrDefault(x=>x.Number==number);if(v is not null){view!.SnapshotJson=v.SnapshotJson;view.Decision=v.Decision;view.MatchPercent=v.MatchPercent;view.MustHaveFit=v.MustHaveFit;view.CoreRoleFit=v.CoreRoleFit;view.EvidenceStrength=v.EvidenceStrength;view.VersionNumber=v.Number;}snapshot=JsonSerializer.Deserialize<AssessmentSnapshot>(view!.SnapshotJson);}
+Task Save()=>Run(async()=>{var saved=await Ats.SaveDraft(Id);if(saved!=Id)Nav.NavigateTo($"/assessment/{saved}");else await Load();Notice="Saved to ATS.";});
 }

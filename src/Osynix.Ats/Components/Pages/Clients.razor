@@ -1,0 +1,25 @@
+@page "/clients"
+@attribute [Authorize(Roles="Admin,Recruiter")]
+@inherits PageBase
+@inject WorkspaceService Workspace
+@inject AtsService Ats
+<PageTitle>Clients · Osynix ATS</PageTitle>
+<div class="page-heading"><div><div class="eyebrow">CLIENT RELATIONSHIPS</div><h1>Clients</h1><p class="muted">Client contacts, recruitment context and associated positions.</p></div><button @onclick="()=>edit=new Client()">+ Create client</button></div>
+<Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
+<div class="toolbar"><input aria-label="Search clients" placeholder="Search clients or industry…" @bind="search" @bind:event="oninput" /></div>
+<section class="panel table-wrap"><table><thead><tr><th>Client</th><th>Industry / location</th><th>Positions</th><th>Contacts</th><th>Status</th><th></th></tr></thead><tbody>
+@foreach(var c in clients.Where(x=>$"{x.Name} {x.Industry}".Contains(search,StringComparison.OrdinalIgnoreCase))){<tr><td><b>@c.Name</b></td><td>@c.Industry<small>@c.Location</small></td><td>@positions.Count(x=>x.ClientId==c.Id)</td><td>@c.Contacts.Count</td><td>@c.Status</td><td><button class="secondary" @onclick="()=>Open(c)">Open</button></td></tr>}
+</tbody></table>@if(clients.Count==0){<p class="empty">Create your first client or import the tracker workbook.</p>}</section>
+@if(edit is not null){<div class="overlay"><section class="drawer wide" role="dialog" aria-modal="true" aria-label="Client editor"><div class="drawer-head"><h2>@(clients.Any(x=>x.Id==edit.Id)?edit.Name:"New client")</h2><button class="secondary" @onclick="()=>edit=null">Close</button></div><Feedback Error="@Error" Busy="Busy" />
+<div class="form-grid"><label>Client name<input @bind="edit.Name" /></label><label>Industry<input @bind="edit.Industry" /></label><label>Location<input @bind="edit.Location" /></label><label>Website<input @bind="edit.Website" /></label><label>Status<select @bind="edit.Status"><option>Active</option><option>Inactive</option></select></label></div><label>Recruitment context<textarea rows="4" @bind="edit.Notes"></textarea></label>
+<div class="section-heading"><h3>Contacts</h3><button class="secondary" @onclick="()=>edit.Contacts.Add(new ClientContact())">+ Contact</button></div>
+@foreach(var contact in edit.Contacts){<div class="criterion-editor"><div class="form-grid"><label>Name<input @bind="contact.Name" /></label><label>Title<input @bind="contact.Title" /></label><label>Email<input type="email" @bind="contact.Email" /></label><label>Phone<input @bind="contact.Phone" /></label></div><button class="secondary danger" @onclick="()=>edit.Contacts.Remove(contact)">Remove contact</button></div>}
+<h3>Positions</h3>@foreach(var p in positions.Where(x=>x.ClientId==edit.Id)){<p><a href="@($"/positions?ref={Uri.EscapeDataString(p.Reference)}")">#@p.Reference — @p.Title</a> · @p.Status</p>}
+<button disabled="@Busy" @onclick="Save">Save client</button></section></div>}
+@code{
+List<Client> clients=[];List<Position> positions=[];Client? edit;string search="";
+protected override Task OnInitializedAsync()=>Run(Load);
+async Task Load(){clients=await Workspace.Clients();positions=await Ats.Positions();}
+void Open(Client c){edit=JsonSerializer.Deserialize<Client>(JsonSerializer.Serialize(c));Error="";}
+Task Save()=>Run(async()=>{await Workspace.SaveClient(edit!);edit=null;await Load();Notice="Client saved.";});
+}

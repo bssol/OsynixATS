@@ -1,0 +1,3311 @@
+{
+  "review_date": "2026-10-05",
+  "timezone": "Asia/Karachi",
+  "git_head": "8c1127a3f95713914e4d51d577fb1bf3ba60e918",
+  "scope": "Offline source inventory, static behavioral review, isolated workbook import and synthetic scoring comparison. Missing functionality has not been implemented by this audit.",
+  "sources": [
+    {
+      "file": "AccessGuard.txt",
+      "bytes": 2980,
+      "sha256": "9b2f28594618bfddd5459582992bec46f92381342c7e4792a920f5586aaa7535",
+      "functions": [
+        {
+          "name": "redirectToLogin",
+          "line": 118
+        },
+        {
+          "name": "redirectToCandidate",
+          "line": 136
+        },
+        {
+          "name": "clearSessionAndRedirect",
+          "line": 171
+        }
+      ],
+      "lines": 186
+    },
+    {
+      "file": "Appsscriotjason.txt",
+      "bytes": 475,
+      "sha256": "037d244601f2fa37e9c6123f28de2d3d17e7482ad8411212f624f6870e929223",
+      "functions": [],
+      "lines": 16
+    },
+    {
+      "file": "AuthroizationServices.gs",
+      "bytes": 4463,
+      "sha256": "d98d693f56e31b87195e33b99816b664abecedde701c332c2ce32414c1f7363f",
+      "functions": [
+        {
+          "name": "requireValidATSSession_",
+          "line": 23
+        },
+        {
+          "name": "requireATSRole_",
+          "line": 63
+        },
+        {
+          "name": "requireATSOperationalUser_",
+          "line": 122
+        },
+        {
+          "name": "requireATSPermission_",
+          "line": 140
+        },
+        {
+          "name": "requireCanCreatePositions_",
+          "line": 192
+        },
+        {
+          "name": "requireCanViewTalentPool_",
+          "line": 203
+        },
+        {
+          "name": "requireCanExportReports_",
+          "line": 214
+        },
+        {
+          "name": "normalizeATSRole_",
+          "line": 229
+        },
+        {
+          "name": "isATSAdmin_",
+          "line": 241
+        },
+        {
+          "name": "isATSRecruiter_",
+          "line": 255
+        }
+      ],
+      "lines": 266
+    },
+    {
+      "file": "Authservice.gs",
+      "bytes": 22382,
+      "sha256": "3b614ddb4219c6bf11b99fc13b9829cb988ba1c25c4950025c3fc454ce31a71d",
+      "functions": [
+        {
+          "name": "requestLoginCode",
+          "line": 1
+        },
+        {
+          "name": "isTrustedATSDevice_",
+          "line": 128
+        },
+        {
+          "name": "verifyLoginCode",
+          "line": 168
+        },
+        {
+          "name": "validateATSSession",
+          "line": 404
+        },
+        {
+          "name": "createATSSession_",
+          "line": 536
+        },
+        {
+          "name": "findATSSession_",
+          "line": 590
+        },
+        {
+          "name": "updateATSSessionActivity_",
+          "line": 675
+        },
+        {
+          "name": "expireATSSession_",
+          "line": 700
+        },
+        {
+          "name": "revokeATSSession_",
+          "line": 725
+        },
+        {
+          "name": "hashATSSessionToken_",
+          "line": 757
+        },
+        {
+          "name": "logoutATS",
+          "line": 785
+        },
+        {
+          "name": "loginWithTrustedDevice",
+          "line": 821
+        },
+        {
+          "name": "findTrustedATSDevice_",
+          "line": 1029
+        },
+        {
+          "name": "trustATSDevice_",
+          "line": 1150
+        },
+        {
+          "name": "updateTrustedATSDeviceLastUsed_",
+          "line": 1279
+        },
+        {
+          "name": "hashATSDeviceToken_",
+          "line": 1312
+        },
+        {
+          "name": "findATSUserByEmail_",
+          "line": 1341
+        },
+        {
+          "name": "updateLastLogin_",
+          "line": 1484
+        },
+        {
+          "name": "logATSActivity_",
+          "line": 1545
+        }
+      ],
+      "lines": 1571
+    },
+    {
+      "file": "Candidatedatabasehtml.txt",
+      "bytes": 24549,
+      "sha256": "3d908974cbef69625e31577a37cf60fa01267f5577d5bda9e2a0ec87712bd742",
+      "functions": [],
+      "lines": 1454
+    },
+    {
+      "file": "CandidateDatabaseServies.txt",
+      "bytes": 14307,
+      "sha256": "953246d454e5580a71e9974187921449a2e402ef0e0bf36abd5e376df817e84f",
+      "functions": [
+        {
+          "name": "getCandidateDatabaseData",
+          "line": 10
+        },
+        {
+          "name": "createCandidateHeaderIndex_",
+          "line": 606
+        },
+        {
+          "name": "getCandidateCell_",
+          "line": 625
+        },
+        {
+          "name": "isCandidateAssessmentNewer_",
+          "line": 645
+        },
+        {
+          "name": "createEmptyCandidateSummary_",
+          "line": 683
+        },
+        {
+          "name": "buildCandidateDatabaseSummary_",
+          "line": 698
+        }
+      ],
+      "lines": 790
+    },
+    {
+      "file": "Candidatedatabasestyle.txt",
+      "bytes": 84354,
+      "sha256": "df75b83999d0212a0ce1023889cddaedee3c42f26dca575a778ac0ae174710e1",
+      "functions": [],
+      "lines": 3751
+    },
+    {
+      "file": "candidatedatbasejavascript.txt",
+      "bytes": 94895,
+      "sha256": "27b472da3ddff1d34cf7ab7d03279024eac0880730519b4458ef6ae850010c99",
+      "functions": [
+        {
+          "name": "loadCandidateDatabase",
+          "line": 18
+        },
+        {
+          "name": "renderCandidateDatabaseSummary",
+          "line": 116
+        },
+        {
+          "name": "setCandidateKpi_",
+          "line": 232
+        },
+        {
+          "name": "renderCandidateDatabaseInsights",
+          "line": 254
+        },
+        {
+          "name": "renderCandidateStatusInsight_",
+          "line": 279
+        },
+        {
+          "name": "normalizeCandidateSeniority_",
+          "line": 478
+        },
+        {
+          "name": "normalizeCandidateCity_",
+          "line": 576
+        },
+        {
+          "name": "renderCandidateSkillsInsight_",
+          "line": 706
+        },
+        {
+          "name": "getCandidateSeniorityColor_",
+          "line": 936
+        },
+        {
+          "name": "renderCandidateLocationsInsight_",
+          "line": 982
+        },
+        {
+          "name": "getCandidateLocationColor_",
+          "line": 1141
+        },
+        {
+          "name": "escapeCandidateDatabaseHtml_",
+          "line": 1192
+        },
+        {
+          "name": "refreshCandidateDatabase",
+          "line": 1225
+        },
+        {
+          "name": "getCandidateLifecycleState_",
+          "line": 1248
+        },
+        {
+          "name": "openCandidateReactiveView",
+          "line": 1388
+        },
+        {
+          "name": "updateCandidateReactiveHeading_",
+          "line": 1461
+        },
+        {
+          "name": "renderCandidateReactiveTable_",
+          "line": 1534
+        },
+        {
+          "name": "renderCandidateReactivePage_",
+          "line": 1717
+        },
+        {
+          "name": "renderCandidateReactivePagination_",
+          "line": 1775
+        },
+        {
+          "name": "changeCandidateReactivePage_",
+          "line": 1914
+        },
+        {
+          "name": "closeCandidateReactiveView",
+          "line": 1944
+        },
+        {
+          "name": "filterCandidateReactiveView_",
+          "line": 1984
+        },
+        {
+          "name": "initialiseCandidateReactiveFilters_",
+          "line": 2128
+        },
+        {
+          "name": "openCandidateReactiveFilterMenu_",
+          "line": 2221
+        },
+        {
+          "name": "getCandidateReactiveFilterValues_",
+          "line": 2395
+        },
+        {
+          "name": "getCandidateReactiveSelectedFilter_",
+          "line": 2461
+        },
+        {
+          "name": "setCandidateReactiveFilter_",
+          "line": 2485
+        },
+        {
+          "name": "updateCandidateReactiveFilterLabels_",
+          "line": 2522
+        },
+        {
+          "name": "updateCandidateReactiveFilterLabel_",
+          "line": 2556
+        },
+        {
+          "name": "escapeCandidateDatabaseJs_",
+          "line": 2598
+        },
+        {
+          "name": "viewCandidateReactiveProfile_",
+          "line": 2613
+        },
+        {
+          "name": "loadCandidateProfile_",
+          "line": 2645
+        },
+        {
+          "name": "renderCandidateProfile_",
+          "line": 2672
+        },
+        {
+          "name": "parseCandidateProfileLocations_",
+          "line": 2784
+        },
+        {
+          "name": "renderCandidateProfileHeaderLocations_",
+          "line": 2801
+        },
+        {
+          "name": "enhanceCandidateProfilePersonalSections_",
+          "line": 2829
+        },
+        {
+          "name": "decorateCandidateProfileHeaderMeta_",
+          "line": 2879
+        },
+        {
+          "name": "splitCandidateProfileList_",
+          "line": 2888
+        },
+        {
+          "name": "renderCandidateProfileSkills_",
+          "line": 2895
+        },
+        {
+          "name": "toggleCandidateProfileSkills_",
+          "line": 2919
+        },
+        {
+          "name": "splitCandidateProfileSentences_",
+          "line": 2928
+        },
+        {
+          "name": "candidateProfileDurationFromRange_",
+          "line": 2936
+        },
+        {
+          "name": "parsePoint_",
+          "line": 2947
+        },
+        {
+          "name": "renderCandidateProfileEmployment_",
+          "line": 2981
+        },
+        {
+          "name": "renderCandidateProfileEducation_",
+          "line": 3074
+        },
+        {
+          "name": "moveAssessmentContentOutOfOverview_",
+          "line": 3176
+        },
+        {
+          "name": "candidateAssessmentNumber_",
+          "line": 3191
+        },
+        {
+          "name": "setCandidateAssessmentDonut_",
+          "line": 3204
+        },
+        {
+          "name": "renderCandidateAssessmentBullets_",
+          "line": 3226
+        },
+        {
+          "name": "renderCandidateAssessmentTab_",
+          "line": 3253
+        },
+        {
+          "name": "renderCandidateAssessmentCriteria_",
+          "line": 3287
+        },
+        {
+          "name": "enhanceCandidateAssessmentCollapsibles_",
+          "line": 3336
+        },
+        {
+          "name": "switchCandidateProfileTab_",
+          "line": 3351
+        },
+        {
+          "name": "selectCandidateProfileAssessment_",
+          "line": 3366
+        },
+        {
+          "name": "saveCandidateProfile_",
+          "line": 3373
+        },
+        {
+          "name": "getCandidateProfileInputValue_",
+          "line": 3418
+        },
+        {
+          "name": "setCandidateProfileText_",
+          "line": 3423
+        },
+        {
+          "name": "setCandidateProfileInput_",
+          "line": 3430
+        },
+        {
+          "name": "populateCandidateProfileSelect_",
+          "line": 3436
+        },
+        {
+          "name": "renderCandidateProfileHistory_",
+          "line": 3452
+        },
+        {
+          "name": "enhanceCandidateProfileOverviewApplications_",
+          "line": 3476
+        },
+        {
+          "name": "renderCandidateProfileActivity_",
+          "line": 3594
+        },
+        {
+          "name": "toggleCandidateProfileSection_",
+          "line": 3612
+        },
+        {
+          "name": "formatCandidateProfilePercent_",
+          "line": 3617
+        },
+        {
+          "name": "showCandidateProfileError_",
+          "line": 3623
+        },
+        {
+          "name": "closeCandidateProfile_",
+          "line": 3633
+        },
+        {
+          "name": "updateCandidateReactiveStickyHeader_",
+          "line": 3672
+        },
+        {
+          "name": "clearCandidateDatabaseFilters",
+          "line": 3763
+        },
+        {
+          "name": "openTalentPoolDatabase",
+          "line": 3816
+        }
+      ],
+      "lines": 3855
+    },
+    {
+      "file": "CandidateProfileservices.txt",
+      "bytes": 17569,
+      "sha256": "e737a41d823e38a53d175f85d1ebc6569cd9647ceade1fed8e8fc7b7095a5bfa",
+      "functions": [
+        {
+          "name": "getCandidateProfile",
+          "line": 16
+        },
+        {
+          "name": "getCandidateProfileJdCriteriaByRef_",
+          "line": 780
+        },
+        {
+          "name": "cell_",
+          "line": 794
+        },
+        {
+          "name": "parseCandidateStructuredProfileField_",
+          "line": 820
+        },
+        {
+          "name": "parseCandidateCriterionResults_",
+          "line": 842
+        },
+        {
+          "name": "getCandidateProfileOptions_",
+          "line": 864
+        },
+        {
+          "name": "getCandidateProfileList_",
+          "line": 946
+        }
+      ],
+      "lines": 995
+    },
+    {
+      "file": "candidateservice.gs",
+      "bytes": 54056,
+      "sha256": "aa2a8e656c4c9215716c7776e4340c5699985812f7376d32739534b0fe73cd60",
+      "functions": [
+        {
+          "name": "saveAssessment",
+          "line": 35
+        },
+        {
+          "name": "updateCandidateLifecycle",
+          "line": 1628
+        },
+        {
+          "name": "candReadSheetObjects_",
+          "line": 2090
+        },
+        {
+          "name": "candHeaders_",
+          "line": 2332
+        },
+        {
+          "name": "candFindFirstEmptyDataRow_",
+          "line": 2382
+        },
+        {
+          "name": "candFindTalentPerson_",
+          "line": 2474
+        },
+        {
+          "name": "candFindTalentByCandidateId_",
+          "line": 2652
+        },
+        {
+          "name": "candFindCandidateAssessment_",
+          "line": 2698
+        },
+        {
+          "name": "candAppendObjectRow_",
+          "line": 2762
+        },
+        {
+          "name": "candUpdateRowByNumber_",
+          "line": 2922
+        },
+        {
+          "name": "candForceTextFormats_",
+          "line": 3064
+        },
+        {
+          "name": "candUpdateTalentPool_",
+          "line": 3128
+        },
+        {
+          "name": "candPreferNewProfileValue_",
+          "line": 3576
+        },
+        {
+          "name": "candPreferExistingProfileValue_",
+          "line": 3620
+        },
+        {
+          "name": "candNormalizeTalentProfile_",
+          "line": 3651
+        },
+        {
+          "name": "candSerializeStructuredProfile_",
+          "line": 3767
+        },
+        {
+          "name": "candNormalizeSeniorityLevel_",
+          "line": 3777
+        },
+        {
+          "name": "candBuildTalentPoolNote_",
+          "line": 4001
+        },
+        {
+          "name": "candNextCandidateId_",
+          "line": 4191
+        },
+        {
+          "name": "candPick_",
+          "line": 4295
+        },
+        {
+          "name": "candText_",
+          "line": 4357
+        },
+        {
+          "name": "candNormalizeRefNo_",
+          "line": 4387
+        },
+        {
+          "name": "candNormalizeEmail_",
+          "line": 4473
+        },
+        {
+          "name": "candNormalizePhone_",
+          "line": 4491
+        },
+        {
+          "name": "candNormalizeName_",
+          "line": 4541
+        },
+        {
+          "name": "candNumberOrBlank_",
+          "line": 4579
+        },
+        {
+          "name": "candPercentNumber_",
+          "line": 4633
+        },
+        {
+          "name": "candFormatPercentForSheet_",
+          "line": 4687
+        },
+        {
+          "name": "candParseRefList_",
+          "line": 4719
+        },
+        {
+          "name": "candDefaultStageFromDecision_",
+          "line": 4803
+        },
+        {
+          "name": "candResolveLifecycleSync_",
+          "line": 4877
+        },
+        {
+          "name": "candSaveCandidateCv_",
+          "line": 5187
+        }
+      ],
+      "lines": 5389
+    },
+    {
+      "file": "Code.gs",
+      "bytes": 7076,
+      "sha256": "591f73d5698a8a61a78820e2be0f9f9a32acf967961a3900e3d24169e8d725cf",
+      "functions": [
+        {
+          "name": "doGet",
+          "line": 1
+        },
+        {
+          "name": "include",
+          "line": 210
+        },
+        {
+          "name": "getBootstrapData",
+          "line": 217
+        },
+        {
+          "name": "getPositionDetails",
+          "line": 229
+        },
+        {
+          "name": "getWebAppUrl",
+          "line": 384
+        },
+        {
+          "name": "diagnoseATSWriteTarget",
+          "line": 388
+        }
+      ],
+      "lines": 431
+    },
+    {
+      "file": "Config.gs",
+      "bytes": 759,
+      "sha256": "5245aa3f8757985e53d702416d50c773089806bbf437039b0d2731f7ee2fb075",
+      "functions": [
+        {
+          "name": "getOpenAIKey_",
+          "line": 17
+        },
+        {
+          "name": "getSpreadsheet_",
+          "line": 40
+        }
+      ],
+      "lines": 47
+    },
+    {
+      "file": "Dashbaord.txt",
+      "bytes": 5721,
+      "sha256": "ba6aae61193ceea37f50165b145f1dccfc15974393014fa2aa61b2347b68c13f",
+      "functions": [],
+      "lines": 259
+    },
+    {
+      "file": "Dashbaordjavascript.txt",
+      "bytes": 46137,
+      "sha256": "e4538486d858881d554ce27a3811a580d50756dc361306b2af4726e2ec2ca6fa",
+      "functions": [
+        {
+          "name": "dashboardSessionToken_",
+          "line": 24
+        },
+        {
+          "name": "dashboardApplyUser_",
+          "line": 59
+        },
+        {
+          "name": "dashboardGreetingPrefix_",
+          "line": 98
+        },
+        {
+          "name": "dashboardLoad",
+          "line": 114
+        },
+        {
+          "name": "dashboardRefresh",
+          "line": 189
+        },
+        {
+          "name": "dashboardRender",
+          "line": 194
+        },
+        {
+          "name": "dashboardRenderKpis_",
+          "line": 207
+        },
+        {
+          "name": "dashboardRenderPositionStatus_",
+          "line": 353
+        },
+        {
+          "name": "countStatus",
+          "line": 370
+        },
+        {
+          "name": "dashboardGoToManagePositions_",
+          "line": 447
+        },
+        {
+          "name": "dashboardRenderFunnel_",
+          "line": 457
+        },
+        {
+          "name": "dashboardRenderDecisionMix_",
+          "line": 534
+        },
+        {
+          "name": "dashboardRenderPositions_",
+          "line": 671
+        },
+        {
+          "name": "dashboardPositionTable_",
+          "line": 698
+        },
+        {
+          "name": "dashboardRenderPending_",
+          "line": 810
+        },
+        {
+          "name": "dashboardRenderClients_",
+          "line": 857
+        },
+        {
+          "name": "dashboardRenderRecent_",
+          "line": 934
+        },
+        {
+          "name": "dashboardCandidateTable_",
+          "line": 958
+        },
+        {
+          "name": "dashboardRenderTopTalent_",
+          "line": 1040
+        },
+        {
+          "name": "dashboardOpenManagePositions",
+          "line": 1113
+        },
+        {
+          "name": "dashboardFilterManagePositions",
+          "line": 1146
+        },
+        {
+          "name": "dashboardOpenList",
+          "line": 1203
+        },
+        {
+          "name": "dashboardShowCandidateDatabase_",
+          "line": 1315
+        },
+        {
+          "name": "dashboardFilterDrawerCandidates",
+          "line": 1346
+        },
+        {
+          "name": "dashboardOpenClient",
+          "line": 1404
+        },
+        {
+          "name": "dashboardFindPosition_",
+          "line": 1497
+        },
+        {
+          "name": "dashboardOpenPosition",
+          "line": 1516
+        },
+        {
+          "name": "dashboardPositionManagementHtml_",
+          "line": 1606
+        },
+        {
+          "name": "dashboardSavePosition",
+          "line": 1751
+        },
+        {
+          "name": "dashboardOpenCandidate",
+          "line": 1887
+        },
+        {
+          "name": "dashboardOpenPending",
+          "line": 1986
+        },
+        {
+          "name": "dashboardOpenFunnel",
+          "line": 2120
+        },
+        {
+          "name": "dashboardOpenDecision",
+          "line": 2176
+        },
+        {
+          "name": "dashboardSummaryCard_",
+          "line": 2213
+        },
+        {
+          "name": "dashboardShowDrawer_",
+          "line": 2235
+        },
+        {
+          "name": "dashboardCloseDrawer",
+          "line": 2290
+        },
+        {
+          "name": "dashboardPriorityClass_",
+          "line": 2320
+        },
+        {
+          "name": "dashboardStatusClass_",
+          "line": 2344
+        },
+        {
+          "name": "dashboardNormalize_",
+          "line": 2380
+        },
+        {
+          "name": "dashboardInitials_",
+          "line": 2389
+        },
+        {
+          "name": "dashboardErrorMessage_",
+          "line": 2416
+        },
+        {
+          "name": "dashboardEscape_",
+          "line": 2432
+        },
+        {
+          "name": "dashboardEscapeAttr_",
+          "line": 2459
+        }
+      ],
+      "lines": 2472
+    },
+    {
+      "file": "DashbaordServices.txt",
+      "bytes": 27492,
+      "sha256": "4b690c12c86999f0c12d642cb04ec9ca8158fad3413259c26486dfc67ee599b4",
+      "functions": [
+        {
+          "name": "getRecruiterDashboardData",
+          "line": 15
+        },
+        {
+          "name": "updatePositionManagement",
+          "line": 780
+        },
+        {
+          "name": "dashboardPositionObject_",
+          "line": 1216
+        },
+        {
+          "name": "dashboardReadObjects_",
+          "line": 1315
+        },
+        {
+          "name": "dashboardCellByHeader_",
+          "line": 1381
+        },
+        {
+          "name": "dashboardSetCellByHeader_",
+          "line": 1401
+        },
+        {
+          "name": "dashboardLogPositionUpdate_",
+          "line": 1428
+        },
+        {
+          "name": "dashboardNormalize_",
+          "line": 1534
+        },
+        {
+          "name": "dashboardRef_",
+          "line": 1543
+        },
+        {
+          "name": "dashboardNumber_",
+          "line": 1563
+        },
+        {
+          "name": "dashboardPercentNumber_",
+          "line": 1587
+        },
+        {
+          "name": "dashboardDisplay_",
+          "line": 1594
+        }
+      ],
+      "lines": 1598
+    },
+    {
+      "file": "Dashboardstyle.txt",
+      "bytes": 17991,
+      "sha256": "9b185b9e56772b02e9e6c31f4f2a06c25f11b0bc2f5a52f39fca5ed0c494e940",
+      "functions": [],
+      "lines": 1049
+    },
+    {
+      "file": "Indexhtml.txt",
+      "bytes": 10047,
+      "sha256": "d756868b8917addb96e29e200cf281ecc4698ee3e806e58401cc68bc9cbd4292",
+      "functions": [],
+      "lines": 472
+    },
+    {
+      "file": "Javascripthtml.txt",
+      "bytes": 64522,
+      "sha256": "9d32721d00431dab97229b9823bb0cffc48cb9174621c46da70952838245e19a",
+      "functions": [
+        {
+          "name": "getATSSessionToken_",
+          "line": 41
+        },
+        {
+          "name": "restoreBatchAssessmentState",
+          "line": 97
+        },
+        {
+          "name": "restoreSingleAssessmentState",
+          "line": 317
+        },
+        {
+          "name": "switchAssessmentMode",
+          "line": 659
+        },
+        {
+          "name": "handleBatchFiles",
+          "line": 1051
+        },
+        {
+          "name": "assessBatch",
+          "line": 1235
+        },
+        {
+          "name": "processNext",
+          "line": 1447
+        },
+        {
+          "name": "renderBatchResults",
+          "line": 1771
+        },
+        {
+          "name": "saveBatchToATS",
+          "line": 2539
+        },
+        {
+          "name": "saveNextCandidate",
+          "line": 2759
+        },
+        {
+          "name": "clearBatchAssessmentState_",
+          "line": 3247
+        },
+        {
+          "name": "downloadBatchPdf",
+          "line": 3365
+        },
+        {
+          "name": "viewBatchAssessment",
+          "line": 3929
+        },
+        {
+          "name": "renderClientDropdown",
+          "line": 4057
+        },
+        {
+          "name": "handleClientChange",
+          "line": 4277
+        },
+        {
+          "name": "renderPositionCards",
+          "line": 4445
+        },
+        {
+          "name": "selectPositionCard",
+          "line": 4961
+        },
+        {
+          "name": "loadPosition",
+          "line": 5053
+        },
+        {
+          "name": "normalizeClientName",
+          "line": 5217
+        },
+        {
+          "name": "priorityClass",
+          "line": 5249
+        },
+        {
+          "name": "assess",
+          "line": 5321
+        },
+        {
+          "name": "renderAssessment",
+          "line": 5745
+        },
+        {
+          "name": "downloadSinglePdf",
+          "line": 7601
+        },
+        {
+          "name": "save",
+          "line": 8037
+        },
+        {
+          "name": "resetAssessment",
+          "line": 8327
+        },
+        {
+          "name": "metric",
+          "line": 8471
+        },
+        {
+          "name": "setBusy",
+          "line": 8567
+        },
+        {
+          "name": "showError",
+          "line": 8655
+        },
+        {
+          "name": "escapeHtml",
+          "line": 8763
+        },
+        {
+          "name": "updatePositionContextPanel",
+          "line": 8859
+        },
+        {
+          "name": "showAssessmentTab",
+          "line": 9639
+        }
+      ],
+      "lines": 9823
+    },
+    {
+      "file": "Loginhtml.txt",
+      "bytes": 271086,
+      "sha256": "a17b75251d1071b69072d176c406b59a315665fae4c49410dc9324aa73a2e3cc",
+      "functions": [],
+      "lines": 467
+    },
+    {
+      "file": "loginjavascript.txt",
+      "bytes": 20664,
+      "sha256": "6197aabce8d314851a049feea611a27b3b856ceb8d74b9368dbff7dd34244e17",
+      "functions": [
+        {
+          "name": "sendLoginCode",
+          "line": 118
+        },
+        {
+          "name": "loginWithTrustedDeviceUI_",
+          "line": 286
+        },
+        {
+          "name": "verifyLoginCodeUI",
+          "line": 450
+        },
+        {
+          "name": "resendLoginCode",
+          "line": 672
+        },
+        {
+          "name": "showOtpStep_",
+          "line": 763
+        },
+        {
+          "name": "backToEmailLogin",
+          "line": 820
+        },
+        {
+          "name": "setLoginFormReady_",
+          "line": 881
+        },
+        {
+          "name": "setLoginInterfaceLocked_",
+          "line": 907
+        },
+        {
+          "name": "restoreKeepSignedInPreference_",
+          "line": 982
+        },
+        {
+          "name": "saveSuccessfulLogin_",
+          "line": 1008
+        },
+        {
+          "name": "clearCurrentSession_",
+          "line": 1040
+        },
+        {
+          "name": "createDeviceToken_",
+          "line": 1054
+        },
+        {
+          "name": "requestAccess",
+          "line": 1091
+        },
+        {
+          "name": "continueToATS",
+          "line": 1128
+        },
+        {
+          "name": "showLoginStatus",
+          "line": 1206
+        },
+        {
+          "name": "setLoginBusy",
+          "line": 1248
+        },
+        {
+          "name": "setButtonLabel_",
+          "line": 1279
+        },
+        {
+          "name": "getLoginErrorMessage",
+          "line": 1313
+        }
+      ],
+      "lines": 1387
+    },
+    {
+      "file": "loginstylehtml.txt",
+      "bytes": 15303,
+      "sha256": "cca42b378cd9825e8cc87509237ef4a67e459f2752a9cda0ba19bb7c42203db5",
+      "functions": [],
+      "lines": 1212
+    },
+    {
+      "file": "Managemeposotionjavascript.txt",
+      "bytes": 14367,
+      "sha256": "57f7719d4893203949ebdf2e9106e486b12ea861cba368643b5d427158fe93ec",
+      "functions": [
+        {
+          "name": "mpSessionToken_",
+          "line": 12
+        },
+        {
+          "name": "mpLoad",
+          "line": 22
+        },
+        {
+          "name": "mpRefresh",
+          "line": 49
+        },
+        {
+          "name": "mpRenderKpis_",
+          "line": 51
+        },
+        {
+          "name": "mpRenderClientOptions_",
+          "line": 78
+        },
+        {
+          "name": "mpApplyUrlStatus_",
+          "line": 87
+        },
+        {
+          "name": "mpSetStatus",
+          "line": 99
+        },
+        {
+          "name": "mpApplyFilters",
+          "line": 106
+        },
+        {
+          "name": "mpSortPositions_",
+          "line": 133
+        },
+        {
+          "name": "mpRenderActiveKpi_",
+          "line": 145
+        },
+        {
+          "name": "mpRenderTable_",
+          "line": 151
+        },
+        {
+          "name": "mpRenderResultCount_",
+          "line": 201
+        },
+        {
+          "name": "mpRenderPagination_",
+          "line": 216
+        },
+        {
+          "name": "mpPageNumbers_",
+          "line": 241
+        },
+        {
+          "name": "mpGoPage",
+          "line": 253
+        },
+        {
+          "name": "mpChangePageSize",
+          "line": 263
+        },
+        {
+          "name": "mpClearFilters",
+          "line": 269
+        },
+        {
+          "name": "mpOpenPosition",
+          "line": 279
+        },
+        {
+          "name": "mpSavePosition",
+          "line": 340
+        },
+        {
+          "name": "mpDetailCard_",
+          "line": 381
+        },
+        {
+          "name": "mpShowDrawer_",
+          "line": 385
+        },
+        {
+          "name": "mpCloseDrawer",
+          "line": 395
+        },
+        {
+          "name": "mpStatusClass_",
+          "line": 402
+        },
+        {
+          "name": "mpNorm_",
+          "line": 406
+        },
+        {
+          "name": "mpError_",
+          "line": 410
+        },
+        {
+          "name": "mpEsc_",
+          "line": 414
+        },
+        {
+          "name": "mpEscAttr_",
+          "line": 418
+        }
+      ],
+      "lines": 421
+    },
+    {
+      "file": "Managepositions.txt",
+      "bytes": 3413,
+      "sha256": "116dc02e7917ed7752770bd5584527803af873bbcb068e30b3585b7e8960facb",
+      "functions": [],
+      "lines": 115
+    },
+    {
+      "file": "ManagePositionService.txt",
+      "bytes": 3899,
+      "sha256": "8b92876ba81e37b1fcdfe078505971e3395d9326cb555c8f2c676ba5558539b1",
+      "functions": [
+        {
+          "name": "getManagePositionsData",
+          "line": 8
+        },
+        {
+          "name": "managePositionsReadObjects_",
+          "line": 90
+        },
+        {
+          "name": "managePositionsRef_",
+          "line": 114
+        },
+        {
+          "name": "managePositionsNumber_",
+          "line": 119
+        },
+        {
+          "name": "managePositionsPercent_",
+          "line": 124
+        },
+        {
+          "name": "managePositionsNormalize_",
+          "line": 128
+        }
+      ],
+      "lines": 130
+    },
+    {
+      "file": "Nanagepositonstyle.txt",
+      "bytes": 9254,
+      "sha256": "f8bee1d108c9eaa6f3756d69103576be31695a575eab24b975f0e0bb1fc844b5",
+      "functions": [],
+      "lines": 241
+    },
+    {
+      "file": "Navigation.txt",
+      "bytes": 144510,
+      "sha256": "79f419e7ac54c83f4f30d85e4cd78d32e825bd54deb8cc5bcb60bcbfeeaeec06",
+      "functions": [
+        {
+          "name": "navigateATS",
+          "line": 401
+        },
+        {
+          "name": "toggleATSUserMenu",
+          "line": 441
+        },
+        {
+          "name": "closeATSUserMenu",
+          "line": 451
+        },
+        {
+          "name": "setATSActiveNavigation_",
+          "line": 485
+        },
+        {
+          "name": "logoutATSUser",
+          "line": 545
+        },
+        {
+          "name": "redirectAfterLogout",
+          "line": 561
+        }
+      ],
+      "lines": 571
+    },
+    {
+      "file": "OpenAI.txt",
+      "bytes": 34695,
+      "sha256": "37a5f045abc47a01ac862733293ac3e58c723271dbcbf8628d140004eee76c30",
+      "functions": [
+        {
+          "name": "assessCandidate",
+          "line": 33
+        },
+        {
+          "name": "normalizeLiveCriterion_",
+          "line": 696
+        },
+        {
+          "name": "firstDefinedText_",
+          "line": 788
+        },
+        {
+          "name": "firstDefinedNumber_",
+          "line": 822
+        },
+        {
+          "name": "normalizeYesNo_",
+          "line": 860
+        },
+        {
+          "name": "buildCandidateAssessmentPrompt_",
+          "line": 882
+        },
+        {
+          "name": "matchCriterionResultsStable_",
+          "line": 1169
+        },
+        {
+          "name": "snapToAllowed_",
+          "line": 1255
+        },
+        {
+          "name": "statusFromScoreStable_",
+          "line": 1301
+        },
+        {
+          "name": "calculateWeightedATSStable_",
+          "line": 1343
+        },
+        {
+          "name": "calculateMustHaveFitStable_",
+          "line": 1389
+        },
+        {
+          "name": "calculateCoreRoleFitStable_",
+          "line": 1451
+        },
+        {
+          "name": "calculateEvidenceStrengthStable_",
+          "line": 1509
+        },
+        {
+          "name": "calculateDecisionStable_",
+          "line": 1559
+        },
+        {
+          "name": "getLiveDecisionRulesStable_",
+          "line": 1615
+        },
+        {
+          "name": "buildAssessmentSummaryStable_",
+          "line": 1715
+        },
+        {
+          "name": "sanitizeTalentProfile_",
+          "line": 1829
+        },
+        {
+          "name": "sanitizeEmploymentHistory_",
+          "line": 1901
+        },
+        {
+          "name": "sanitizeEducationHistory_",
+          "line": 1917
+        },
+        {
+          "name": "getLatestEmploymentRecordStable_",
+          "line": 1933
+        },
+        {
+          "name": "isCurrentEmploymentEndDateStable_",
+          "line": 1955
+        },
+        {
+          "name": "parseEmploymentDateStable_",
+          "line": 1960
+        },
+        {
+          "name": "cleanProfileText_",
+          "line": 1978
+        },
+        {
+          "name": "normalizeCriterionName_",
+          "line": 2000
+        },
+        {
+          "name": "cleanNullableText_",
+          "line": 2018
+        },
+        {
+          "name": "cleanNullableNumber_",
+          "line": 2032
+        },
+        {
+          "name": "roundOneDecimal_",
+          "line": 2066
+        },
+        {
+          "name": "defaultStageFromDecisionStable_",
+          "line": 2076
+        }
+      ],
+      "lines": 2118
+    },
+    {
+      "file": "Osynix_ATS_Functional_Business_Logic_Migration_Specification.docx",
+      "bytes": 54326,
+      "sha256": "32cc08cd3ae34b5cba259d199ec7a04f9d53d551684841e77b1ccf4030430e4c"
+    },
+    {
+      "file": "Osynix_ATS_Master_Tracker.xlsx",
+      "bytes": 636922,
+      "sha256": "22708b391d15c79fa58655900c257b4be94abc5c172e34b93431dd83e94945a2"
+    },
+    {
+      "file": "Positionhtml.txt",
+      "bytes": 9344,
+      "sha256": "c89f4380816ce2fa9e453f4dc311091343ad9b1855fd5eec8440265713f0da6c",
+      "functions": [],
+      "lines": 375
+    },
+    {
+      "file": "Positionjavascripthtml.txt",
+      "bytes": 29713,
+      "sha256": "ffdee280c0a1e5e4c00f9d0055ab312eb94f72a37d7b41d9a2f82f78853929ca",
+      "functions": [
+        {
+          "name": "getATSSessionToken_",
+          "line": 9
+        },
+        {
+          "name": "loadExistingClients",
+          "line": 73
+        },
+        {
+          "name": "filterExistingClients",
+          "line": 123
+        },
+        {
+          "name": "renderExistingClients",
+          "line": 146
+        },
+        {
+          "name": "selectExistingClient",
+          "line": 206
+        },
+        {
+          "name": "clearClientSelection",
+          "line": 259
+        },
+        {
+          "name": "startNewClient",
+          "line": 300
+        },
+        {
+          "name": "cancelNewClient",
+          "line": 330
+        },
+        {
+          "name": "checkNewClientSimilarity",
+          "line": 351
+        },
+        {
+          "name": "confirmNewClient",
+          "line": 448
+        },
+        {
+          "name": "clearClientDuplicateWarning",
+          "line": 498
+        },
+        {
+          "name": "normalizeClientName",
+          "line": 512
+        },
+        {
+          "name": "clientSimilarity",
+          "line": 527
+        },
+        {
+          "name": "levenshteinDistance",
+          "line": 566
+        },
+        {
+          "name": "analyzeJD",
+          "line": 615
+        },
+        {
+          "name": "renderDraft",
+          "line": 674
+        },
+        {
+          "name": "renderCriteria",
+          "line": 696
+        },
+        {
+          "name": "appendCriterionCard",
+          "line": 707
+        },
+        {
+          "name": "toggleLogic",
+          "line": 843
+        },
+        {
+          "name": "resetCriterionToAIDraft",
+          "line": 851
+        },
+        {
+          "name": "addCriterion",
+          "line": 868
+        },
+        {
+          "name": "removeCriterion",
+          "line": 896
+        },
+        {
+          "name": "scaleWeightInputsToTotal",
+          "line": 912
+        },
+        {
+          "name": "fixWeightRounding",
+          "line": 936
+        },
+        {
+          "name": "getWeightInputs",
+          "line": 961
+        },
+        {
+          "name": "collectCriteria",
+          "line": 967
+        },
+        {
+          "name": "updateWeightTotal",
+          "line": 996
+        },
+        {
+          "name": "createApprovedPosition",
+          "line": 1038
+        },
+        {
+          "name": "showCreateSuccess",
+          "line": 1202
+        },
+        {
+          "name": "resetPositionForm",
+          "line": 1227
+        },
+        {
+          "name": "setAnalyzeBusy",
+          "line": 1289
+        },
+        {
+          "name": "setCreateBusy",
+          "line": 1309
+        },
+        {
+          "name": "showStatus",
+          "line": 1321
+        },
+        {
+          "name": "clearStatus",
+          "line": 1336
+        },
+        {
+          "name": "getErrorMessage",
+          "line": 1344
+        },
+        {
+          "name": "escapeHtml",
+          "line": 1355
+        }
+      ],
+      "lines": 1364
+    },
+    {
+      "file": "Positionservice.gs",
+      "bytes": 31662,
+      "sha256": "1ea149fe3117bb007402cb93b150ab7719ef4a94f0b2cf68db2625fefb0a885e",
+      "functions": [
+        {
+          "name": "analyzeJobDescription",
+          "line": 14
+        },
+        {
+          "name": "buildJDAnalysisPrompt_",
+          "line": 250
+        },
+        {
+          "name": "createPosition",
+          "line": 427
+        },
+        {
+          "name": "getExistingClients",
+          "line": 743
+        },
+        {
+          "name": "getExistingClientsInternal_",
+          "line": 750
+        },
+        {
+          "name": "canonicalizeClientName_",
+          "line": 841
+        },
+        {
+          "name": "normalizeClientNameServer_",
+          "line": 880
+        },
+        {
+          "name": "savePositionJDToDrive_",
+          "line": 895
+        },
+        {
+          "name": "getOrCreateRootFolder_",
+          "line": 977
+        },
+        {
+          "name": "getOrCreateChildFolder_",
+          "line": 995
+        },
+        {
+          "name": "sanitizeDriveFolderName_",
+          "line": 1014
+        },
+        {
+          "name": "nextRefNo_",
+          "line": 1029
+        },
+        {
+          "name": "normalizeJDWeights_",
+          "line": 1093
+        },
+        {
+          "name": "validateJDAnalysis_",
+          "line": 1215
+        },
+        {
+          "name": "authorizeDriveAccess",
+          "line": 1354
+        },
+        {
+          "name": "calculateJDHash_",
+          "line": 1363
+        },
+        {
+          "name": "normalizePositionForDuplicate_",
+          "line": 1401
+        },
+        {
+          "name": "findPositionDuplicate_",
+          "line": 1419
+        },
+        {
+          "name": "backfillJDFileHashes",
+          "line": 1588
+        }
+      ],
+      "lines": 1733
+    },
+    {
+      "file": "Postionstyle.txt",
+      "bytes": 9466,
+      "sha256": "f347c2f5a8582f9cf02c1b69b14a43b63bac8c57458a9888756d8db29cc88e07",
+      "functions": [],
+      "lines": 529
+    },
+    {
+      "file": "ReportServices.txt",
+      "bytes": 27541,
+      "sha256": "5d56599e9c8ce7ff755ffb4d7902688395e7a349865317009e3706733d5120a0",
+      "functions": [
+        {
+          "name": "generateSingleCandidatePdf",
+          "line": 1
+        },
+        {
+          "name": "generateBatchCandidatePdf",
+          "line": 583
+        },
+        {
+          "name": "appendReportField_",
+          "line": 1433
+        },
+        {
+          "name": "appendReportSectionHeading_",
+          "line": 1457
+        },
+        {
+          "name": "reportPercent_",
+          "line": 1479
+        },
+        {
+          "name": "reportScore10_",
+          "line": 1501
+        },
+        {
+          "name": "reportNumber_",
+          "line": 1514
+        },
+        {
+          "name": "reportSafeFilename_",
+          "line": 1527
+        },
+        {
+          "name": "sizeReportLogo_",
+          "line": 1540
+        },
+        {
+          "name": "authorizeReportServices",
+          "line": 1577
+        }
+      ],
+      "lines": 1587
+    },
+    {
+      "file": "SheetServies.gs",
+      "bytes": 5772,
+      "sha256": "eaf283703f0f77e77798e452cb411cccafc2f9518ca5d53f38caa2f4aaa1e69f",
+      "functions": [
+        {
+          "name": "sheetToObjects_",
+          "line": 1
+        },
+        {
+          "name": "getActivePositions_",
+          "line": 31
+        },
+        {
+          "name": "getPositionByRef_",
+          "line": 47
+        },
+        {
+          "name": "getCriteriaByRef_",
+          "line": 63
+        },
+        {
+          "name": "getSettingsColumn_",
+          "line": 79
+        },
+        {
+          "name": "findTalentCandidate_",
+          "line": 101
+        },
+        {
+          "name": "findExistingAssessment_",
+          "line": 161
+        },
+        {
+          "name": "nextCandidateId_",
+          "line": 172
+        },
+        {
+          "name": "appendObjectRow_",
+          "line": 224
+        },
+        {
+          "name": "updateObjectRowByKeys_",
+          "line": 253
+        }
+      ],
+      "lines": 319
+    },
+    {
+      "file": "Stylehtml.txt",
+      "bytes": 24684,
+      "sha256": "df38291fce20488638fbec6ad1ed6dec0210de8e306ff7d279dc2e387547f947",
+      "functions": [],
+      "lines": 1573
+    },
+    {
+      "file": "Talenetpool.txt",
+      "bytes": 4852,
+      "sha256": "a818e61973312aa71e6b1c28aaddd945f60f498ee14f88044598f60cfae8f463",
+      "functions": [
+        {
+          "name": "returnToCandidateDatabase",
+          "line": 251
+        }
+      ],
+      "lines": 302
+    },
+    {
+      "file": "TalentPooljavascript.txt",
+      "bytes": 22381,
+      "sha256": "81d0d244b83cf40275818094320fe7d8166f7cedff9f8e7311ef36e310a5ab4a",
+      "functions": [
+        {
+          "name": "loadTalentPool",
+          "line": 33
+        },
+        {
+          "name": "renderTalentPoolPage_",
+          "line": 138
+        },
+        {
+          "name": "renderTalentPoolTable_",
+          "line": 203
+        },
+        {
+          "name": "renderTalentPoolPagination_",
+          "line": 401
+        },
+        {
+          "name": "changeTalentPoolPage_",
+          "line": 539
+        },
+        {
+          "name": "initialiseTalentPoolFilters_",
+          "line": 583
+        },
+        {
+          "name": "applyTalentPoolFilters_",
+          "line": 758
+        },
+        {
+          "name": "openTalentPoolFilterMenu_",
+          "line": 898
+        },
+        {
+          "name": "createTalentPoolFilterOption_",
+          "line": 1049
+        },
+        {
+          "name": "setTalentPoolFilter_",
+          "line": 1097
+        },
+        {
+          "name": "getTalentPoolUniqueValues_",
+          "line": 1135
+        },
+        {
+          "name": "updateTalentPoolFilterTriggers_",
+          "line": 1172
+        },
+        {
+          "name": "updateTalentPoolFilterTrigger_",
+          "line": 1197
+        },
+        {
+          "name": "closeTalentPoolFilterMenus_",
+          "line": 1237
+        },
+        {
+          "name": "viewTalentPoolCandidate_",
+          "line": 1257
+        },
+        {
+          "name": "escapeTalentPoolHtml_",
+          "line": 1279
+        },
+        {
+          "name": "escapeTalentPoolJs_",
+          "line": 1298
+        },
+        {
+          "name": "updateTalentPoolStickyHeader_",
+          "line": 1311
+        }
+      ],
+      "lines": 1386
+    },
+    {
+      "file": "Talentpoolstyles.txt",
+      "bytes": 8490,
+      "sha256": "13ffc7fe5e2450d0dc701a4dd6e0eb3fc7e6a98fcbe0ec74dc43d64763f8fa05",
+      "functions": [],
+      "lines": 523
+    }
+  ],
+  "current_app_files": [
+    {
+      "file": "src/Osynix.Ats/appsettings.json",
+      "sha256": "6c03da2b381a83742ac5fe994a211cef133854ced62de0405a35b31f120a53fd"
+    },
+    {
+      "file": "src/Osynix.Ats/Components/_Imports.razor",
+      "sha256": "f994a6f9bf638961c628644be3aac20d7edf86772b11a6d0530ad4b15c81d352"
+    },
+    {
+      "file": "src/Osynix.Ats/Components/App.razor",
+      "sha256": "f72e6f88b9e4147066e3784ef069e91438623b4791efcaab475e442e8caa9a5e"
+    },
+    {
+      "file": "src/Osynix.Ats/Components/Layout/MainLayout.razor",
+      "sha256": "c5be8465f8ad6d2b41c15a4333b2d74edd69667388db8bd385aed5b850d8cc52"
+    },
+    {
+      "file": "src/Osynix.Ats/Components/PageBase.cs",
+      "sha256": "a82a37ec9288fed07c220efe46d46f4682a69fb26fc66953e319f9afc4121244"
+    },
+    {
+      "file": "src/Osynix.Ats/Components/Pages/Assess.razor",
+      "sha256": "a0162465cbcc8df55769c3123675f75ecf8dc2a7a41007510446355b1923a251"
+    },
+    {
+      "file": "src/Osynix.Ats/Components/Pages/AssessmentDetail.razor",
+      "sha256": "47709eb52bd951e3e26d7892f5bc98c4496f3a4e2572e944e3fae4743039bc84"
+    },
+    {
+      "file": "src/Osynix.Ats/Components/Pages/Candidates.razor",
+      "sha256": "0dca420835ee26db638cc4fbf88020f91d2c908019f2866a2e53a98f1b8bc55f"
+    },
+    {
+      "file": "src/Osynix.Ats/Components/Pages/Dashboard.razor",
+      "sha256": "0727e93053e9f6ba6ad7480af943fa2add2a3f8133a17a7dbd54a713393cc3e9"
+    },
+    {
+      "file": "src/Osynix.Ats/Components/Pages/Error.razor",
+      "sha256": "3098b8f2dd9a5814275edc821297e58de086cb5c9601b01eba2507e884d67629"
+    },
+    {
+      "file": "src/Osynix.Ats/Components/Pages/Import.razor",
+      "sha256": "de2ad66537ac5ebbea32135a97c8fddeedc62c303ee388df6e69151235141d07"
+    },
+    {
+      "file": "src/Osynix.Ats/Components/Pages/Pipeline.razor",
+      "sha256": "24122dc640535552d3005f35163c68c66ee346396222b91308d75fd6750a7782"
+    },
+    {
+      "file": "src/Osynix.Ats/Components/Pages/Positions.razor",
+      "sha256": "5b5ff0ed76f29ccbf596a3ef79f6e880e59caeba1cc7769a802e3e5f806cdcc1"
+    },
+    {
+      "file": "src/Osynix.Ats/Components/Pages/Settings.razor",
+      "sha256": "e9c7b67d3f9349aac4deaac696a429d3d124183b40f1e7203323552e11a02cd1"
+    },
+    {
+      "file": "src/Osynix.Ats/Components/Routes.razor",
+      "sha256": "43ed19423b0822abf9f414fc601eb6bb67da13a9a5369cfbf67171f31c73441a"
+    },
+    {
+      "file": "src/Osynix.Ats/Components/Shared/DecisionBadge.razor",
+      "sha256": "6f4519d4059c12e3f1035bd051eded7cc8bdc3ef90e198a345352110622bec24"
+    },
+    {
+      "file": "src/Osynix.Ats/Components/Shared/Feedback.razor",
+      "sha256": "0cdb07596dde71f4cfbdb54146cfdf03d3e7c62f4e643011d346d3722af64fe3"
+    },
+    {
+      "file": "src/Osynix.Ats/Data/AtsDbContext.cs",
+      "sha256": "8a05a5a6018a29e31ca24cfde97f8fa9997cd51f88ff4f705fa50ca5908c1162"
+    },
+    {
+      "file": "src/Osynix.Ats/Domain/Models.cs",
+      "sha256": "477ac27c101516e1fbb731e33bdb343401a46f664b2baa726acb7ed78f97cc60"
+    },
+    {
+      "file": "src/Osynix.Ats/Domain/ScoringEngine.cs",
+      "sha256": "538fd4666ddbd06b04aabd072cfa1cadaa747c6681d38b9fc2de2748323fd875"
+    },
+    {
+      "file": "src/Osynix.Ats/Osynix.Ats.csproj",
+      "sha256": "e89e061d78239b652d6682b9a5edc6f9d25d5f2adf028d783b2ac139d4077e3a"
+    },
+    {
+      "file": "src/Osynix.Ats/Pages/_ViewImports.cshtml",
+      "sha256": "3627e8f9eef5b80d704f715d35cc0f3bf792ddbdcc2fa796c5078a70d5e6f404"
+    },
+    {
+      "file": "src/Osynix.Ats/Pages/Account/Login.cshtml",
+      "sha256": "0c5e982eee16a15965c1c5a8e7288eae04ebf5618de396c7c5123f12ce8656aa"
+    },
+    {
+      "file": "src/Osynix.Ats/Pages/Account/Login.cshtml.cs",
+      "sha256": "de787b500d50014330abe2ca6490c23ea8cbcfacba2300abda1e06ac6dcaa0d5"
+    },
+    {
+      "file": "src/Osynix.Ats/Pages/Account/Logout.cshtml",
+      "sha256": "7863d3b0194d84e2f228154804c901526b7db7ac5e2b5079d6a7b6ef4fda125f"
+    },
+    {
+      "file": "src/Osynix.Ats/Pages/Account/Logout.cshtml.cs",
+      "sha256": "38a2f2347f59b0da0464f4a20d8708a71a97ccfdf7fcae2177530867f744c7b4"
+    },
+    {
+      "file": "src/Osynix.Ats/Program.cs",
+      "sha256": "689acf3c57336a1532b63fffb40fa80da14dfee17cf24ecc79b482a22eef6ae8"
+    },
+    {
+      "file": "src/Osynix.Ats/Properties/launchSettings.json",
+      "sha256": "10176d3a756f89afd4774df81ebeae41db9c78c2ad583819bb496c28d8214d3f"
+    },
+    {
+      "file": "src/Osynix.Ats/Services/Access.cs",
+      "sha256": "6ce46516873042108c5064d4487b65e04d019275f34248cd95d63c6ae23b7ed2"
+    },
+    {
+      "file": "src/Osynix.Ats/Services/AdminService.cs",
+      "sha256": "3c61cf93ebd7f066ea8473ea58bcc14c9506f106a64c1951829cd8c9e63615a3"
+    },
+    {
+      "file": "src/Osynix.Ats/Services/AiService.cs",
+      "sha256": "1e1ee38bc00459eb783bc8b6d9593602a01c16314d0cc82905effdc734d9ce08"
+    },
+    {
+      "file": "src/Osynix.Ats/Services/AtsService.cs",
+      "sha256": "4ee56ebeef6eb6c37c64d421663b3929bc8422df243e4e27f2119aa5e9e5b88f"
+    },
+    {
+      "file": "src/Osynix.Ats/Services/ReportService.cs",
+      "sha256": "c80d890501903ddea6a7721ee1c0338f21a09f8675ff50ef8fe11dbb7a7af9c7"
+    },
+    {
+      "file": "src/Osynix.Ats/Services/RevalidatingIdentityStateProvider.cs",
+      "sha256": "6ca9f743e6b27967d83b9a6bbe584122d9f9493a3a265e988387b8ad6a8bb588"
+    },
+    {
+      "file": "src/Osynix.Ats/Services/WorkbookImport.cs",
+      "sha256": "99413aeb57a5290ece18419175fb0d9905f3e2d8a720721bf05c54aa21486a0a"
+    },
+    {
+      "file": "src/Osynix.Ats/wwwroot/app.css",
+      "sha256": "5a878508797c873223a984e4621331519b3cce498530505ce4a5bc4068f2d412"
+    }
+  ],
+  "workbook": {
+    "formula_cells": 14175,
+    "google_dummy_function_cells": 6126,
+    "sheets": [
+      {
+        "name": "Lists & Settings",
+        "max_row": 13,
+        "max_column": 21,
+        "headers": [
+          {
+            "column": "A",
+            "header": "Position Status"
+          },
+          {
+            "column": "B",
+            "header": "Recruitment Stage"
+          },
+          {
+            "column": "C",
+            "header": "Interview Status"
+          },
+          {
+            "column": "D",
+            "header": "Client Status"
+          },
+          {
+            "column": "E",
+            "header": "Decision"
+          },
+          {
+            "column": "F",
+            "header": "Priority"
+          },
+          {
+            "column": "G",
+            "header": "Yes / No"
+          },
+          {
+            "column": "H",
+            "header": "Ref Numbers"
+          },
+          {
+            "column": "J",
+            "header": "Must-Have Fit"
+          },
+          {
+            "column": "K",
+            "header": "Definition"
+          },
+          {
+            "column": "M",
+            "header": "Must-Have Fit"
+          },
+          {
+            "column": "N",
+            "header": "Min ATS Match"
+          },
+          {
+            "column": "O",
+            "header": "Calculated Decision"
+          },
+          {
+            "column": "Q",
+            "header": "Decision Rules"
+          },
+          {
+            "column": "S",
+            "header": "Talent Pool Status"
+          },
+          {
+            "column": "T",
+            "header": "Seniority Level"
+          },
+          {
+            "column": "U",
+            "header": "Filled Source"
+          }
+        ],
+        "formula_count": 0,
+        "validations": [],
+        "hidden": "visible",
+        "hyperlink_count": 0
+      },
+      {
+        "name": "Positions Master",
+        "max_row": 500,
+        "max_column": 30,
+        "headers": [
+          {
+            "column": "A",
+            "header": "Ref #"
+          },
+          {
+            "column": "B",
+            "header": "Client"
+          },
+          {
+            "column": "C",
+            "header": "Position"
+          },
+          {
+            "column": "D",
+            "header": "Location"
+          },
+          {
+            "column": "E",
+            "header": "Open Date"
+          },
+          {
+            "column": "F",
+            "header": "Status"
+          },
+          {
+            "column": "G",
+            "header": "Priority"
+          },
+          {
+            "column": "H",
+            "header": "Hiring Target"
+          },
+          {
+            "column": "I",
+            "header": "Profiles Screened"
+          },
+          {
+            "column": "J",
+            "header": "Shortlisted"
+          },
+          {
+            "column": "K",
+            "header": "Client Interviews"
+          },
+          {
+            "column": "L",
+            "header": "Offers"
+          },
+          {
+            "column": "M",
+            "header": "Hired"
+          },
+          {
+            "column": "N",
+            "header": "Average ATS Match"
+          },
+          {
+            "column": "O",
+            "header": "Hiring Manager / Contact"
+          },
+          {
+            "column": "P",
+            "header": "JD / File Link"
+          },
+          {
+            "column": "Q",
+            "header": "Notes"
+          },
+          {
+            "column": "R",
+            "header": "Last Updated"
+          },
+          {
+            "column": "S",
+            "header": "JD File Hash"
+          },
+          {
+            "column": "T",
+            "header": "Assigned Recruiter"
+          },
+          {
+            "column": "U",
+            "header": "Created By"
+          },
+          {
+            "column": "V",
+            "header": "Created Date"
+          },
+          {
+            "column": "W",
+            "header": "Position Closed By"
+          },
+          {
+            "column": "X",
+            "header": "Position Closed Date"
+          },
+          {
+            "column": "Y",
+            "header": "Closure Status"
+          },
+          {
+            "column": "Z",
+            "header": "Last Updated By"
+          },
+          {
+            "column": "AA",
+            "header": "Filled Source"
+          },
+          {
+            "column": "AB",
+            "header": "Hired Candidate ID"
+          },
+          {
+            "column": "AC",
+            "header": "Hired Candidate Name"
+          },
+          {
+            "column": "AD",
+            "header": "Closure Reason"
+          }
+        ],
+        "formula_count": 6,
+        "validations": [
+          {
+            "range": "F2:F500",
+            "type": "list",
+            "formula1": "\"Active,On Hold,Closed,Filled,Cancelled\""
+          },
+          {
+            "range": "G2:G500",
+            "type": "list",
+            "formula1": "\"High,Medium,Low\""
+          }
+        ],
+        "hidden": "visible",
+        "hyperlink_count": 3
+      },
+      {
+        "name": "Candidates",
+        "max_row": 2001,
+        "max_column": 28,
+        "headers": [
+          {
+            "column": "A",
+            "header": "Candidate ID"
+          },
+          {
+            "column": "B",
+            "header": "Ref #"
+          },
+          {
+            "column": "C",
+            "header": "Candidate Name"
+          },
+          {
+            "column": "D",
+            "header": "Mobile / Phone Number"
+          },
+          {
+            "column": "E",
+            "header": "Email ID"
+          },
+          {
+            "column": "F",
+            "header": "Current Designation"
+          },
+          {
+            "column": "G",
+            "header": "Current Company"
+          },
+          {
+            "column": "H",
+            "header": "Location"
+          },
+          {
+            "column": "I",
+            "header": "Total Experience (Yrs)"
+          },
+          {
+            "column": "J",
+            "header": "Relevant Industry Experience (Yrs)"
+          },
+          {
+            "column": "K",
+            "header": "Date Screened"
+          },
+          {
+            "column": "L",
+            "header": "Evidence Strength /10"
+          },
+          {
+            "column": "M",
+            "header": "ATS Match %"
+          },
+          {
+            "column": "N",
+            "header": "Must-Have Fit"
+          },
+          {
+            "column": "O",
+            "header": "Core Role Fit /10"
+          },
+          {
+            "column": "P",
+            "header": "Key Strengths"
+          },
+          {
+            "column": "Q",
+            "header": "Key Gap / Risk"
+          },
+          {
+            "column": "R",
+            "header": "Executive Assessment"
+          },
+          {
+            "column": "S",
+            "header": "Decision"
+          },
+          {
+            "column": "T",
+            "header": "Recruitment Stage"
+          },
+          {
+            "column": "U",
+            "header": "Interview Status"
+          },
+          {
+            "column": "V",
+            "header": "Client Status"
+          },
+          {
+            "column": "W",
+            "header": "Expected Salary"
+          },
+          {
+            "column": "X",
+            "header": "Availability"
+          },
+          {
+            "column": "Y",
+            "header": "Recruiter Notes"
+          },
+          {
+            "column": "Z",
+            "header": "CV / File Link"
+          },
+          {
+            "column": "AA",
+            "header": "Last Updated"
+          },
+          {
+            "column": "AB",
+            "header": "Criterion Results JSON"
+          }
+        ],
+        "formula_count": 1983,
+        "validations": [
+          {
+            "range": "U2:U2001",
+            "type": "list",
+            "formula1": "\"Not Scheduled,Scheduled,Completed,No Show,Reschedule Required,Not Required\""
+          },
+          {
+            "range": "B2:B2001",
+            "type": "list",
+            "formula1": "'Lists & Settings'!$H$2:$H$501"
+          },
+          {
+            "range": "V2:V2001",
+            "type": "list",
+            "formula1": "\"Not Submitted,Submitted,Under Review,Client Shortlisted,Client Rejected,Client Interview,Offer,Hired\""
+          },
+          {
+            "range": "N2:N2001",
+            "type": "list",
+            "formula1": "'Lists & Settings'!$J$2:$J$6"
+          },
+          {
+            "range": "T2:T2001",
+            "type": "list",
+            "formula1": "'Lists & Settings'!$B$2:$B$13"
+          },
+          {
+            "range": "S2:S2001",
+            "type": "list",
+            "formula1": "\"Priority Shortlist,Shortlist,Hold,Reject,Insufficient Evidence\""
+          }
+        ],
+        "hidden": "visible",
+        "hyperlink_count": 10
+      },
+      {
+        "name": "JD Criteria",
+        "max_row": 500,
+        "max_column": 7,
+        "headers": [
+          {
+            "column": "A",
+            "header": "Ref #"
+          },
+          {
+            "column": "B",
+            "header": "Criterion"
+          },
+          {
+            "column": "C",
+            "header": "Weight %"
+          },
+          {
+            "column": "D",
+            "header": "Knockout?"
+          },
+          {
+            "column": "E",
+            "header": "Evidence Expected"
+          },
+          {
+            "column": "F",
+            "header": "Scoring Guidance"
+          },
+          {
+            "column": "G",
+            "header": "Notes"
+          }
+        ],
+        "formula_count": 0,
+        "validations": [
+          {
+            "range": "D2:D500",
+            "type": "list",
+            "formula1": "\"Yes,No\""
+          }
+        ],
+        "hidden": "visible",
+        "hyperlink_count": 0
+      },
+      {
+        "name": "Recruitment Pipeline",
+        "max_row": 12,
+        "max_column": 3,
+        "headers": [
+          {
+            "column": "A",
+            "header": "Stage"
+          },
+          {
+            "column": "B",
+            "header": "Candidate Count"
+          },
+          {
+            "column": "C",
+            "header": "% of Screened"
+          }
+        ],
+        "formula_count": 22,
+        "validations": [],
+        "hidden": "visible",
+        "hyperlink_count": 0
+      },
+      {
+        "name": "Dashboard",
+        "max_row": 23,
+        "max_column": 11,
+        "headers": [
+          {
+            "column": "A",
+            "header": "OSYNIX ATS MASTER TRACKER"
+          },
+          {
+            "column": "J",
+            "header": "TALENT POOL"
+          }
+        ],
+        "formula_count": 52,
+        "validations": [
+          {
+            "range": "B3",
+            "type": "list",
+            "formula1": "'Positions Master'!$A$2:$A$500"
+          }
+        ],
+        "hidden": "visible",
+        "hyperlink_count": 0
+      },
+      {
+        "name": "Talent Pool Master",
+        "max_row": 2001,
+        "max_column": 29,
+        "headers": [
+          {
+            "column": "A",
+            "header": "Candidate ID"
+          },
+          {
+            "column": "B",
+            "header": "Candidate Name"
+          },
+          {
+            "column": "C",
+            "header": "Mobile / Phone Number"
+          },
+          {
+            "column": "D",
+            "header": "Email ID"
+          },
+          {
+            "column": "E",
+            "header": "Location"
+          },
+          {
+            "column": "F",
+            "header": "Current / Latest Designation"
+          },
+          {
+            "column": "G",
+            "header": "Current / Latest Company"
+          },
+          {
+            "column": "H",
+            "header": "Total Experience (Yrs)"
+          },
+          {
+            "column": "I",
+            "header": "Primary Function"
+          },
+          {
+            "column": "J",
+            "header": "Secondary Function / Specialization"
+          },
+          {
+            "column": "K",
+            "header": "Industries / Domains"
+          },
+          {
+            "column": "L",
+            "header": "Core Skills"
+          },
+          {
+            "column": "M",
+            "header": "Seniority Level"
+          },
+          {
+            "column": "N",
+            "header": "Systems / Tools"
+          },
+          {
+            "column": "O",
+            "header": "Geographic / Market Exposure"
+          },
+          {
+            "column": "P",
+            "header": "Career Profile Summary"
+          },
+          {
+            "column": "Q",
+            "header": "Talent Pool Status"
+          },
+          {
+            "column": "R",
+            "header": "First Screened Date"
+          },
+          {
+            "column": "S",
+            "header": "Last Assessed Date"
+          },
+          {
+            "column": "T",
+            "header": "Ref #s Assessed Against"
+          },
+          {
+            "column": "U",
+            "header": "Assessment Count"
+          },
+          {
+            "column": "V",
+            "header": "Latest Decision"
+          },
+          {
+            "column": "W",
+            "header": "Latest Recruitment Stage"
+          },
+          {
+            "column": "X",
+            "header": "Source CV / File"
+          },
+          {
+            "column": "Y",
+            "header": "Talent Pool Notes"
+          },
+          {
+            "column": "Z",
+            "header": "Last Updated"
+          },
+          {
+            "column": "AA",
+            "header": "Professional Summary"
+          },
+          {
+            "column": "AB",
+            "header": "Employment / Career History"
+          },
+          {
+            "column": "AC",
+            "header": "Education"
+          }
+        ],
+        "formula_count": 11904,
+        "validations": [
+          {
+            "range": "Q2:Q2001",
+            "type": "list",
+            "formula1": "'Lists & Settings'!$S$2:$S$8"
+          },
+          {
+            "range": "M2:M2001",
+            "type": "list",
+            "formula1": "'Lists & Settings'!$T$2:$T$11"
+          }
+        ],
+        "hidden": "visible",
+        "hyperlink_count": 10
+      },
+      {
+        "name": "Users & Access",
+        "max_row": 1000,
+        "max_column": 13,
+        "headers": [
+          {
+            "column": "A",
+            "header": "User ID"
+          },
+          {
+            "column": "B",
+            "header": "Full Name"
+          },
+          {
+            "column": "C",
+            "header": "Email"
+          },
+          {
+            "column": "D",
+            "header": "Role"
+          },
+          {
+            "column": "E",
+            "header": "Status"
+          },
+          {
+            "column": "F",
+            "header": "Assigned Clients"
+          },
+          {
+            "column": "G",
+            "header": "Assigned Ref #s"
+          },
+          {
+            "column": "H",
+            "header": "Can Create Positions"
+          },
+          {
+            "column": "I",
+            "header": "Can View Talent Pool"
+          },
+          {
+            "column": "J",
+            "header": "Can Export Reports"
+          },
+          {
+            "column": "K",
+            "header": "Last Login"
+          },
+          {
+            "column": "L",
+            "header": "Created Date"
+          },
+          {
+            "column": "M",
+            "header": "Last Updated"
+          }
+        ],
+        "formula_count": 0,
+        "validations": [
+          {
+            "range": "D2:D1000",
+            "type": "list",
+            "formula1": "\"Admin,Recruiter\""
+          },
+          {
+            "range": "H2:J1000",
+            "type": "list",
+            "formula1": "\"Yes,No\""
+          },
+          {
+            "range": "E2:E1000",
+            "type": "list",
+            "formula1": "\"Active,Pending,Suspended\""
+          }
+        ],
+        "hidden": "visible",
+        "hyperlink_count": 0
+      },
+      {
+        "name": "Activity Log",
+        "max_row": 58,
+        "max_column": 11,
+        "headers": [
+          {
+            "column": "A",
+            "header": "Timestamp"
+          },
+          {
+            "column": "B",
+            "header": "User Email"
+          },
+          {
+            "column": "C",
+            "header": "User Name"
+          },
+          {
+            "column": "D",
+            "header": "Role"
+          },
+          {
+            "column": "E",
+            "header": "Action"
+          },
+          {
+            "column": "F",
+            "header": "Entity Type"
+          },
+          {
+            "column": "G",
+            "header": "Entity ID / Ref #"
+          },
+          {
+            "column": "H",
+            "header": "Client"
+          },
+          {
+            "column": "I",
+            "header": "Details"
+          },
+          {
+            "column": "J",
+            "header": "Previous Value"
+          },
+          {
+            "column": "K",
+            "header": "New Value"
+          }
+        ],
+        "formula_count": 0,
+        "validations": [
+          {
+            "range": "E2:E58",
+            "type": "list",
+            "formula1": "\"LOGIN,TRUSTED_DEVICE_LOGIN\""
+          },
+          {
+            "range": "A2:A58",
+            "type": "custom",
+            "formula1": "OR(NOT(ISERROR(DATEVALUE(A2))), AND(ISNUMBER(A2), LEFT(CELL(\"format\", A2))=\"D\"))"
+          }
+        ],
+        "hidden": "visible",
+        "hyperlink_count": 16
+      },
+      {
+        "name": "User Sessions",
+        "max_row": 2000,
+        "max_column": 12,
+        "headers": [
+          {
+            "column": "A",
+            "header": "Session ID"
+          },
+          {
+            "column": "B",
+            "header": "User ID"
+          },
+          {
+            "column": "C",
+            "header": "Email"
+          },
+          {
+            "column": "D",
+            "header": "Role"
+          },
+          {
+            "column": "E",
+            "header": "Device Token"
+          },
+          {
+            "column": "F",
+            "header": "Keep Signed In"
+          },
+          {
+            "column": "G",
+            "header": "Created At"
+          },
+          {
+            "column": "H",
+            "header": "Last Activity"
+          },
+          {
+            "column": "I",
+            "header": "Expires At"
+          },
+          {
+            "column": "J",
+            "header": "Status"
+          },
+          {
+            "column": "K",
+            "header": "Revoked At"
+          },
+          {
+            "column": "L",
+            "header": "Revoked By"
+          }
+        ],
+        "formula_count": 0,
+        "validations": [
+          {
+            "range": "F2:F2000",
+            "type": "list",
+            "formula1": "\"Yes,No\""
+          },
+          {
+            "range": "J2:J2000",
+            "type": "list",
+            "formula1": "\"Active,Revoked,Expired\""
+          }
+        ],
+        "hidden": "visible",
+        "hyperlink_count": 0
+      },
+      {
+        "name": "Trusted Devices",
+        "max_row": 2000,
+        "max_column": 10,
+        "headers": [
+          {
+            "column": "A",
+            "header": "Trusted Device ID"
+          },
+          {
+            "column": "B",
+            "header": "User ID"
+          },
+          {
+            "column": "C",
+            "header": "Email"
+          },
+          {
+            "column": "D",
+            "header": "Device Token Hash"
+          },
+          {
+            "column": "E",
+            "header": "Device Label"
+          },
+          {
+            "column": "F",
+            "header": "Trusted At"
+          },
+          {
+            "column": "G",
+            "header": "Last Used At"
+          },
+          {
+            "column": "H",
+            "header": "Status"
+          },
+          {
+            "column": "I",
+            "header": "Revoked At"
+          },
+          {
+            "column": "J",
+            "header": "Revoked By"
+          }
+        ],
+        "formula_count": 0,
+        "validations": [
+          {
+            "range": "H2:H2000",
+            "type": "list",
+            "formula1": "\"Active,Revoked\""
+          }
+        ],
+        "hidden": "visible",
+        "hyperlink_count": 0
+      },
+      {
+        "name": "New Dashboard",
+        "max_row": 75,
+        "max_column": 20,
+        "headers": [
+          {
+            "column": "A",
+            "header": "OSYNIX ATS  •  RECRUITMENT DASHBOARD"
+          },
+          {
+            "column": "S",
+            "header": "Decision"
+          },
+          {
+            "column": "T",
+            "header": "Count"
+          }
+        ],
+        "formula_count": 163,
+        "validations": [],
+        "hidden": "visible",
+        "hyperlink_count": 0
+      },
+      {
+        "name": "Dashboard Data",
+        "max_row": 14,
+        "max_column": 10,
+        "headers": [
+          {
+            "column": "A",
+            "header": "Hiring Funnel"
+          },
+          {
+            "column": "B",
+            "header": "Count"
+          },
+          {
+            "column": "C",
+            "header": ""
+          },
+          {
+            "column": "D",
+            "header": "Decision Mix"
+          },
+          {
+            "column": "E",
+            "header": "Count"
+          },
+          {
+            "column": "F",
+            "header": ""
+          },
+          {
+            "column": "G",
+            "header": "KPI"
+          },
+          {
+            "column": "H",
+            "header": "Value"
+          }
+        ],
+        "formula_count": 45,
+        "validations": [],
+        "hidden": "hidden",
+        "hyperlink_count": 0
+      }
+    ],
+    "record_controls": {
+      "positions": 5,
+      "criteria": 41,
+      "people": 42,
+      "applications": 43,
+      "source_applications_with_criterion_json": 2,
+      "structured_employment_profiles": 1,
+      "legacy_employment_profiles": 3,
+      "structured_education_profiles": 1,
+      "legacy_education_profiles": 3,
+      "activity_events": 57,
+      "users": 2,
+      "sessions": 41,
+      "trusted_devices": 4
+    }
+  },
+  "verification": {
+    "existing_tests": {
+      "command": "dotnet test Osynix.Ats.slnx --no-restore --verbosity quiet",
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0
+    },
+    "import_rehearsal": {
+      "database": "SQLite :memory:",
+      "positions": 5,
+      "candidates": 42,
+      "assessments": 43,
+      "mapped_criterion_evidence_records": 0,
+      "rule_thresholds": [
+        {
+          "fit": "Pass",
+          "minimum": 75,
+          "decision": "Priority Shortlist"
+        },
+        {
+          "fit": "Pass",
+          "minimum": 60,
+          "decision": "Shortlist"
+        },
+        {
+          "fit": "Pass",
+          "minimum": 0,
+          "decision": "Hold"
+        },
+        {
+          "fit": "Partial",
+          "minimum": 70,
+          "decision": "Shortlist"
+        },
+        {
+          "fit": "Partial",
+          "minimum": 55,
+          "decision": "Hold"
+        },
+        {
+          "fit": "Partial",
+          "minimum": 0,
+          "decision": "Reject"
+        }
+      ]
+    },
+    "scoring_comparison": [
+      {
+        "name": "Pass at 75",
+        "matches": true,
+        "reference": {
+          "name": "Pass at 75",
+          "match": 75,
+          "mustHave": "Pass",
+          "core": 6,
+          "confidence": 8,
+          "decision": "Priority Shortlist"
+        },
+        "actual": {
+          "match": 75,
+          "mustHave": "Pass",
+          "core": 6,
+          "confidence": 8,
+          "decision": "Priority Shortlist"
+        }
+      },
+      {
+        "name": "Pass at 60",
+        "matches": true,
+        "reference": {
+          "name": "Pass at 60",
+          "match": 60,
+          "mustHave": "Pass",
+          "core": 6,
+          "confidence": 8,
+          "decision": "Shortlist"
+        },
+        "actual": {
+          "match": 60,
+          "mustHave": "Pass",
+          "core": 6,
+          "confidence": 8,
+          "decision": "Shortlist"
+        }
+      },
+      {
+        "name": "Knockout failure overrides 92",
+        "matches": true,
+        "reference": {
+          "name": "Knockout failure overrides 92",
+          "match": 92,
+          "mustHave": "Fail",
+          "core": 10,
+          "confidence": 8,
+          "decision": "Reject"
+        },
+        "actual": {
+          "match": 92,
+          "mustHave": "Fail",
+          "core": 10,
+          "confidence": 8,
+          "decision": "Reject"
+        }
+      },
+      {
+        "name": "Missing knockout evidence",
+        "matches": true,
+        "reference": {
+          "name": "Missing knockout evidence",
+          "match": 90,
+          "mustHave": "Insufficient Evidence",
+          "core": 10,
+          "confidence": 7.4,
+          "decision": "Insufficient Evidence"
+        },
+        "actual": {
+          "match": 90,
+          "mustHave": "Insufficient Evidence",
+          "core": 10,
+          "confidence": 7.4,
+          "decision": "Insufficient Evidence"
+        }
+      },
+      {
+        "name": "Partial at 70",
+        "matches": true,
+        "reference": {
+          "name": "Partial at 70",
+          "match": 70,
+          "mustHave": "Partial",
+          "core": 10,
+          "confidence": 8,
+          "decision": "Shortlist"
+        },
+        "actual": {
+          "match": 70,
+          "mustHave": "Partial",
+          "core": 10,
+          "confidence": 8,
+          "decision": "Shortlist"
+        }
+      },
+      {
+        "name": "Partial at 55",
+        "matches": true,
+        "reference": {
+          "name": "Partial at 55",
+          "match": 55,
+          "mustHave": "Partial",
+          "core": 6,
+          "confidence": 8,
+          "decision": "Hold"
+        },
+        "actual": {
+          "match": 55,
+          "mustHave": "Partial",
+          "core": 6,
+          "confidence": 8,
+          "decision": "Hold"
+        }
+      },
+      {
+        "name": "Partial at 54",
+        "matches": true,
+        "reference": {
+          "name": "Partial at 54",
+          "match": 54,
+          "mustHave": "Partial",
+          "core": 5.8,
+          "confidence": 8,
+          "decision": "Reject"
+        },
+        "actual": {
+          "match": 54,
+          "mustHave": "Partial",
+          "core": 5.8,
+          "confidence": 8,
+          "decision": "Reject"
+        }
+      },
+      {
+        "name": "Criterion punctuation normalization",
+        "matches": false,
+        "reference": {
+          "name": "Criterion punctuation normalization",
+          "match": 72,
+          "mustHave": "Pass",
+          "core": 6,
+          "confidence": 8,
+          "decision": "Shortlist"
+        },
+        "actual": {
+          "match": 24,
+          "mustHave": "Insufficient Evidence",
+          "core": 6,
+          "confidence": 4.4,
+          "decision": "Insufficient Evidence"
+        }
+      },
+      {
+        "name": "Core fit midpoint rounding",
+        "matches": false,
+        "reference": {
+          "name": "Core fit midpoint rounding",
+          "match": 64,
+          "mustHave": "Pass",
+          "core": 6.1,
+          "confidence": 8,
+          "decision": "Shortlist"
+        },
+        "actual": {
+          "match": 64,
+          "mustHave": "Pass",
+          "core": 6,
+          "confidence": 8,
+          "decision": "Shortlist"
+        }
+      }
+    ],
+    "live_database_modified": false,
+    "source_workbook_modified": false,
+    "paid_ai_calls": 0,
+    "live_google_access": false
+  }
+}

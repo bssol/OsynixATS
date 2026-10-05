@@ -1,0 +1,16 @@
+<div class="kpis"><div class="kpi"><span>ATS match</span><strong class="@(Application.MatchPercent is null?"small-value":"")">@Metric(Application.MatchPercent,"%")</strong></div><div class="kpi"><span>Must-have fit</span><strong class="small-value">@(Application.MustHaveFit.Length>0?Application.MustHaveFit:"Unavailable")</strong></div><div class="kpi"><span>Core role fit</span><strong class="@(Application.CoreRoleFit is null?"small-value":"")">@Metric(Application.CoreRoleFit,"/10")</strong></div><div class="kpi"><span>Evidence strength</span><strong class="@(Application.EvidenceStrength is null?"small-value":"")">@Metric(Application.EvidenceStrength,"/10")</strong></div></div>
+<section class="panel"><div class="section-heading"><div><h2><DecisionBadge Value="@Application.Decision" /></h2><p class="muted">@Snapshot.PositionTitle · @Snapshot.Client · #@Snapshot.Reference · Version @Application.VersionNumber</p></div><a class="button secondary" href="@($"/reports?ids={Application.Id}"+(Application.State=="Saved"?$"&version={Application.VersionNumber}":""))" target="_blank">Report preview</a></div>
+@if(Snapshot.Summary.Length>0){<h3>Executive assessment</h3><p class="preserve">@Snapshot.Summary</p>}
+<div class="two-col">@if(Snapshot.Strengths.Length>0){<div><h3>Key strengths</h3><p class="preserve">@Snapshot.Strengths</p></div>}@if(Snapshot.Gaps.Length>0){<div><h3>Gaps and risks</h3><p class="preserve">@Snapshot.Gaps</p></div>}</div>
+<h3>Criterion-by-criterion assessment</h3>
+@if(Snapshot.Criteria.Count==0){<p class="muted">This historical assessment has no stored criterion scores or evidence. The source framework is shown below with unavailable results.</p>}
+<div class="table-wrap"><table><thead><tr><th>Criterion</th><th>Weight</th><th>Status / score</th><th>Confidence</th><th>Evidence and rationale</th></tr></thead><tbody>
+@foreach(var c in Rows){<tr><td><b>@c.Name</b>@if(c.Knockout){<small>Must-have</small>}</td><td>@c.Weight%</td><td>@(c.Status.Length>0?c.Status:"Unavailable")<small>@Metric(c.Score,"/10")</small></td><td>@Metric(c.Confidence,"/10")</td><td>@c.Found@if(c.Rationale.Length>0){<small class="preserve">@c.Rationale</small>}</td></tr>}
+</tbody></table></div></section>
+@code{
+[Parameter,EditorRequired] public Assessment Application{get;set;}=default!;
+[Parameter,EditorRequired] public AssessmentSnapshot Snapshot{get;set;}=default!;
+[Parameter] public List<Criterion> Framework{get;set;}=[];
+IEnumerable<ScoredCriterion> Rows=>Snapshot.Criteria.Count>0?Snapshot.Criteria:Framework.Select(x=>new ScoredCriterion(x.Name,x.Weight,x.Knockout,null,null,"Unavailable","",""));
+static string Metric(double? value,string suffix)=>value is null?"Unavailable":$"{value:0.#}{suffix}";
+}

@@ -1,0 +1,14 @@
+@inherits PageBase
+@inject AtsService Ats
+@if(edit is not null){
+<Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
+<div class="form-grid"><label>Recruitment stage<select @bind="edit.Stage" disabled="@Terminal">@foreach(var s in Choices.Stages){<option>@s</option>}</select></label><label>Interview status<select @bind="edit.InterviewStatus" disabled="@Terminal"><option value="">Unspecified</option>@foreach(var s in Choices.Interviews){<option>@s</option>}</select></label><label>Client status<select @bind="edit.ClientStatus" disabled="@Terminal"><option value="">Unspecified</option>@foreach(var s in Choices.ClientStatuses){<option>@s</option>}</select></label><label>Current compensation<input @bind="edit.CurrentCompensation" /></label><label>Expected salary<input @bind="edit.ExpectedSalary" /></label><label>Availability<input @bind="edit.Availability" /></label><label>Notice period<input @bind="edit.NoticePeriod" /></label></div><label>Application recruiter notes<textarea rows="4" @bind="edit.RecruiterNotes"></textarea></label><button disabled="@Busy" @onclick="Save">Save recruitment progress</button>
+}
+@code{
+[Parameter,EditorRequired] public Assessment Application{get;set;}=default!;
+[Parameter] public EventCallback OnSaved{get;set;}
+Assessment? edit;
+bool Terminal=>Application.Stage=="Hired"||Application.ClientStatus=="Hired";
+protected override void OnParametersSet(){if(edit is null||edit.Id!=Application.Id||edit.Revision!=Application.Revision)edit=JsonSerializer.Deserialize<Assessment>(JsonSerializer.Serialize(Application));}
+Task Save()=>Run(async()=>{await Ats.SaveLifecycle(edit!);await OnSaved.InvokeAsync();Notice="Recruitment progress saved.";});
+}

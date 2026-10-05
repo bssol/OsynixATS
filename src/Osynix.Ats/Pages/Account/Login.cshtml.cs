@@ -6,14 +6,16 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Osynix.Ats.Data;
 namespace Osynix.Ats.Pages.Account;
 [AllowAnonymous]
-public class LoginModel(SignInManager<AtsUser> signIn) : PageModel
+public class LoginModel(SignInManager<AtsUser> signIn, UserManager<AtsUser> users) : PageModel
 {
     [BindProperty,Required] public string Email{get;set;}="";
     [BindProperty,Required] public string Password{get;set;}="";
     public async Task<IActionResult> OnPostAsync(string? returnUrl=null)
     {
         if(!ModelState.IsValid)return Page();
-        var result=await signIn.PasswordSignInAsync(Email,Password,false,true);
+        var account=await users.FindByNameAsync(Email.Trim());
+        if(account is null || account.Status!="Active") { ModelState.AddModelError("","Sign-in failed. Check your credentials or try again later."); return Page(); }
+        var result=await signIn.PasswordSignInAsync(account,Password,false,true);
         if(result.Succeeded) return LocalRedirect(Url.IsLocalUrl(returnUrl)?returnUrl!:"/");
         ModelState.AddModelError("","Sign-in failed. Check your credentials or try again later.");return Page();
     }

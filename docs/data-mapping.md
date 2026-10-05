@@ -1,19 +1,29 @@
 # Workbook mapping
 
-First row is treated as headers. Required header lookup is case-insensitive. Blank rows are skipped. The whole import is atomic and allowed only when no positions, candidates or assessments exist. Administrator accounts may already exist.
+Headers are read case-insensitively from the first row. Blank rows are skipped. Initial import is atomic and allowed only when no positions, candidates or assessments exist. Existing login accounts and their credentials are preserved.
 
-| Source sheet | Source columns | Target |
-|---|---|---|
-| Positions Master | Ref #, Position/Position Title, Client, Location, Salary Range/Salary / Budget, Employment Type, Status, Job Description/JD Text, Client Notes/Notes | Positions |
-| JD Criteria | Ref #, Criterion, Weight %, Knockout?, Evidence Expected, Scoring Guidance, Notes | Criteria related to position |
-| Talent Pool Master | Candidate ID, Candidate Name, Mobile / Phone Number, Email ID, Location, Current / Latest Designation, Current / Latest Company, Total Experience (Yrs) | Candidate identity and current profile |
-| Talent Pool Master | Primary Function, Secondary Function / Specialization, Industries / Domains, Core Skills, Seniority Level, Systems / Tools, Geographic / Market Exposure | Vacancy-independent talent attributes |
-| Talent Pool Master | Professional Summary/Career Profile Summary, Employment / Career History, Education, Talent Pool Status, Talent Pool Notes, Source CV / File | Profile narrative, status and original document link |
-| Candidates / Recruitment Pipeline | Candidate Name, Ref #, ATS Match %, Must-Have Fit, Core Role Fit /10, Evidence Strength /10, Decision/ATS Decision, Key Strengths, Key Gap / Risk, Executive Assessment | Historical assessment + immutable imported snapshot |
-| Candidates / Recruitment Pipeline | Recruitment Stage, Interview Status, Client Status, Expected Salary, Availability, Recruiter Notes | Current recruitment lifecycle |
-| Lists & Settings | M: Must-have fit; N: minimum ATS percentage; O: decision; rows 2–100 | Configurable decision rules |
-| Every sheet | Every displayed data-cell value, with row number and workbook hash | ImportRows raw JSON archive |
+| Source | Operational target |
+| --- | --- |
+| Positions Master | Reference/title/client, location/salary/type/status, priority/target/contact/recruiter, JD link/hash/text, created/open/update/closure metadata, notes, filled source and hired Candidate ID |
+| JD Criteria | Position relationship, criterion, weight, knockout, evidence expectation, scoring guidance and notes; imported frameworks stay unlocked for review |
+| Talent Pool Master | Original Candidate ID/contact/location/current employment/experience, reusable taxonomy attributes, separate professional and career summaries, talent status/notes, CV link and screening dates |
+| Employment / Career History and Education | Typed records when actual JSON arrays are present; date precision/source text retained; legacy narratives remain visible without guessed records |
+| Candidates | Candidate ID + Ref # relationship; source score/decision/core/confidence, executive summary/strengths/gaps and original Criterion Results JSON; immutable initial assessment version |
+| Candidates lifecycle | Source stage/interview/client status, salary, availability and recruiter notes; blank statuses remain unspecified |
+| Lists & Settings M:O | Original Pass/Partial decision thresholds; future new assessments use reviewed stored rules |
+| Lists & Settings controlled columns | Reference options retained with list name/value/order; operational controls use the audited source vocabulary |
+| Activity Log | Real timestamp/actor/action/entity/details and before/after values; candidate links when the entity ID identifies a person |
+| Users & Access | Missing Admin/Recruiter accounts, source name/status/grants and assignment metadata; imported accounts have no password until Admin sets one |
+| Source data sheets | Displayed values retained as row JSON with sheet/row/workbook hash for reconciliation, except Google session/trusted-device token sheets |
 
-Date fields not explicitly mapped to operational entities remain in raw imported rows. Operational CreatedUtc records the import time, not the original screening time. CV links are retained as text, with HTTPS links available in candidate details; hyperlinks stored only as cell metadata may need a mapping extension. Original workbook formulas/macros are never executed by the application. The archive contains displayed values, not the original binary workbook; keep the workbook backup separately.
+Source screening/open/closed date fields retain the original date/time precision. Source timestamps used for UTC record/audit fields are converted from the Apps Script `Asia/Karachi` timezone. The importer reads cached date values rather than treating a missing date as the import date. It does not recompute historical scoring.
 
-Duplicate normalized candidate names are rejected during initial import for manual resolution, rather than silently merging different people. Candidate reference IDs are normalized to three digits when numeric; nonnumeric references are retained. Unsupported or missing criteria stay unlocked and require review. Existing historical assessments do not unlock or rewrite new AI assessments.
+Missing historical aggregate or criterion metrics remain null/unavailable. Only the two actually populated criterion JSON records in the supplied workbook have detailed historical evidence; the other 41 applications cannot acquire evidence through import. Assessment/profile views can display the position framework with unavailable results. Reports clearly disclose when no original criterion evidence exists.
+
+Candidate ID is authoritative on workbook rows. The same ID can have different position applications. Different IDs with the same display name remain separate people. A repeated Candidate ID + Ref # pair fails the import for review, rather than silently overwriting it. Without source IDs, email/phone/unique-name matching is used and contact conflicts are rejected.
+
+Numeric references are normalized to three digits. `Recruitment Pipeline` is an aggregate archive, not a substitute for the `Candidates` application sheet. Google session tokens and trusted devices are not imported. Existing account passwords/status/roles are not overwritten by workbook accounts. Assignment metadata is retained for future scoped authorization; it does not restrict the current company-wide Admin/Recruiter role model.
+
+CV/JD Drive links remain HTTPS links. The application does not fetch linked file bytes. New CV/JD uploads are stored behind `IDocumentStore` with content hashes. Keep the original XLSX backup separately: the raw JSON archive does not preserve original formatting, charts, formulas or hyperlink-only metadata. Import is not ongoing Sheet synchronization.
+
+Rehearsal result for the supplied workbook: 5 positions, 41 criteria, 42 people, 43 applications/initial versions, 2 detailed evidence records and 57 real activity events. Neither source workbook contents nor live Sheet data were changed.

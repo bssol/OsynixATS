@@ -8,7 +8,7 @@ namespace Osynix.Ats.Pages.Account;
 [AllowAnonymous]
 public class LoginModel(SignInManager<AtsUser> signIn) : PageModel
 {
-    [BindProperty,Required,EmailAddress] public string Email{get;set;}="";
+    [BindProperty,Required] public string Email{get;set;}="";
     [BindProperty,Required] public string Password{get;set;}="";
     public async Task<IActionResult> OnPostAsync(string? returnUrl=null)
     {

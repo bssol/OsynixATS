@@ -8,7 +8,7 @@ public class AdminService(Access access,IServiceScopeFactory scopes,IDbContextFa
     public async Task<List<string>> Users()
     {
         await access.Require(true); using var scope=scopes.CreateScope();var users=scope.ServiceProvider.GetRequiredService<UserManager<AtsUser>>();var result=new List<string>();
-        foreach(var user in await users.Users.ToListAsync()) result.Add($"{user.Email} — {string.Join(", ",await users.GetRolesAsync(user))}");return result;
+        foreach(var user in await users.Users.ToListAsync()) result.Add($"{user.Email ?? user.UserName} — {string.Join(", ",await users.GetRolesAsync(user))}");return result;
     }
     public async Task CreateUser(string email,string password,string role)
     {

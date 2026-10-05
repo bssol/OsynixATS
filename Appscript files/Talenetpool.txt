@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+  <base target="_top">
+
+  <?!= include('Styles'); ?>
+  <?!= include('CandidateDatabaseStyles'); ?>
+  <?!= include('TalentPoolStyles'); ?>
+
+</head>
+
+
+<body>
+
+  <?!= include('AccessGuard'); ?>
+  <?!= include('Navigation'); ?>
+
+
+  <div class="candidate-database-shell">
+
+
+    <!-- ==========================================
+     BACK CONTROL
+     ========================================== -->
+
+<div class="talent-pool-back-row">
+
+  <button
+    type="button"
+    class="talent-pool-back-btn"
+    onclick="returnToCandidateDatabase()"
+  >
+    ← Back
+  </button>
+
+</div>
+
+
+  <!-- ==========================================
+     TALENT POOL TABLE TOOLBAR
+     ========================================== -->
+
+<section class="talent-pool-table-toolbar">
+
+
+  <div class="talent-pool-toolbar-search">
+
+    <input
+      type="search"
+      id="talentPoolSearch"
+      placeholder="Search candidate, company, role, phone, email..."
+      autocomplete="off"
+    >
+
+  </div>
+
+
+  <strong id="talentPoolRecordCount">
+    Showing 0 candidates
+  </strong>
+
+
+  <div
+    id="talentPoolPagination"
+    class="candidate-db-pagination"
+  >
+  </div>
+
+
+</section>
+
+
+
+    <!-- ==========================================
+         TALENT POOL TABLE
+         ========================================== -->
+
+    <!-- INDEPENDENT TALENT POOL COLUMN HEADER -->
+
+<div
+  id="talentPoolStickyHeader"
+  class="talent-pool-sticky-header"
+  aria-hidden="true"
+>
+
+  <div>Candidate Name</div>
+
+  <div>Phone</div>
+
+  <div>Email</div>
+
+  <div>
+    <button
+      type="button"
+      class="talent-pool-sticky-filter-trigger"
+      id="talentPoolStickyLocationTrigger"
+    >
+      <span>Location</span>
+      <span>▼</span>
+    </button>
+  </div>
+
+  <div>Current Role</div>
+
+  <div>
+    <button
+      type="button"
+      class="talent-pool-sticky-filter-trigger"
+      id="talentPoolStickySeniorityTrigger"
+    >
+      <span>Seniority</span>
+      <span>▼</span>
+    </button>
+  </div>
+
+  <div>
+    <button
+      type="button"
+      class="talent-pool-sticky-filter-trigger"
+      id="talentPoolStickyStatusTrigger"
+    >
+      <span>Talent Status</span>
+      <span>▼</span>
+    </button>
+  </div>
+
+  <div>Last Updated</div>
+
+  <div>Action</div>
+
+</div>
+    <section class="candidate-db-table-card">
+
+
+      <div class="candidate-db-table-wrap">
+
+
+        <table class="candidate-db-table talent-pool-table">
+
+
+          <thead>
+
+  <tr>
+
+    <th>
+      Candidate Name
+    </th>
+
+    <th>
+      Phone
+    </th>
+
+    <th>
+      Email
+    </th>
+
+
+    <th class="talent-pool-filter-th">
+
+      <button
+        type="button"
+        class="talent-pool-filter-trigger"
+        id="talentPoolLocationTrigger"
+      >
+        <span>Location</span>
+        <span class="talent-pool-filter-arrow">▼</span>
+      </button>
+
+    </th>
+
+
+    <th>
+      Current Role
+    </th>
+
+
+    <th class="talent-pool-filter-th">
+
+      <button
+        type="button"
+        class="talent-pool-filter-trigger"
+        id="talentPoolSeniorityTrigger"
+      >
+        <span>Seniority</span>
+        <span class="talent-pool-filter-arrow">▼</span>
+      </button>
+
+    </th>
+
+
+    <th class="talent-pool-filter-th">
+
+      <button
+        type="button"
+        class="talent-pool-filter-trigger"
+        id="talentPoolStatusTrigger"
+      >
+        <span>Talent Status</span>
+        <span class="talent-pool-filter-arrow">▼</span>
+      </button>
+
+    </th>
+
+
+    <th>
+      Last Updated
+    </th>
+
+    <th>
+      Action
+    </th>
+
+  </tr>
+
+</thead>
+
+
+          <tbody id="talentPoolBody">
+
+            <tr>
+
+  <td
+    colspan="9"
+    class="candidate-db-loading-cell"
+  >
+    Loading Talent Pool...
+  </td>
+
+</tr>
+
+          </tbody>
+
+
+        </table>
+
+
+      </div>
+
+
+    </section>
+
+
+  </div>
+
+
+
+  <script>
+
+    function returnToCandidateDatabase() {
+
+      const sessionToken =
+        localStorage.getItem(
+          'OSYNIX_ATS_SESSION'
+        );
+
+
+      const baseUrl =
+        '<?= getWebAppUrl(); ?>';
+
+
+      window.top.location.href =
+        baseUrl +
+        '?page=candidatedatabase&session=' +
+        encodeURIComponent(
+          sessionToken || ''
+        );
+
+    }
+
+
+    
+
+
+    document.addEventListener(
+      'DOMContentLoaded',
+      function() {
+
+        const navButton =
+          document.getElementById(
+            'navCandidateDatabase'
+          );
+
+        if (navButton) {
+
+          navButton.classList.add(
+            'active'
+          );
+
+        }
+
+      }
+    );
+
+  </script>
+
+<?!= include('TalentPoolJavascript'); ?>
+
+</body>
+
+</html>

@@ -1,0 +1,130 @@
+/**
+* Osynix ATS - ManagePositionsService.gs
+*
+* Read-only position register service for the dedicated Manage Positions page.
+* Position updates continue to use updatePositionManagement() in DashboardService.gs.
+*/
+
+function getManagePositionsData(sessionToken) {
+const user = requireATSOperationalUser_(sessionToken);
+
+const ss = getSpreadsheet_();
+const sheet = ss.getSheetByName(CONFIG.SHEETS.POSITIONS);
+
+if (!sheet) {
+throw new Error('Positions Master sheet was not found.');
+}
+
+const rows = managePositionsReadObjects_(sheet);
+
+const positions = rows.map(function(item) {
+return {
+refNo: managePositionsRef_(item['Ref #']),
+client: String(item['Client'] || '').trim(),
+position: String(item['Position'] || '').trim(),
+location: String(item['Location'] || '').trim(),
+openDate: String(item['Open Date'] || '').trim(),
+status: String(item['Status'] || '').trim(),
+priority: String(item['Priority'] || 'Medium').trim(),
+hiringTarget: managePositionsNumber_(item['Hiring Target']),
+screened: managePositionsNumber_(item['Profiles Screened']),
+shortlisted: managePositionsNumber_(item['Shortlisted']),
+interviews: managePositionsNumber_(item['Client Interviews']),
+offers: managePositionsNumber_(item['Offers']),
+hired: managePositionsNumber_(item['Hired']),
+averageMatch: managePositionsPercent_(item['Average ATS Match']),
+hiringManager: String(item['Hiring Manager / Contact'] || '').trim(),
+jdUrl: String(item['JD / File Link'] || '').trim(),
+notes: String(item['Notes'] || '').trim(),
+lastUpdated: String(item['Last Updated'] || '').trim(),
+closedBy: String(item['Position Closed By'] || '').trim(),
+closedDate: String(item['Position Closed Date'] || '').trim(),
+closureStatus: String(item['Closure Status'] || '').trim(),
+lastUpdatedBy: String(item['Last Updated By'] || '').trim()
+};
+});
+
+const counts = {
+total: positions.length,
+active: 0,
+onHold: 0,
+filled: 0,
+closed: 0,
+cancelled: 0
+};
+
+const clientMap = {};
+
+positions.forEach(function(item) {
+const status = managePositionsNormalize_(item.status);
+
+if (status === 'active') counts.active += 1;
+if (status === 'on hold') counts.onHold += 1;
+if (status === 'filled') counts.filled += 1;
+if (status === 'closed') counts.closed += 1;
+if (status === 'cancelled') counts.cancelled += 1;
+
+if (item.client) {
+clientMap[managePositionsNormalize_(item.client)] = item.client;
+}
+});
+
+return {
+user: {
+userId: user.userId || '',
+fullName: user.fullName || '',
+email: user.email || '',
+role: user.role || '',
+permissions: user.permissions || {}
+},
+counts: counts,
+positions: positions,
+clients: Object.keys(clientMap).map(function(key) {
+return clientMap[key];
+}).sort(function(a, b) {
+return a.localeCompare(b);
+})
+};
+}
+
+function managePositionsReadObjects_(sheet) {
+const lastRow = sheet.getLastRow();
+const lastColumn = sheet.getLastColumn();
+
+if (lastRow < 2 || lastColumn < 1) return [];
+
+const values = sheet.getRange(1, 1, lastRow, lastColumn).getDisplayValues();
+const headers = values[0].map(function(value) {
+return String(value || '').trim();
+});
+
+return values.slice(1).filter(function(row) {
+return row.some(function(value) {
+return String(value || '').trim() !== '';
+});
+}).map(function(row) {
+const item = {};
+headers.forEach(function(header, index) {
+if (header) item[header] = row[index];
+});
+return item;
+});
+}
+
+function managePositionsRef_(value) {
+const clean = String(value || '').replace(/[^\d]/g, '').trim();
+return clean ? clean.padStart(3, '0') : '';
+}
+
+function managePositionsNumber_(value) {
+const number = Number(String(value || '0').replace(/,/g, '').replace(/%/g, ''));
+return isNaN(number) ? 0 : number;
+}
+
+function managePositionsPercent_(value) {
+return managePositionsNumber_(value);
+}
+
+function managePositionsNormalize_(value) {
+return String(value || '').trim().toLowerCase();
+}

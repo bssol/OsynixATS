@@ -1,0 +1,3855 @@
+<script>
+ 
+  let candidateDatabaseData = null;
+ 
+ 
+  document.addEventListener(
+  'DOMContentLoaded',
+  function() {
+ 
+    loadCandidateDatabase();
+ 
+    initialiseCandidateReactiveFilters_();
+ 
+  }
+);
+ 
+ 
+  function loadCandidateDatabase() {
+ 
+    const sessionToken =
+  localStorage.getItem(
+    'OSYNIX_ATS_SESSION'
+  );
+ 
+    if (!sessionToken) {
+ 
+      console.error(
+        'Candidate Database: No ATS session token found.'
+      );
+ 
+      return;
+    }
+ 
+ 
+    google.script.run
+ 
+      .withSuccessHandler(
+        function(data) {
+ 
+          candidateDatabaseData =
+            data;
+ 
+          console.log(
+            'Candidate Database loaded:',
+            data
+          );
+ 
+ 
+          /*
+           * For this first test we are only
+           * populating the KPI cards.
+           *
+           * Table, filters and insights come
+           * after the backend is verified.
+           */
+ 
+          renderCandidateDatabaseSummary(
+            data
+          );
+          renderCandidateDatabaseInsights(
+  data
+);
+ 
+      })
+ 
+      .withFailureHandler(
+  function(error) {
+ 
+    console.error(
+      'Candidate Database load failed:',
+      error
+    );
+ 
+    console.error(
+      'Candidate Database error message:',
+      error && error.message
+        ? error.message
+        : String(error)
+    );
+ 
+    alert(
+      'Candidate Database Error:\n\n' +
+      (
+        error && error.message
+          ? error.message
+          : String(error)
+      )
+    );
+ 
+          const tableBody =
+            document.getElementById(
+              'candidateDatabaseBody'
+            );
+ 
+          if (tableBody) {
+ 
+            tableBody.innerHTML =
+              '<tr>' +
+                '<td colspan="11" ' +
+                'class="candidate-db-loading-cell">' +
+                  'Unable to load candidate database.' +
+                '</td>' +
+              '</tr>';
+ 
+          }
+ 
+      })
+ 
+      .getCandidateDatabaseData(
+        sessionToken
+      );
+ 
+  }
+ 
+ 
+  function renderCandidateDatabaseSummary(
+  data
+) {
+ 
+  const candidates =
+    data &&
+    Array.isArray(data.candidates)
+      ? data.candidates
+      : [];
+ 
+ 
+  const lifecycleCounts = {
+ 
+    shortlisted: 0,
+    hold: 0,
+    interview: 0,
+    pending: 0,
+    rejected: 0,
+    hired: 0
+ 
+  };
+ 
+ 
+  candidates.forEach(
+    function(candidate) {
+ 
+      const lifecycleState =
+        getCandidateLifecycleState_(
+          candidate
+        );
+ 
+ 
+      if (
+        lifecycleState &&
+        lifecycleCounts[
+          lifecycleState
+        ] !== undefined
+      ) {
+ 
+        lifecycleCounts[
+          lifecycleState
+        ]++;
+ 
+      }
+ 
+    }
+  );
+ 
+ 
+  setCandidateKpi_(
+    'candidateKpiTotal',
+    candidates.length
+  );
+ 
+ 
+  setCandidateKpi_(
+    'candidateKpiShortlisted',
+    lifecycleCounts.shortlisted
+  );
+ 
+ 
+  setCandidateKpi_(
+    'candidateKpiHold',
+    lifecycleCounts.hold
+  );
+ 
+ 
+  setCandidateKpi_(
+    'candidateKpiRejected',
+    lifecycleCounts.rejected
+  );
+ 
+ 
+  setCandidateKpi_(
+    'candidateKpiInterview',
+    lifecycleCounts.interview
+  );
+ 
+ 
+  setCandidateKpi_(
+    'candidateKpiOffers',
+    lifecycleCounts.pending
+  );
+ 
+ 
+  setCandidateKpi_(
+    'candidateKpiHired',
+    lifecycleCounts.hired
+  );
+ 
+ 
+  const candidateCount =
+    candidates.length;
+ 
+ 
+  const tableSummary =
+    document.getElementById(
+      'candidateTableSummary'
+    );
+ 
+ 
+  if (tableSummary) {
+ 
+    tableSummary.textContent =
+      candidateCount +
+      (
+        candidateCount === 1
+          ? ' candidate'
+          : ' candidates'
+      );
+ 
+  }
+ 
+}
+ 
+ 
+  function setCandidateKpi_(
+    elementId,
+    value
+  ) {
+ 
+    const element =
+      document.getElementById(
+        elementId
+      );
+ 
+    if (!element) {
+      return;
+    }
+ 
+    element.textContent =
+      value === undefined ||
+      value === null ||
+      value === ''
+        ? '0'
+        : value;
+ 
+  }
+function renderCandidateDatabaseInsights(
+  data
+) {
+ 
+  const candidates =
+    data &&
+    Array.isArray(data.candidates)
+      ? data.candidates
+      : [];
+ 
+  renderCandidateStatusInsight_(
+    candidates
+  );
+ 
+  renderCandidateSkillsInsight_(
+    candidates
+  );
+ 
+  renderCandidateLocationsInsight_(
+    candidates
+  );
+ 
+}
+ 
+ 
+function renderCandidateStatusInsight_(
+  candidates
+) {
+ 
+  const container =
+    document.getElementById(
+      'candidateStatusInsight'
+    );
+ 
+  if (!container) {
+    return;
+  }
+ 
+ 
+  const counts = {};
+ 
+  candidates.forEach(
+    function(candidate) {
+ 
+      const status =
+        String(
+          candidate.talentPoolStatus ||
+          'Unspecified'
+        ).trim();
+ 
+      counts[status] =
+        (counts[status] || 0) + 1;
+ 
+    }
+  );
+ 
+ 
+  const entries =
+    Object.keys(counts)
+      .map(
+        function(status) {
+          return {
+            label: status,
+            count: counts[status]
+          };
+        }
+      )
+      .sort(
+        function(a, b) {
+          return b.count - a.count;
+        }
+      );
+ 
+ 
+  if (!entries.length) {
+ 
+    container.innerHTML =
+      '<div class="candidate-db-placeholder">' +
+        'No talent pool status data available.' +
+      '</div>';
+ 
+    return;
+ 
+  }
+ 
+ 
+  const total =
+    candidates.length || 0;
+ 
+ 
+  /*
+   * Build conic-gradient segments.
+   * Uses the Osynix palette while keeping
+   * the dashboard visually restrained.
+   */
+ 
+  const colors = [
+    '#175AFF',
+    '#1C1E66',
+    '#31B67A',
+    '#8B6CE8',
+    '#E9A23B',
+    '#E45D5D'
+  ];
+ 
+  let start = 0;
+ 
+  const segments =
+    entries.map(
+      function(item, index) {
+ 
+        const size =
+          total
+            ? (item.count / total) * 100
+            : 0;
+ 
+        const end =
+          start + size;
+ 
+        const segment =
+          colors[
+            index % colors.length
+          ] +
+          ' ' +
+          start +
+          '% ' +
+          end +
+          '%';
+ 
+        start = end;
+ 
+        return segment;
+ 
+      }
+    );
+ 
+ 
+  const legend =
+    entries.map(
+      function(item, index) {
+ 
+        const percentage =
+          total
+            ? Math.round(
+                (item.count / total) * 100
+              )
+            : 0;
+ 
+        return (
+          '<div class="candidate-status-legend-row">' +
+ 
+            '<div class="candidate-status-legend-name">' +
+ 
+              '<span ' +
+                'class="candidate-status-dot" ' +
+                'style="background:' +
+                  colors[
+                    index % colors.length
+                  ] +
+                '">' +
+              '</span>' +
+ 
+              '<span>' +
+                escapeCandidateDatabaseHtml_(
+                  item.label
+                ) +
+              '</span>' +
+ 
+            '</div>' +
+ 
+            '<div class="candidate-status-legend-value">' +
+ 
+              '<strong>' +
+                item.count +
+              '</strong>' +
+ 
+              '<small>' +
+                percentage +
+                '%' +
+              '</small>' +
+ 
+            '</div>' +
+ 
+          '</div>'
+        );
+ 
+      }
+    )
+    .join('');
+ 
+ 
+  container.innerHTML =
+ 
+    '<div class="candidate-status-layout">' +
+ 
+      '<div class="candidate-status-donut-wrap">' +
+ 
+        '<div ' +
+          'class="candidate-status-donut" ' +
+          'style="background:conic-gradient(' +
+            segments.join(',') +
+          ')">' +
+ 
+          '<div class="candidate-status-donut-center">' +
+ 
+            '<strong>' +
+              total +
+            '</strong>' +
+ 
+            '<span>Total Talent</span>' +
+ 
+          '</div>' +
+ 
+        '</div>' +
+ 
+      '</div>' +
+ 
+      '<div class="candidate-status-legend">' +
+        legend +
+      '</div>' +
+ 
+    '</div>';
+ 
+}
+function normalizeCandidateSeniority_(
+  rawValue
+) {
+ 
+  const value =
+    String(rawValue || '')
+      .trim()
+      .toLowerCase();
+ 
+ 
+  if (!value) {
+    return 'Others';
+  }
+ 
+ 
+  /*
+   * Most specific / senior categories first.
+   * This prevents terms such as
+   * "Senior Manager" being caught as "Manager".
+   */
+ 
+  if (
+    /\b(founder|co-founder|cofounder|owner|proprietor|entrepreneur)\b/i
+      .test(value)
+  ) {
+    return 'Founder / Owner';
+  }
+ 
+ 
+  if (
+    /\b(chief|ceo|coo|cfo|cto|chro|cmo|general manager|gm|managing director|managing partner|executive director)\b/i
+      .test(value)
+  ) {
+    return 'Executive / GM';
+  }
+ 
+ 
+  if (
+    /\b(head|director|vice president|vp|country manager|country head|department head|functional head)\b/i
+      .test(value)
+  ) {
+    return 'Head / Director';
+  }
+ 
+ 
+  if (
+    /\b(senior manager|sr\.?\s*manager|regional manager|area manager|national manager)\b/i
+      .test(value)
+  ) {
+    return 'Senior Manager';
+  }
+ 
+ 
+  if (
+    /\b(manager|assistant manager|deputy manager|branch manager|operations manager|project manager|program manager)\b/i
+      .test(value)
+  ) {
+    return 'Manager';
+  }
+ 
+ 
+  if (
+    /\b(team lead|team leader|supervisor|shift lead|shift supervisor|floor supervisor|foreman)\b/i
+      .test(value)
+  ) {
+    return 'Team Lead / Supervisor';
+  }
+ 
+ 
+  if (
+    /\b(senior|sr\.|specialist|consultant|advisor|analyst|engineer|accountant|executive|officer)\b/i
+      .test(value)
+  ) {
+    return 'Senior Professional';
+  }
+ 
+ 
+  if (
+    /\b(associate|coordinator|assistant|representative|agent|developer|designer|writer|recruiter|administrator|admin|technician)\b/i
+      .test(value)
+  ) {
+    return 'Individual Contributor';
+  }
+ 
+ 
+  if (
+    /\b(commander|commanding officer|colonel|major|captain|lieutenant|brigadier|military officer)\b/i
+      .test(value)
+  ) {
+    return 'Officer / Command';
+  }
+ 
+ 
+  return 'Others';
+ 
+}
+ 
+ 
+function normalizeCandidateCity_(
+  rawValue
+) {
+ 
+  const value =
+    String(rawValue || '')
+      .trim()
+      .toLowerCase();
+ 
+ 
+  if (!value) {
+    return 'Others';
+  }
+ 
+ 
+  /*
+   * City matching intentionally searches
+   * the complete location string.
+   *
+   * Examples:
+   * Bahria Town, Lahore -> Lahore
+   * DHA Lahore          -> Lahore
+   * Gulberg, Lahore     -> Lahore
+   */
+ 
+ 
+  const cityRules = [
+ 
+    {
+      city: 'Lahore',
+      pattern:
+        /\b(lahore|dha lahore|gulberg|johar town|model town|bahria town lahore|bahria orchard)\b/i
+    },
+ 
+    {
+      city: 'Karachi',
+      pattern:
+        /\b(karachi|dha karachi|clifton|korangi|malir|gulshan-e-iqbal|gulistan-e-johar|shahrah-e-faisal)\b/i
+    },
+ 
+    {
+      city: 'Islamabad',
+      pattern:
+        /\b(islamabad|blue area|f-\d+|g-\d+|i-\d+|e-\d+)\b/i
+    },
+ 
+    {
+      city: 'Rawalpindi',
+      pattern:
+        /\b(rawalpindi|saddar rawalpindi|chaklala)\b/i
+    },
+ 
+    {
+      city: 'Faisalabad',
+      pattern:
+        /\b(faisalabad)\b/i
+    },
+ 
+    {
+      city: 'Multan',
+      pattern:
+        /\b(multan)\b/i
+    },
+ 
+    {
+      city: 'Gujranwala',
+      pattern:
+        /\b(gujranwala)\b/i
+    },
+ 
+    {
+      city: 'Sialkot',
+      pattern:
+        /\b(sialkot)\b/i
+    },
+ 
+    {
+      city: 'Bahawalpur',
+      pattern:
+        /\b(bahawalpur)\b/i
+    },
+ 
+    {
+      city: 'Bahawalnagar',
+      pattern:
+        /\b(bahawalnagar)\b/i
+    },
+ 
+    {
+      city: 'Peshawar',
+      pattern:
+        /\b(peshawar)\b/i
+    },
+ 
+    {
+      city: 'Quetta',
+      pattern:
+        /\b(quetta)\b/i
+    },
+ 
+    {
+      city: 'Hyderabad',
+      pattern:
+        /\b(hyderabad)\b/i
+    }
+ 
+  ];
+ 
+ 
+  for (
+    let i = 0;
+    i < cityRules.length;
+    i++
+  ) {
+ 
+    if (
+      cityRules[i].pattern.test(
+        value
+      )
+    ) {
+      return cityRules[i].city;
+    }
+ 
+  }
+ 
+ 
+  return 'Others';
+ 
+}
+ 
+function renderCandidateSkillsInsight_(
+  candidates
+) {
+ 
+  const container =
+    document.getElementById(
+      'candidateSkillsInsight'
+    );
+ 
+  if (!container) {
+    return;
+  }
+ 
+ 
+  /*
+   * Keep the ATS seniority taxonomy in its
+   * intended progression rather than sorting
+   * categories alphabetically.
+   */
+ 
+  const seniorityOrder = [
+    'Individual Contributor',
+    'Senior Professional',
+    'Team Lead / Supervisor',
+    'Manager',
+    'Senior Manager',
+    'Head / Director',
+    'Executive / GM',
+    'Founder / Owner',
+    'Officer / Command'
+  ];
+ 
+ 
+  const counts = {};
+ 
+  seniorityOrder.forEach(
+    function(level) {
+      counts[level] = 0;
+    }
+  );
+ 
+ 
+  let unspecified = 0;
+ 
+ 
+  candidates.forEach(
+    function(candidate) {
+ 
+      const seniority =
+  normalizeCandidateSeniority_(
+    candidate.seniorityLevel
+  );
+ 
+ 
+      const matchedLevel =
+        seniorityOrder.find(
+          function(level) {
+ 
+            return (
+              level.toLowerCase() ===
+              seniority.toLowerCase()
+            );
+ 
+          }
+        );
+ 
+ 
+      if (matchedLevel) {
+ 
+        counts[matchedLevel]++;
+ 
+      } else {
+ 
+        /*
+         * Preserve unexpected historical values
+         * instead of silently discarding them.
+         */
+ 
+        if (
+          counts[seniority] === undefined
+        ) {
+          counts[seniority] = 0;
+        }
+ 
+        counts[seniority]++;
+ 
+      }
+ 
+    }
+  );
+ 
+ 
+  const entries = [];
+ 
+ 
+  seniorityOrder.forEach(
+    function(level) {
+ 
+      if (counts[level] > 0) {
+ 
+        entries.push({
+          label: level,
+          count: counts[level]
+        });
+ 
+      }
+ 
+    }
+  );
+ 
+ 
+  /*
+   * Include any historical/non-standard values
+   * after the controlled taxonomy.
+   */
+ 
+  Object.keys(counts)
+    .filter(
+      function(level) {
+ 
+        return (
+          seniorityOrder.indexOf(level) === -1 &&
+          counts[level] > 0
+        );
+ 
+      }
+    )
+    .forEach(
+      function(level) {
+ 
+        entries.push({
+          label: level,
+          count: counts[level]
+        });
+ 
+      }
+    );
+ 
+ 
+ 
+  if (!entries.length) {
+ 
+    container.innerHTML =
+      '<div class="candidate-db-placeholder">' +
+        'No seniority data available.' +
+      '</div>';
+ 
+    return;
+ 
+  }
+ 
+ 
+  const total =
+    candidates.length || 1;
+ 
+ 
+  const maxCount =
+  Math.max.apply(
+    null,
+    entries.map(
+      function(item) {
+        return item.count;
+      }
+    )
+  ) || 1;
+ 
+ 
+container.innerHTML =
+  '<div class="candidate-vertical-chart">' +
+ 
+    entries.map(
+      function(item) {
+ 
+        const height =
+          Math.max(
+            8,
+            Math.round(
+              (
+                item.count /
+                maxCount
+              ) * 100
+            )
+          );
+ 
+ 
+        return (
+          '<div class="candidate-vertical-item">' +
+ 
+            '<div class="candidate-vertical-value">' +
+              item.count +
+            '</div>' +
+ 
+            '<div class="candidate-vertical-track">' +
+ 
+              '<div ' +
+                'class="candidate-vertical-bar" ' +
+'style="height:' +
+  height +
+'%;background:' +
+  getCandidateSeniorityColor_(
+    item.label
+  ) +
+'">' +
+              '</div>' +
+ 
+            '</div>' +
+ 
+            '<div ' +
+              'class="candidate-vertical-label" ' +
+              'title="' +
+                escapeCandidateDatabaseHtml_(
+                  item.label
+                ) +
+              '">' +
+ 
+              escapeCandidateDatabaseHtml_(
+                item.label
+              ) +
+ 
+            '</div>' +
+ 
+          '</div>'
+        );
+ 
+      }
+    ).join('') +
+ 
+  '</div>';
+ 
+}
+function getCandidateSeniorityColor_(
+  level
+) {
+ 
+  const colors = {
+ 
+    'Individual Contributor':
+      '#5B8CFF',
+ 
+    'Senior Professional':
+      '#175AFF',
+ 
+    'Team Lead / Supervisor':
+      '#6366F1',
+ 
+    'Manager':
+      '#1C1E66',
+ 
+    'Senior Manager':
+      '#7C5CE7',
+ 
+    'Head / Director':
+      '#9B51E0',
+ 
+    'Executive / GM':
+      '#B45CE0',
+ 
+    'Founder / Owner':
+      '#31A77C',
+ 
+    'Officer / Command':
+      '#64748B',
+ 
+    'Others':
+      '#94A3B8'
+ 
+  };
+ 
+ 
+  return (
+    colors[level] ||
+    colors['Others']
+  );
+ 
+}
+ 
+function renderCandidateLocationsInsight_(
+  candidates
+) {
+ 
+  const container =
+    document.getElementById(
+      'candidateLocationsInsight'
+    );
+ 
+  if (!container) {
+    return;
+  }
+ 
+ 
+  const counts = {};
+ 
+ 
+  candidates.forEach(
+    function(candidate) {
+ 
+      const location =
+  normalizeCandidateCity_(
+    candidate.location
+  );
+ 
+ 
+      const key =
+        location.toLowerCase();
+ 
+ 
+      if (!counts[key]) {
+ 
+        counts[key] = {
+          label: location,
+          count: 0
+        };
+ 
+      }
+ 
+ 
+      counts[key].count++;
+ 
+    }
+  );
+ 
+ 
+  const topLocations =
+    Object.keys(counts)
+      .map(
+        function(key) {
+          return counts[key];
+        }
+      )
+      .sort(
+        function(a, b) {
+ 
+          if (b.count !== a.count) {
+            return b.count - a.count;
+          }
+ 
+          return a.label.localeCompare(
+            b.label
+          );
+ 
+        }
+      )
+      .slice(0, 6);
+ 
+ 
+  if (!topLocations.length) {
+ 
+    container.innerHTML =
+      '<div class="candidate-db-placeholder">' +
+        'No location data available.' +
+      '</div>';
+ 
+    return;
+ 
+  }
+ 
+ 
+  const highestCount =
+    topLocations[0].count || 1;
+ 
+ 
+  const maxCount =
+  Math.max.apply(
+    null,
+    topLocations.map(
+      function(item) {
+        return item.count;
+      }
+    )
+  ) || 1;
+ 
+ 
+container.innerHTML =
+  '<div class="candidate-vertical-chart">' +
+ 
+    topLocations.map(
+      function(item) {
+ 
+        const height =
+          Math.max(
+            8,
+            Math.round(
+              (
+                item.count /
+                maxCount
+              ) * 100
+            )
+          );
+ 
+ 
+        return (
+          '<div class="candidate-vertical-item">' +
+ 
+            '<div class="candidate-vertical-value">' +
+              item.count +
+            '</div>' +
+ 
+            '<div class="candidate-vertical-track">' +
+ 
+              '<div ' +
+                'class="candidate-vertical-bar" ' +
+'style="height:' +
+  height +
+'%;background:' +
+  getCandidateLocationColor_(
+    item.label
+  ) +
+'">' +
+              '</div>' +
+ 
+            '</div>' +
+ 
+            '<div ' +
+              'class="candidate-vertical-label" ' +
+              'title="' +
+                escapeCandidateDatabaseHtml_(
+                  item.label
+                ) +
+              '">' +
+ 
+              escapeCandidateDatabaseHtml_(
+                item.label
+              ) +
+ 
+            '</div>' +
+ 
+          '</div>'
+        );
+ 
+      }
+    ).join('') +
+ 
+  '</div>';
+ 
+}
+function getCandidateLocationColor_(
+  location
+) {
+ 
+  if (
+    String(location).toLowerCase() ===
+    'others'
+  ) {
+    return '#94A3B8';
+  }
+ 
+ 
+  const palette = [
+    '#175AFF',
+    '#3B6EFF',
+    '#5865E8',
+    '#1C1E66',
+    '#7357D9',
+    '#4E83E6'
+  ];
+ 
+ 
+  let hash = 0;
+ 
+  const value =
+    String(location || '');
+ 
+ 
+  for (
+    let i = 0;
+    i < value.length;
+    i++
+  ) {
+ 
+    hash =
+      value.charCodeAt(i) +
+      (
+        (hash << 5) -
+        hash
+      );
+ 
+  }
+ 
+ 
+  return palette[
+    Math.abs(hash) %
+    palette.length
+  ];
+ 
+}
+ 
+function escapeCandidateDatabaseHtml_(
+  value
+) {
+ 
+  return String(
+    value === undefined ||
+    value === null
+      ? ''
+      : value
+  )
+    .replace(
+      /&/g,
+      '&amp;'
+    )
+    .replace(
+      /</g,
+      '&lt;'
+    )
+    .replace(
+      />/g,
+      '&gt;'
+    )
+    .replace(
+      /"/g,
+      '&quot;'
+    )
+    .replace(
+      /'/g,
+      '&#039;'
+    );
+ 
+}
+ 
+  function refreshCandidateDatabase() {
+ 
+    loadCandidateDatabase();
+ 
+  }
+/* =========================================================
+   REACTIVE CANDIDATE KPI VIEW
+   ========================================================= */
+ 
+let candidateReactiveType = '';
+let candidateReactiveCandidates = [];
+let candidateReactiveFilteredCandidates = [];
+ 
+let candidateReactivePositionFilter = '';
+let candidateReactiveDecisionFilter = '';
+let candidateReactiveStageFilter = '';
+ 
+let candidateReactiveCurrentPage = 1;
+const candidateReactivePageSize = 25;
+/* =========================================================
+   CENTRAL CANDIDATE LIFECYCLE RESOLVER
+   ========================================================= */
+ 
+function getCandidateLifecycleState_(
+  candidate
+) {
+ 
+  const assessment =
+    candidate &&
+    candidate.latestAssessment
+      ? candidate.latestAssessment
+      : {};
+ 
+ 
+  const stage =
+    String(
+      assessment.recruitmentStage || ''
+    )
+      .trim()
+      .toLowerCase();
+ 
+ 
+  const interviewStatus =
+    String(
+      assessment.interviewStatus || ''
+    )
+      .trim()
+      .toLowerCase();
+ 
+ 
+  const clientStatus =
+    String(
+      assessment.clientStatus || ''
+    )
+      .trim()
+      .toLowerCase();
+ 
+ 
+  const talentPoolStatus =
+    String(
+      candidate &&
+      candidate.talentPoolStatus
+        ? candidate.talentPoolStatus
+        : ''
+    )
+      .trim()
+      .toLowerCase();
+ 
+ 
+  /*
+   * 1. HIRED / PLACED
+   * Highest-priority successful final outcome.
+   */
+ 
+  if (
+    clientStatus === 'hired' ||
+    stage === 'hired' ||
+    talentPoolStatus === 'placed'
+  ) {
+    return 'hired';
+  }
+ 
+ 
+  /*
+   * 2. REJECTED
+   * Final negative outcome overrides all earlier stages.
+   */
+ 
+  if (
+    clientStatus === 'client rejected' ||
+    stage === 'rejected'
+  ) {
+    return 'rejected';
+  }
+ 
+ 
+  /*
+   * 3. PENDING DECISION
+   *
+   * Offer is intentionally treated as pending.
+   * Completed interviews also move into Pending Decision.
+   */
+ 
+  if (
+    clientStatus === 'offer' ||
+    stage === 'offer sent' ||
+    interviewStatus === 'completed' ||
+    clientStatus === 'submitted' ||
+    clientStatus === 'under review' ||
+    clientStatus === 'client shortlisted'
+  ) {
+    return 'pending';
+  }
+ 
+ 
+  /*
+   * 4. IN INTERVIEW
+   *
+   * Candidate is actively progressing through an
+   * interview stage and no downstream outcome has
+   * already overridden it.
+   */
+ 
+  if (
+    stage === 'technical interview' ||
+    stage === 'final interview' ||
+    stage === 'client interview' ||
+    clientStatus === 'client interview'
+  ) {
+    return 'interview';
+  }
+ 
+ 
+  /*
+   * 5. ON HOLD
+   */
+ 
+  if (
+    stage === 'hold'
+  ) {
+    return 'hold';
+  }
+ 
+ 
+  /*
+   * 6. SHORTLISTED
+   */
+ 
+  if (
+    stage === 'shortlisted'
+  ) {
+    return 'shortlisted';
+  }
+ 
+ 
+  /*
+   * Candidate does not currently belong to one of
+   * the operational Candidate Database KPI queues.
+   */
+ 
+  return '';
+}
+ 
+function openCandidateReactiveView(type) {
+ 
+  if (
+    !candidateDatabaseData ||
+    !Array.isArray(candidateDatabaseData.candidates)
+  ) {
+    return;
+  }
+ 
+ 
+  candidateReactiveType = type;
+ 
+ 
+  const candidates =
+    candidateDatabaseData.candidates;
+ 
+ 
+  candidateReactiveCandidates =
+  candidates.filter(
+    function(candidate) {
+ 
+      const lifecycleState =
+        getCandidateLifecycleState_(
+          candidate
+        );
+ 
+ 
+      return (
+        lifecycleState === type
+      );
+ 
+    }
+  );
+ 
+candidateReactivePositionFilter = '';
+candidateReactiveDecisionFilter = '';
+candidateReactiveStageFilter = '';
+updateCandidateReactiveFilterLabels_();
+ 
+candidateReactiveFilteredCandidates =
+  candidateReactiveCandidates.slice();
+ 
+candidateReactiveCurrentPage = 1;
+updateCandidateReactiveHeading_(type);
+ 
+ 
+  const search =
+    document.getElementById(
+      'candidateReactiveSearch'
+    );
+ 
+  if (search) {
+    search.value = '';
+  }
+ 
+ 
+  renderCandidateReactivePage_();
+ 
+ 
+  const section =
+    document.getElementById(
+      'candidateReactiveSection'
+    );
+ 
+ if (section) {
+ 
+  section.style.display = 'block';
+ 
+}
+ 
+}
+ 
+ 
+function updateCandidateReactiveHeading_(type) {
+ 
+  const title =
+    document.getElementById(
+      'candidateReactiveTitle'
+    );
+ 
+  const subtitle =
+    document.getElementById(
+      'candidateReactiveSubtitle'
+    );
+ 
+ 
+  const headings = {
+ 
+    shortlisted: {
+      title: 'Shortlisted Candidates',
+      subtitle:
+        'Candidates currently shortlisted for active or historical positions.'
+    },
+ 
+    hold: {
+      title: 'Candidates On Hold',
+      subtitle:
+        'Candidates currently placed on hold.'
+    },
+ 
+    rejected: {
+      title: 'Rejected Candidates',
+      subtitle:
+        'Candidates currently marked as rejected.'
+    },
+ 
+    interview: {
+      title: 'Candidates In Interview',
+      subtitle:
+        'Candidates currently progressing through interview stages.'
+    },
+ 
+   pending: {
+  title: 'Pending Decision',
+  subtitle:
+    'Candidates awaiting a recruitment or client outcome.'
+},
+ 
+    hired: {
+      title: 'Hired / Placed Candidates',
+      subtitle:
+        'Candidates recorded as hired or placed.'
+    }
+ 
+  };
+ 
+ 
+  const selected =
+    headings[type] || {
+      title: 'Candidates',
+      subtitle:
+        'Candidates matching the selected dashboard KPI.'
+    };
+ 
+ 
+  if (title) {
+    title.textContent = selected.title;
+  }
+ 
+  if (subtitle) {
+    subtitle.textContent = selected.subtitle;
+  }
+ 
+}
+ 
+ 
+function renderCandidateReactiveTable_(
+  candidates
+) {
+ 
+  const body =
+    document.getElementById(
+      'candidateReactiveBody'
+    );
+ 
+  const count =
+    document.getElementById(
+      'candidateReactiveCount'
+    );
+ 
+ 
+  if (!body) {
+    return;
+  }
+ 
+ 
+  const rows =
+    Array.isArray(candidates)
+      ? candidates
+      : [];
+ 
+ 
+  if (count) {
+ 
+    count.textContent =
+      rows.length +
+      (
+        rows.length === 1
+          ? ' candidate'
+          : ' candidates'
+      );
+ 
+  }
+ 
+ 
+  if (!rows.length) {
+ 
+    body.innerHTML =
+      '<tr>' +
+        '<td colspan="8" ' +
+        'class="candidate-db-loading-cell">' +
+          'No candidates found for this KPI.' +
+        '</td>' +
+      '</tr>';
+ 
+    return;
+ 
+  }
+ 
+ 
+  body.innerHTML =
+    rows.map(
+      function(candidate) {
+ 
+        const assessment =
+          candidate.latestAssessment || {};
+ 
+ 
+        const candidateName =
+          candidate.candidateName ||
+          'Unnamed Candidate';
+ 
+ 
+        const refNumber =
+  assessment.refNo ||
+  assessment.refNumber ||
+  assessment.ref ||
+  '—';
+ 
+ 
+const position =
+  assessment.position ||
+  refNumber;
+ 
+ 
+const atsMatch =
+  assessment.atsMatch === undefined ||
+  assessment.atsMatch === null ||
+  assessment.atsMatch === ''
+    ? '—'
+    : String(
+        assessment.atsMatch
+      ).replace('%', '') + '%';
+ 
+ 
+const decision =
+  assessment.decision ||
+  '—';
+ 
+ 
+const stage =
+  assessment.recruitmentStage ||
+  '—';
+ 
+ 
+const interviewStatus =
+  assessment.interviewStatus ||
+  '—';
+ 
+ 
+const clientStatus =
+  assessment.clientStatus ||
+  '—';
+ 
+ 
+        return (
+  '<tr>' +
+ 
+    '<td>' +
+      '<strong>' +
+        escapeCandidateDatabaseHtml_(
+          candidateName
+        ) +
+      '</strong>' +
+    '</td>' +
+ 
+    '<td>' +
+      escapeCandidateDatabaseHtml_(
+        position
+      ) +
+    '</td>' +
+ 
+    '<td>' +
+      escapeCandidateDatabaseHtml_(
+        atsMatch
+      ) +
+    '</td>' +
+ 
+    '<td>' +
+      escapeCandidateDatabaseHtml_(
+        decision
+      ) +
+    '</td>' +
+ 
+    '<td>' +
+      escapeCandidateDatabaseHtml_(
+        stage
+      ) +
+    '</td>' +
+ 
+    '<td>' +
+      escapeCandidateDatabaseHtml_(
+        interviewStatus
+      ) +
+    '</td>' +
+ 
+    '<td>' +
+      escapeCandidateDatabaseHtml_(
+        clientStatus
+      ) +
+    '</td>' +
+ 
+    '<td>' +
+  '<button ' +
+    'type="button" ' +
+    'class="candidate-db-secondary-btn" ' +
+    'onclick="viewCandidateReactiveProfile_(\'' +
+      escapeCandidateDatabaseJs_(
+        candidate.candidateId || ''
+      ) +
+    '\', \'' +
+      escapeCandidateDatabaseJs_(
+        refNumber === '—'
+          ? ''
+          : refNumber
+      ) +
+    '\')">' +
+    'View' +
+  '</button>' +
+'</td>' +
+ 
+  '</tr>'
+);
+ 
+      }
+    )
+    .join('');
+ 
+}
+function renderCandidateReactivePage_() {
+ 
+  const totalRecords =
+    candidateReactiveFilteredCandidates.length;
+ 
+  const totalPages =
+    Math.max(
+      1,
+      Math.ceil(
+        totalRecords /
+        candidateReactivePageSize
+      )
+    );
+ 
+ 
+  if (
+    candidateReactiveCurrentPage >
+    totalPages
+  ) {
+    candidateReactiveCurrentPage =
+      totalPages;
+  }
+ 
+ 
+  const startIndex =
+    (
+      candidateReactiveCurrentPage - 1
+    ) *
+    candidateReactivePageSize;
+ 
+ 
+  const endIndex =
+    startIndex +
+    candidateReactivePageSize;
+ 
+ 
+  const pageRecords =
+    candidateReactiveFilteredCandidates.slice(
+      startIndex,
+      endIndex
+    );
+ 
+ 
+  renderCandidateReactiveTable_(
+    pageRecords
+  );
+ 
+ 
+  renderCandidateReactivePagination_(
+    totalRecords,
+    totalPages,
+    startIndex,
+    pageRecords.length
+  );
+ 
+}
+ 
+ 
+function renderCandidateReactivePagination_(
+  totalRecords,
+  totalPages,
+  startIndex,
+  visibleCount
+) {
+ 
+  const container =
+    document.getElementById(
+      'candidateReactivePagination'
+    );
+ 
+ 
+  const count =
+    document.getElementById(
+      'candidateReactiveCount'
+    );
+ 
+ 
+  if (count) {
+ 
+    if (!totalRecords) {
+ 
+      count.textContent =
+        '0 candidates';
+ 
+    } else {
+ 
+      const firstRecord =
+        startIndex + 1;
+ 
+      const lastRecord =
+        startIndex + visibleCount;
+ 
+      count.textContent =
+        'Showing ' +
+        firstRecord +
+        '–' +
+        lastRecord +
+        ' of ' +
+        totalRecords +
+        (
+          totalRecords === 1
+            ? ' candidate'
+            : ' candidates'
+        );
+ 
+    }
+ 
+  }
+ 
+ 
+  if (!container) {
+    return;
+  }
+ 
+ 
+  if (
+    totalPages <= 1 ||
+    totalRecords === 0
+  ) {
+ 
+    container.innerHTML = '';
+    return;
+ 
+  }
+ 
+ 
+  let html = '';
+ 
+ 
+  html +=
+    '<button ' +
+      'type="button" ' +
+      'class="candidate-reactive-page-btn" ' +
+      (
+        candidateReactiveCurrentPage === 1
+          ? 'disabled '
+          : ''
+      ) +
+      'onclick="changeCandidateReactivePage_(' +
+        (
+          candidateReactiveCurrentPage - 1
+        ) +
+      ')">' +
+      'Previous' +
+    '</button>';
+ 
+ 
+  for (
+    let page = 1;
+    page <= totalPages;
+    page++
+  ) {
+ 
+    html +=
+      '<button ' +
+        'type="button" ' +
+        'class="candidate-reactive-page-btn' +
+        (
+          page ===
+          candidateReactiveCurrentPage
+            ? ' active'
+            : ''
+        ) +
+        '" ' +
+        'onclick="changeCandidateReactivePage_(' +
+          page +
+        ')">' +
+        page +
+      '</button>';
+ 
+  }
+ 
+ 
+  html +=
+    '<button ' +
+      'type="button" ' +
+      'class="candidate-reactive-page-btn" ' +
+      (
+        candidateReactiveCurrentPage ===
+        totalPages
+          ? 'disabled '
+          : ''
+      ) +
+      'onclick="changeCandidateReactivePage_(' +
+        (
+          candidateReactiveCurrentPage + 1
+        ) +
+      ')">' +
+      'Next' +
+    '</button>';
+ 
+ 
+  container.innerHTML = html;
+ 
+}
+ 
+ 
+function changeCandidateReactivePage_(
+  page
+) {
+ 
+  const totalPages =
+    Math.max(
+      1,
+      Math.ceil(
+        candidateReactiveFilteredCandidates.length /
+        candidateReactivePageSize
+      )
+    );
+ 
+ 
+  if (
+    page < 1 ||
+    page > totalPages
+  ) {
+    return;
+  }
+ 
+ 
+  candidateReactiveCurrentPage =
+    page;
+ 
+ 
+  renderCandidateReactivePage_();
+ 
+}
+ 
+function closeCandidateReactiveView() {
+ 
+  const section =
+    document.getElementById(
+      'candidateReactiveSection'
+    );
+ 
+  if (section) {
+    section.style.display = 'none';
+  }
+ 
+ 
+  candidateReactiveType = '';
+candidateReactiveCandidates = [];
+candidateReactiveFilteredCandidates = [];
+candidateReactiveCurrentPage = 1;
+ 
+const pagination =
+  document.getElementById(
+    'candidateReactivePagination'
+  );
+ 
+if (pagination) {
+  pagination.innerHTML = '';
+}
+ 
+}
+const stickyHeader =
+  document.getElementById(
+    'candidateReactiveStickyHeader'
+  );
+ 
+if (stickyHeader) {
+ 
+  stickyHeader.classList.remove(
+    'is-visible'
+  );
+ 
+}
+ 
+function filterCandidateReactiveView_() {
+ 
+  const search =
+    document.getElementById(
+      'candidateReactiveSearch'
+    );
+ 
+ 
+  const query =
+    search
+      ? String(search.value || '')
+          .trim()
+          .toLowerCase()
+      : '';
+ 
+ 
+  const filtered =
+    candidateReactiveCandidates.filter(
+      function(candidate) {
+ 
+        const assessment =
+          candidate.latestAssessment || {};
+ 
+ 
+        const position =
+          String(
+            assessment.position || ''
+          )
+            .trim()
+            .toLowerCase();
+ 
+ 
+        const decision =
+          String(
+            assessment.decision || ''
+          )
+            .trim()
+            .toLowerCase();
+ 
+ 
+        const stage =
+          String(
+            assessment.recruitmentStage || ''
+          )
+            .trim()
+            .toLowerCase();
+ 
+ 
+        /*
+         * POSITION FILTER
+         */
+ 
+        if (
+          candidateReactivePositionFilter &&
+          position !==
+            candidateReactivePositionFilter
+              .toLowerCase()
+        ) {
+          return false;
+        }
+ 
+ 
+        /*
+         * AI DECISION FILTER
+         */
+ 
+        if (
+          candidateReactiveDecisionFilter &&
+          decision !==
+            candidateReactiveDecisionFilter
+              .toLowerCase()
+        ) {
+          return false;
+        }
+ 
+ 
+        /*
+         * RECRUITMENT STAGE FILTER
+         */
+ 
+        if (
+          candidateReactiveStageFilter &&
+          stage !==
+            candidateReactiveStageFilter
+              .toLowerCase()
+        ) {
+          return false;
+        }
+ 
+ 
+        /*
+         * FREE-TEXT SEARCH
+         */
+ 
+        if (query) {
+ 
+          const searchable =
+            [
+              candidate.candidateName,
+              candidate.currentDesignation,
+              candidate.currentCompany,
+              candidate.location,
+              candidate.coreSkills,
+              assessment.refNo,
+              assessment.refNumber,
+              assessment.ref,
+              assessment.position,
+              assessment.client,
+              assessment.decision,
+              assessment.recruitmentStage
+            ]
+              .join(' ')
+              .toLowerCase();
+ 
+ 
+          if (
+            searchable.indexOf(query) === -1
+          ) {
+            return false;
+          }
+ 
+        }
+ 
+ 
+        return true;
+ 
+      }
+    );
+ 
+ 
+  candidateReactiveFilteredCandidates =
+    filtered;
+ 
+ 
+  candidateReactiveCurrentPage = 1;
+ 
+ 
+  renderCandidateReactivePage_();
+ 
+}
+/* =========================================================
+   REACTIVE KPI HEADER FILTER MENUS
+   ========================================================= */
+ 
+function initialiseCandidateReactiveFilters_() {
+ 
+  const filterTriggers = [
+ 
+    {
+      id: 'candidateReactivePositionTrigger',
+      type: 'position'
+    },
+ 
+    {
+      id: 'candidateReactiveDecisionTrigger',
+      type: 'decision'
+    },
+ 
+    {
+      id: 'candidateReactiveStageTrigger',
+      type: 'stage'
+    },
+ 
+    {
+      id: 'candidateReactiveStickyPositionTrigger',
+      type: 'position'
+    },
+ 
+    {
+      id: 'candidateReactiveStickyDecisionTrigger',
+      type: 'decision'
+    },
+ 
+    {
+      id: 'candidateReactiveStickyStageTrigger',
+      type: 'stage'
+    }
+ 
+  ];
+ 
+ 
+  filterTriggers.forEach(
+    function(item) {
+ 
+      const trigger =
+        document.getElementById(
+          item.id
+        );
+ 
+ 
+      if (!trigger) {
+        return;
+      }
+ 
+ 
+      trigger.addEventListener(
+        'click',
+        function(event) {
+ 
+          event.preventDefault();
+          event.stopPropagation();
+ 
+          openCandidateReactiveFilterMenu_(
+            trigger,
+            item.type
+          );
+ 
+        }
+      );
+ 
+    }
+  );
+ 
+ 
+  document.addEventListener(
+    'click',
+    function(event) {
+ 
+      const menu =
+        document.getElementById(
+          'candidateReactiveFilterMenu'
+        );
+ 
+ 
+      if (
+        menu &&
+        !menu.contains(event.target)
+      ) {
+        menu.remove();
+      }
+ 
+    }
+  );
+ 
+}
+ 
+ 
+function openCandidateReactiveFilterMenu_(
+  trigger,
+  type
+) {
+ 
+  const existingMenu =
+    document.getElementById(
+      'candidateReactiveFilterMenu'
+    );
+ 
+ 
+  if (existingMenu) {
+    existingMenu.remove();
+  }
+ 
+ 
+  const values =
+    getCandidateReactiveFilterValues_(
+      type
+    );
+ 
+ 
+  const selectedValue =
+    getCandidateReactiveSelectedFilter_(
+      type
+    );
+ 
+ 
+  const menu =
+    document.createElement('div');
+ 
+ 
+  menu.id =
+    'candidateReactiveFilterMenu';
+ 
+ 
+  menu.className =
+    'candidate-reactive-filter-menu';
+ 
+ 
+  /*
+   * Add "All" option first.
+   */
+ 
+  const allOption =
+    document.createElement('button');
+ 
+ 
+  allOption.type = 'button';
+ 
+ 
+  allOption.className =
+    'candidate-reactive-filter-option' +
+    (
+      !selectedValue
+        ? ' active'
+        : ''
+    );
+ 
+ 
+  allOption.textContent = 'All';
+ 
+ 
+  allOption.addEventListener(
+    'click',
+    function(event) {
+ 
+      event.preventDefault();
+      event.stopPropagation();
+ 
+      setCandidateReactiveFilter_(
+        type,
+        ''
+      );
+ 
+      menu.remove();
+ 
+    }
+  );
+ 
+ 
+  menu.appendChild(
+    allOption
+  );
+ 
+ 
+  values.forEach(
+    function(value) {
+ 
+      const option =
+        document.createElement('button');
+ 
+ 
+      option.type = 'button';
+ 
+ 
+      option.className =
+        'candidate-reactive-filter-option' +
+        (
+          String(selectedValue) ===
+          String(value)
+            ? ' active'
+            : ''
+        );
+ 
+ 
+      option.textContent =
+        value;
+ 
+ 
+      option.addEventListener(
+        'click',
+        function(event) {
+ 
+          event.preventDefault();
+          event.stopPropagation();
+ 
+          setCandidateReactiveFilter_(
+            type,
+            value
+          );
+ 
+          menu.remove();
+ 
+        }
+      );
+ 
+ 
+      menu.appendChild(
+        option
+      );
+ 
+    }
+  );
+ 
+ 
+  /*
+   * Attach the menu to whichever header
+   * triggered it: normal or sticky.
+   */
+ 
+  const normalParent =
+    trigger.closest(
+      '.candidate-reactive-filter-th'
+    );
+ 
+ 
+  const stickyParent =
+    trigger.closest(
+      '.candidate-reactive-sticky-filter-cell'
+    );
+ 
+ 
+  const parent =
+    normalParent ||
+    stickyParent;
+ 
+ 
+  if (!parent) {
+    return;
+  }
+ 
+ 
+  parent.style.position =
+    'relative';
+ 
+ 
+  parent.appendChild(
+    menu
+  );
+ 
+}
+ 
+ 
+function getCandidateReactiveFilterValues_(
+  type
+) {
+ 
+  const values =
+    new Set();
+ 
+ 
+  candidateReactiveCandidates.forEach(
+    function(candidate) {
+ 
+      const assessment =
+        candidate.latestAssessment || {};
+ 
+ 
+      let value = '';
+ 
+ 
+      if (type === 'position') {
+ 
+        value =
+          String(
+            assessment.position || ''
+          ).trim();
+ 
+      }
+ 
+ 
+      if (type === 'decision') {
+ 
+        value =
+          String(
+            assessment.decision || ''
+          ).trim();
+ 
+      }
+ 
+ 
+      if (type === 'stage') {
+ 
+        value =
+          String(
+            assessment.recruitmentStage || ''
+          ).trim();
+ 
+      }
+ 
+ 
+      if (value) {
+        values.add(value);
+      }
+ 
+    }
+  );
+ 
+ 
+  return Array.from(values)
+    .sort(
+      function(a, b) {
+        return a.localeCompare(b);
+      }
+    );
+ 
+}
+ 
+ 
+function getCandidateReactiveSelectedFilter_(
+  type
+) {
+ 
+  if (type === 'position') {
+    return candidateReactivePositionFilter;
+  }
+ 
+ 
+  if (type === 'decision') {
+    return candidateReactiveDecisionFilter;
+  }
+ 
+ 
+  if (type === 'stage') {
+    return candidateReactiveStageFilter;
+  }
+ 
+ 
+  return '';
+ 
+}
+ 
+ 
+function setCandidateReactiveFilter_(
+  type,
+  value
+) {
+ 
+  if (type === 'position') {
+ 
+    candidateReactivePositionFilter =
+      value;
+ 
+  }
+ 
+ 
+  if (type === 'decision') {
+ 
+    candidateReactiveDecisionFilter =
+      value;
+ 
+  }
+ 
+ 
+  if (type === 'stage') {
+ 
+    candidateReactiveStageFilter =
+      value;
+ 
+  }
+ 
+ 
+  updateCandidateReactiveFilterLabels_();
+ 
+ 
+  filterCandidateReactiveView_();
+ 
+}
+ 
+ 
+function updateCandidateReactiveFilterLabels_() {
+ 
+  updateCandidateReactiveFilterLabel_(
+    [
+      'candidateReactivePositionTrigger',
+      'candidateReactiveStickyPositionTrigger'
+    ],
+    'Position',
+    candidateReactivePositionFilter
+  );
+ 
+ 
+  updateCandidateReactiveFilterLabel_(
+    [
+      'candidateReactiveDecisionTrigger',
+      'candidateReactiveStickyDecisionTrigger'
+    ],
+    'AI Decision',
+    candidateReactiveDecisionFilter
+  );
+ 
+ 
+  updateCandidateReactiveFilterLabel_(
+    [
+      'candidateReactiveStageTrigger',
+      'candidateReactiveStickyStageTrigger'
+    ],
+    'Recruitment Stage',
+    candidateReactiveStageFilter
+  );
+ 
+}
+ 
+ 
+function updateCandidateReactiveFilterLabel_(
+  ids,
+  label,
+  selectedValue
+) {
+ 
+  ids.forEach(
+    function(id) {
+ 
+      const trigger =
+        document.getElementById(id);
+ 
+ 
+      if (!trigger) {
+        return;
+      }
+ 
+ 
+      const labelElement =
+        trigger.querySelector('span');
+ 
+ 
+      if (labelElement) {
+ 
+        labelElement.textContent =
+          selectedValue
+            ? label + ' •'
+            : label;
+ 
+      }
+ 
+ 
+      trigger.classList.toggle(
+        'active',
+        Boolean(selectedValue)
+      );
+ 
+    }
+  );
+ 
+}
+ 
+function escapeCandidateDatabaseJs_(
+  value
+) {
+ 
+  return String(value || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'");
+ 
+}
+ 
+ 
+let currentCandidateProfileId_ = '';
+let currentCandidateProfileRef_ = '';
+let currentCandidateProfileData_ = null;
+ 
+function viewCandidateReactiveProfile_(candidateId, refNo) {
+  currentCandidateProfileId_ = String(candidateId || '');
+  currentCandidateProfileRef_ = String(refNo || '');
+ 
+  const drawer = document.getElementById('candidateProfileSection');
+  const overlay = document.getElementById('candidateProfileOverlay');
+  const loading = document.getElementById('candidateProfileLoading');
+  const content = document.getElementById('candidateProfileContent');
+ 
+  if (!drawer) return;
+ 
+  drawer.classList.add('is-open');
+  drawer.setAttribute('aria-hidden', 'false');
+ 
+  if (overlay) {
+    overlay.classList.add('is-open');
+    overlay.setAttribute('aria-hidden', 'false');
+  }
+ 
+  document.body.classList.add('candidate-profile-open');
+ 
+  if (loading) {
+    loading.style.display = 'flex';
+    loading.textContent = 'Loading candidate profile...';
+  }
+ 
+  if (content) content.style.display = 'none';
+ 
+  switchCandidateProfileTab_('overview');
+  loadCandidateProfile_(currentCandidateProfileId_, currentCandidateProfileRef_);
+}
+ 
+function loadCandidateProfile_(candidateId, refNo) {
+  const sessionToken = localStorage.getItem('OSYNIX_ATS_SESSION');
+ 
+  if (!sessionToken) {
+    showCandidateProfileError_('ATS session token was not found.');
+    return;
+  }
+ 
+  google.script.run
+    .withSuccessHandler(function(data) {
+      currentCandidateProfileData_ = data || null;
+      currentCandidateProfileId_ = candidateId || '';
+      currentCandidateProfileRef_ =
+        data && data.selectedAssessment && data.selectedAssessment.refNo
+          ? String(data.selectedAssessment.refNo)
+          : String(refNo || '');
+      renderCandidateProfile_(data);
+    })
+    .withFailureHandler(function(error) {
+      console.error('Candidate Profile load failed:', error);
+      showCandidateProfileError_(
+        error && error.message ? error.message : String(error)
+      );
+    })
+    .getCandidateProfile(sessionToken, candidateId, refNo || '');
+}
+ 
+function renderCandidateProfile_(data) {
+  const loading = document.getElementById('candidateProfileLoading');
+  const content = document.getElementById('candidateProfileContent');
+  const profile = data && data.profile ? data.profile : {};
+  const assessment = data && data.selectedAssessment ? data.selectedAssessment : {};
+  const history = data && Array.isArray(data.assessmentHistory) ? data.assessmentHistory : [];
+  const activity = data && Array.isArray(data.activity) ? data.activity : [];
+  const options = data && data.options ? data.options : {};
+ 
+  setCandidateProfileText_('candidateProfileName', profile.candidateName || 'Candidate Profile');
+  setCandidateProfileText_('candidateProfileCandidateId', profile.candidateId || '—');
+  setCandidateProfileText_('candidateProfilePhone', profile.phone || '—');
+  setCandidateProfileText_('candidateProfileEmail', profile.email || '—');
+  renderCandidateProfileHeaderLocations_(profile);
+  decorateCandidateProfileHeaderMeta_();
+ 
+  const headline = [profile.currentDesignation, profile.currentCompany]
+    .filter(Boolean)
+    .join(' • ');
+  setCandidateProfileText_('candidateProfileHeadline', headline || 'Candidate information and recruitment history');
+ 
+  setCandidateProfileText_('candidateProfileTalentStatus', profile.talentPoolStatus || '—');
+  setCandidateProfileText_('candidateProfileCurrentRole', profile.currentDesignation || '—');
+  setCandidateProfileText_('candidateProfileCurrentCompany', profile.currentCompany || '—');
+  setCandidateProfileText_('candidateProfileExperience', profile.totalExperience || '—');
+  setCandidateProfileText_('candidateProfileSeniority', profile.seniorityLevel || '—');
+  setCandidateProfileText_('candidateProfileFunction', profile.primaryFunction || '—');
+  setCandidateProfileText_('candidateProfileSecondaryFunction', profile.secondaryFunction || '—');
+  setCandidateProfileText_('candidateProfileProfessionalSummary', profile.professionalSummary || '—');
+  setCandidateProfileText_('candidateProfileCareerSummary', profile.careerSummary || '—');
+  renderCandidateProfileEmployment_(profile.employmentCareerHistory || '');
+  renderCandidateProfileEducation_(profile.education || '');
+  renderCandidateProfileSkills_(profile.coreSkills || '');
+  setCandidateProfileText_('candidateProfileIndustries', profile.industries || '—');
+  setCandidateProfileText_('candidateProfileSystemsTools', profile.systemsTools || '—');
+  setCandidateProfileText_('candidateProfileMarketExposure', profile.marketExposure || '—');
+  setCandidateProfileText_('candidateProfileTalentNotes', profile.talentPoolNotes || '—');
+ 
+  toggleCandidateProfileSection_('candidateProfileProfessionalSummarySection', profile.professionalSummary);
+  toggleCandidateProfileSection_('candidateProfileCareerSummarySection', profile.careerSummary);
+  toggleCandidateProfileSection_('candidateProfileEmploymentSection', profile.employmentCareerHistory);
+  toggleCandidateProfileSection_('candidateProfileEducationSection', profile.education);
+  toggleCandidateProfileSection_('candidateProfileSkillsSection', profile.coreSkills);
+  toggleCandidateProfileSection_('candidateProfileIndustriesSection', profile.industries);
+  toggleCandidateProfileSection_('candidateProfileSystemsSection', profile.systemsTools);
+  toggleCandidateProfileSection_('candidateProfileMarketSection', profile.marketExposure);
+  toggleCandidateProfileSection_('candidateProfileTalentNotesSection', profile.talentPoolNotes);
+  enhanceCandidateProfilePersonalSections_();
+ 
+  const cvButton = document.getElementById('candidateProfileCvButton');
+  const cvUrl = profile.sourceCv || assessment.cvFileLink || '';
+  if (cvButton) {
+    if (cvUrl) {
+      cvButton.href = cvUrl;
+      cvButton.style.display = 'inline-flex';
+    } else {
+      cvButton.removeAttribute('href');
+      cvButton.style.display = 'none';
+    }
+  }
+ 
+  setCandidateProfileText_('candidateProfileRef', assessment.refNo || '—');
+  setCandidateProfileText_('candidateProfileAtsMatch', formatCandidateProfilePercent_(assessment.atsMatch));
+  setCandidateProfileText_('candidateProfileDecision', assessment.decision || '—');
+  setCandidateProfileText_('candidateProfileRecruitmentStageText', assessment.recruitmentStage || '—');
+  setCandidateProfileText_('candidateProfileMustHave', assessment.mustHaveFit || '—');
+  setCandidateProfileText_('candidateProfileCoreFit', assessment.coreRoleFit || '—');
+  setCandidateProfileText_('candidateProfileEvidence', assessment.evidenceStrength || '—');
+  setCandidateProfileText_('candidateProfilePosition', assessment.position || 'No selected assessment');
+ 
+  const clientText = [assessment.client, assessment.positionLocation].filter(Boolean).join(' • ');
+  setCandidateProfileText_('candidateProfileClient', clientText || '—');
+  setCandidateProfileText_('candidateProfileExecutiveAssessment', assessment.executiveAssessment || '—');
+  setCandidateProfileText_('candidateProfileStrengths', assessment.keyStrengths || '—');
+  setCandidateProfileText_('candidateProfileGap', assessment.keyGapRisk || '—');
+  moveAssessmentContentOutOfOverview_();
+ 
+  populateCandidateProfileSelect_('candidateProfileRecruitmentStage', options.recruitmentStages || [], assessment.recruitmentStage || '');
+  populateCandidateProfileSelect_('candidateProfileInterviewStatus', options.interviewStatuses || [], assessment.interviewStatus || '');
+  populateCandidateProfileSelect_('candidateProfileClientStatus', options.clientStatuses || [], assessment.clientStatus || '');
+  setCandidateProfileInput_('candidateProfileExpectedSalary', assessment.expectedSalary || '');
+  setCandidateProfileInput_('candidateProfileAvailability', assessment.availability || '');
+  setCandidateProfileInput_('candidateProfileRecruiterNotes', assessment.recruiterNotes || '');
+ 
+  renderCandidateProfileHistory_(history, assessment.refNo || '');
+  enhanceCandidateProfileOverviewApplications_(history, assessment.refNo || '');
+  renderCandidateProfileActivity_(activity);
+  renderCandidateAssessmentTab_(assessment);
+  enhanceCandidateAssessmentCollapsibles_();
+ 
+  const controls = [
+    'candidateProfileRecruitmentStage',
+    'candidateProfileInterviewStatus',
+    'candidateProfileClientStatus',
+    'candidateProfileExpectedSalary',
+    'candidateProfileAvailability',
+    'candidateProfileRecruiterNotes',
+    'candidateProfileSaveBtn'
+  ];
+  controls.forEach(function(id) {
+    const element = document.getElementById(id);
+    if (element) element.disabled = !assessment.refNo;
+  });
+ 
+  setCandidateProfileText_('candidateProfileSaveStatus', '');
+ 
+  if (loading) loading.style.display = 'none';
+  if (content) content.style.display = 'block';
+}
+ 
+ 
+ 
+function parseCandidateProfileLocations_(profile) {
+  const source = profile || {};
+  let location = String(
+    source.currentAddress ||
+    source.currentLocation ||
+    source.location ||
+    ''
+  ).trim();
+ 
+  location = location
+    .split(/;\s*(?=permanent\b)/i)[0]
+    .replace(/\s*(?:permanent|home)\s+(?:address|location).*$/i, '')
+    .trim();
+ 
+  return { current: location, permanent: '' };
+}
+ 
+function renderCandidateProfileHeaderLocations_(profile) {
+  const container = document.getElementById('candidateProfileLocationHeader');
+  if (!container) return;
+ 
+  const locations = parseCandidateProfileLocations_(profile);
+  const rows = [];
+ 
+  if (locations.current) {
+    rows.push(
+      '<span class="candidate-profile-location-row">' +
+        (locations.permanent ? '<span class="candidate-profile-location-label">Current</span>' : '') +
+        '<span>' + escapeCandidateDatabaseHtml_(locations.current) + '</span>' +
+      '</span>'
+    );
+  }
+ 
+  if (locations.permanent) {
+    rows.push(
+      '<span class="candidate-profile-location-row">' +
+        '<span class="candidate-profile-location-label">Permanent</span>' +
+        '<span>' + escapeCandidateDatabaseHtml_(locations.permanent) + '</span>' +
+      '</span>'
+    );
+  }
+ 
+  container.innerHTML = rows.length ? rows.join('') : '—';
+}
+ 
+function enhanceCandidateProfilePersonalSections_() {
+  const leftPanel = document.querySelector('.candidate-profile-overview-left');
+  if (!leftPanel) return;
+ 
+  const sections = Array.from(
+    leftPanel.querySelectorAll(':scope > .candidate-profile-resume-section')
+  ).filter(function(section) {
+    return section.style.display !== 'none';
+  });
+ 
+  sections.forEach(function(section) {
+    if (section.classList.contains('candidate-profile-personal-collapsible')) return;
+ 
+    const heading = section.querySelector(':scope > h3');
+    if (!heading) return;
+ 
+    const title = String(heading.textContent || 'Details').trim();
+    const body = document.createElement('div');
+    body.className = 'candidate-profile-personal-collapsible-body';
+ 
+    Array.from(section.childNodes).forEach(function(node) {
+      if (node !== heading) body.appendChild(node);
+    });
+    heading.remove();
+ 
+    const header = document.createElement('button');
+    header.type = 'button';
+    header.className = 'candidate-profile-personal-collapsible-header';
+    header.setAttribute('aria-expanded', 'true');
+    header.innerHTML =
+      '<span>' + escapeCandidateDatabaseHtml_(title) + '</span>' +
+      '<span class="candidate-profile-collapse-icon">−</span>';
+ 
+    header.onclick = function() {
+      const collapsed = section.classList.toggle('is-collapsed');
+      header.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      const icon = header.querySelector('.candidate-profile-collapse-icon');
+      if (icon) icon.textContent = collapsed ? '+' : '−';
+    };
+ 
+    if (section.id === 'candidateProfileEmploymentSection') {
+      body.classList.add('candidate-profile-personal-collapsible-body--career');
+    }
+ 
+    section.classList.add('candidate-profile-personal-collapsible');
+    section.appendChild(header);
+    section.appendChild(body);
+  });
+}
+ 
+function decorateCandidateProfileHeaderMeta_() {
+  const phone = document.getElementById('candidateProfilePhone');
+  const email = document.getElementById('candidateProfileEmail');
+  const location = document.getElementById('candidateProfileLocationHeader');
+  if (phone) phone.classList.add('candidate-profile-meta-item', 'candidate-profile-meta-phone');
+  if (email) email.classList.add('candidate-profile-meta-item', 'candidate-profile-meta-email');
+  if (location) location.classList.add('candidate-profile-meta-item', 'candidate-profile-meta-location');
+}
+ 
+function splitCandidateProfileList_(value) {
+  return String(value || '')
+    .split(/\s*[,;\n]\s*/)
+    .map(function(item) { return item.trim(); })
+    .filter(Boolean);
+}
+ 
+function renderCandidateProfileSkills_(value) {
+  const container = document.getElementById('candidateProfileCoreSkills');
+  if (!container) return;
+  const skills = splitCandidateProfileList_(value);
+  if (!skills.length) {
+    container.textContent = '—';
+    return;
+  }
+ 
+  const visibleCount = 8;
+  const chips = skills.map(function(skill, index) {
+    return '<span class="candidate-profile-skill-chip' +
+      (index >= visibleCount ? ' is-extra' : '') + '">' +
+      escapeCandidateDatabaseHtml_(skill) + '</span>';
+  }).join('');
+ 
+  const moreCount = Math.max(0, skills.length - visibleCount);
+  const toggle = moreCount
+    ? '<button type="button" class="candidate-profile-skills-toggle" onclick="toggleCandidateProfileSkills_(this)">+' + moreCount + ' more</button>'
+    : '';
+ 
+  container.innerHTML = '<span class="candidate-profile-skill-chips">' + chips + toggle + '</span>';
+}
+ 
+function toggleCandidateProfileSkills_(button) {
+  if (!button) return;
+  const wrap = button.closest('.candidate-profile-skill-chips');
+  if (!wrap) return;
+  const expanded = wrap.classList.toggle('is-expanded');
+  const extras = wrap.querySelectorAll('.candidate-profile-skill-chip.is-extra').length;
+  button.textContent = expanded ? 'Show less' : '+' + extras + ' more';
+}
+ 
+function splitCandidateProfileSentences_(value) {
+  return String(value || '')
+    .replace(/\r/g, '')
+    .split(/(?<=[.!?])\s+(?=[A-Z0-9])|\n+/)
+    .map(function(item) { return item.trim(); })
+    .filter(Boolean);
+}
+ 
+function candidateProfileDurationFromRange_(rangeText) {
+  const text = String(rangeText || '').trim();
+  if (!text) return '';
+ 
+  const months = {
+    jan: 0, january: 0, feb: 1, february: 1, mar: 2, march: 2,
+    apr: 3, april: 3, may: 4, jun: 5, june: 5, jul: 6, july: 6,
+    aug: 7, august: 7, sep: 8, sept: 8, september: 8, oct: 9, october: 9,
+    nov: 10, november: 10, dec: 11, december: 11
+  };
+ 
+  function parsePoint_(part, isEnd) {
+    const value = String(part || '').trim().toLowerCase();
+    if (/^(present|current|now)$/.test(value)) return new Date();
+ 
+    const m = value.match(/^([a-z]+)\s+((?:19|20)\d{2})$/i);
+    if (m && months[m[1].toLowerCase()] !== undefined) {
+      return new Date(Number(m[2]), months[m[1].toLowerCase()], 1);
+    }
+ 
+    const y = value.match(/^((?:19|20)\d{2})$/);
+    if (y) return new Date(Number(y[1]), isEnd ? 11 : 0, 1);
+ 
+    return null;
+  }
+ 
+  const parts = text.split(/\s*[–—-]\s*/);
+  if (parts.length !== 2) return '';
+ 
+  const from = parsePoint_(parts[0], false);
+  const to = parsePoint_(parts[1], true);
+  if (!from || !to || to < from) return '';
+ 
+  let totalMonths = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
+  if (/present|current|now/i.test(parts[1])) totalMonths += 1;
+  if (totalMonths < 1) return '';
+ 
+  const years = Math.floor(totalMonths / 12);
+  const remainingMonths = totalMonths % 12;
+  const bits = [];
+  if (years) bits.push(years + ' yr' + (years === 1 ? '' : 's'));
+  if (remainingMonths) bits.push(remainingMonths + ' mo' + (remainingMonths === 1 ? '' : 's'));
+  return bits.join(' ');
+}
+ 
+function renderCandidateProfileEmployment_(value) {
+  const container = document.getElementById('candidateProfileEmploymentHistory');
+  if (!container) return;
+ 
+  if (Array.isArray(value)) {
+    const items = value.filter(function(item) {
+      return item && typeof item === 'object' &&
+        (item.company_name || item.designation || item.start_date || item.end_date || item.location);
+    });
+ 
+    if (!items.length) {
+      container.textContent = '—';
+      return;
+    }
+ 
+    container.innerHTML = '<div class="candidate-profile-timeline">' + items.map(function(item) {
+      const company = String(item.company_name || '').trim();
+      const designation = String(item.designation || '').trim();
+      const startDate = String(item.start_date || '').trim();
+      const endDate = String(item.end_date || '').trim();
+      const location = String(item.location || '').trim();
+      const timeline = startDate && endDate ? startDate + ' – ' + endDate : (startDate || endDate);
+      const meta = [designation, location].filter(Boolean).join(' • ');
+ 
+      return '<div class="candidate-profile-timeline-item">' +
+        '<div class="candidate-profile-timeline-heading">' +
+          '<div class="candidate-profile-timeline-title">' + escapeCandidateDatabaseHtml_(company || designation || 'Employment') + '</div>' +
+          (timeline ? '<div class="candidate-profile-timeline-date">' + escapeCandidateDatabaseHtml_(timeline) + '</div>' : '') +
+        '</div>' +
+        (company && designation ? '<div class="candidate-profile-timeline-meta">' + escapeCandidateDatabaseHtml_(designation) + '</div>' : '') +
+        (location ? '<div class="candidate-profile-timeline-copy">' + escapeCandidateDatabaseHtml_(location) + '</div>' : '') +
+      '</div>';
+    }).join('') + '</div>';
+    return;
+  }
+ 
+  const sentences = splitCandidateProfileSentences_(value);
+  if (!sentences.length) {
+    container.textContent = '—';
+    return;
+  }
+ 
+  const entries = [];
+  sentences.forEach(function(sentence) {
+    const isNewRole = /\s[—–-]\s/.test(sentence) ||
+      (/\b(present|current)\b/i.test(sentence) && /\b(19|20)\d{2}\b/.test(sentence));
+ 
+    if (isNewRole || !entries.length) {
+      entries.push({ heading: sentence, details: [] });
+    } else {
+      entries[entries.length - 1].details.push(sentence);
+    }
+  });
+ 
+  container.innerHTML = '<div class="candidate-profile-timeline">' + entries.map(function(entry) {
+    const parts = entry.heading.split(/\s[—–-]\s/, 2);
+    const employer = parts.length > 1 ? parts[0].trim() : entry.heading.trim();
+    let roleMeta = parts.length > 1 ? parts[1].trim() : '';
+ 
+    let timeline = '';
+    let duration = '';
+ 
+    const dateRangeMatch = roleMeta.match(/(?:,\s*)?((?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+)?(?:19|20)\d{2}\s*[–—-]\s*(?:(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+)?(?:19|20)\d{2}|present|current))\.?$/i);
+    const durationMatch = !dateRangeMatch
+      ? roleMeta.match(/(?:,\s*)?(\d+(?:\.\d+)?\s+(?:years?|yrs?|months?|mos?))(?=;|\.|$)/i)
+      : null;
+ 
+    if (dateRangeMatch) {
+      timeline = dateRangeMatch[1].trim().replace(/\.$/, '');
+      duration = candidateProfileDurationFromRange_(timeline);
+      roleMeta = roleMeta.replace(dateRangeMatch[0], '').replace(/[,\s]+$/, '').trim();
+    } else if (durationMatch) {
+      duration = durationMatch[1].trim();
+      roleMeta = roleMeta.replace(durationMatch[0], '').replace(/[,\s;]+$/, '').trim();
+    }
+ 
+    const semicolonParts = roleMeta.split(/\s*;\s*/);
+    const designation = (semicolonParts.shift() || '').trim().replace(/\.$/, '');
+    const inlineDetail = semicolonParts.join('; ').trim();
+    const detailText = [inlineDetail].concat(entry.details).filter(Boolean).join(' ');
+    const timelineLabel = [timeline, duration].filter(Boolean).join(' • ');
+ 
+    return '<div class="candidate-profile-timeline-item">' +
+      '<div class="candidate-profile-timeline-heading">' +
+        '<div class="candidate-profile-timeline-title">' + escapeCandidateDatabaseHtml_(employer) + '</div>' +
+        (timelineLabel ? '<div class="candidate-profile-timeline-date">' + escapeCandidateDatabaseHtml_(timelineLabel) + '</div>' : '') +
+      '</div>' +
+      (designation ? '<div class="candidate-profile-timeline-meta">' + escapeCandidateDatabaseHtml_(designation) + '</div>' : '') +
+      (detailText ? '<div class="candidate-profile-timeline-copy">' + escapeCandidateDatabaseHtml_(detailText) + '</div>' : '') +
+      '</div>';
+  }).join('') + '</div>';
+}
+ 
+function renderCandidateProfileEducation_(value) {
+  const container = document.getElementById('candidateProfileEducation');
+  if (!container) return;
+ 
+  if (Array.isArray(value)) {
+    const items = value.filter(function(item) {
+      return item && typeof item === 'object' &&
+        (item.qualification || item.institution || item.start_date || item.end_date || item.location);
+    });
+ 
+    if (!items.length) {
+      container.textContent = '—';
+      return;
+    }
+ 
+    container.innerHTML = '<div class="candidate-profile-timeline candidate-profile-education-timeline">' +
+      items.map(function(item) {
+        const qualification = String(item.qualification || '').trim();
+        const institution = String(item.institution || '').trim();
+        const startDate = String(item.start_date || '').trim();
+        const endDate = String(item.end_date || '').trim();
+        const location = String(item.location || '').trim();
+        const timeline = startDate && endDate ? startDate + ' – ' + endDate : (startDate || endDate);
+        const meta = [institution, location].filter(Boolean).join(' • ');
+ 
+        return '<div class="candidate-profile-timeline-item candidate-profile-education-timeline-item">' +
+          '<div class="candidate-profile-timeline-heading">' +
+            '<div class="candidate-profile-timeline-title">' + escapeCandidateDatabaseHtml_(qualification || 'Education') + '</div>' +
+            (timeline ? '<div class="candidate-profile-timeline-date">' + escapeCandidateDatabaseHtml_(timeline) + '</div>' : '') +
+          '</div>' +
+          (meta ? '<div class="candidate-profile-timeline-meta candidate-profile-education-meta">' + escapeCandidateDatabaseHtml_(meta) + '</div>' : '') +
+        '</div>';
+      }).join('') +
+    '</div>';
+    return;
+  }
+ 
+  const raw = String(value || '').replace(/\r/g, ' ').replace(/\n+/g, ' ').trim();
+  if (!raw) {
+    container.textContent = '—';
+    return;
+  }
+ 
+  const certificationMatch = raw.match(/(?:Professional\s+certifications?|Certifications?)\s*:\s*(.+)$/i);
+  const certificationText = certificationMatch ? certificationMatch[1].trim() : '';
+  const academicText = certificationMatch ? raw.slice(0, certificationMatch.index).trim() : raw;
+ 
+  const degreeStart = /(?=(?:M\.?\s*Phil\.?|M\.?\s*Sc\.?|MBA|MS|B\.?\s*Sc\.?|B\.?\s*A\.?|BBA|BS|F\.?\s*Sc\.?|FA|ICS|I\.?\s*Com\.?|Matriculation|Matric)\b)/gi;
+  let items = academicText.split(degreeStart)
+    .map(function(item) { return item.trim().replace(/^[.;,\s]+|[.;,\s]+$/g, ''); })
+    .filter(Boolean);
+ 
+  if (!items.length) items = splitCandidateProfileSentences_(academicText);
+ 
+  const educationHtml = items.map(function(item) {
+    let timeline = '';
+    const dateMatch = item.match(/(?:,\s*)?((?:19|20)\d{2}\s*[–—-]\s*(?:(?:19|20)\d{2}|present|current))\.?$/i);
+    if (dateMatch) {
+      timeline = dateMatch[1].trim();
+      item = item.replace(dateMatch[0], '').replace(/[,\s]+$/, '').trim();
+    }
+ 
+    const commaParts = item.split(/\s*,\s*/).filter(Boolean);
+    const degree = (commaParts.shift() || item).trim().replace(/\.$/, '');
+    const institution = commaParts.join(', ').trim().replace(/\.$/, '');
+ 
+    return '<div class="candidate-profile-timeline-item candidate-profile-education-timeline-item">' +
+      '<div class="candidate-profile-timeline-heading">' +
+        '<div class="candidate-profile-timeline-title">' + escapeCandidateDatabaseHtml_(degree) + '</div>' +
+        (timeline ? '<div class="candidate-profile-timeline-date">' + escapeCandidateDatabaseHtml_(timeline) + '</div>' : '') +
+      '</div>' +
+      (institution ? '<div class="candidate-profile-timeline-meta candidate-profile-education-meta">' + escapeCandidateDatabaseHtml_(institution) + '</div>' : '') +
+      '</div>';
+  }).join('');
+ 
+  let certificationHtml = '';
+  if (certificationText) {
+    const certifications = certificationText
+      .split(/\s*;\s*|\s+and\s+(?=(?:Lead\s+Auditor|ISO|NEBOSH|IOSH|CIPD|SHRM|PMP|Six\s+Sigma|Certified)\b)/i)
+      .map(function(item) { return item.trim().replace(/^[,.;\s]+|[,.;\s]+$/g, ''); })
+      .filter(Boolean);
+ 
+    certificationHtml =
+      '<div class="candidate-profile-certifications">' +
+        '<div class="candidate-profile-certifications-label">Professional Certifications</div>' +
+        '<div class="candidate-profile-certifications-list">' +
+          certifications.map(function(item) {
+            return '<div class="candidate-profile-certification-row">' +
+              escapeCandidateDatabaseHtml_(item) +
+            '</div>';
+          }).join('') +
+        '</div>' +
+      '</div>';
+  }
+ 
+  container.innerHTML =
+    '<div class="candidate-profile-timeline candidate-profile-education-timeline">' +
+      educationHtml +
+    '</div>' +
+    certificationHtml;
+}
+ 
+function moveAssessmentContentOutOfOverview_() {
+  ['candidateProfileExecutiveAssessment', 'candidateProfileMustHave'].forEach(function(id) {
+    const element = document.getElementById(id);
+    const card = element ? element.closest('.candidate-profile-context-card') : null;
+    if (card) card.style.display = 'none';
+  });
+ 
+  const strengths = document.getElementById('candidateProfileStrengths');
+  const gap = document.getElementById('candidateProfileGap');
+  const strengthHeading = strengths && strengths.parentElement ? strengths.parentElement.querySelector('span') : null;
+  const gapHeading = gap && gap.parentElement ? gap.parentElement.querySelector('span') : null;
+  if (strengthHeading) strengthHeading.classList.add('candidate-profile-fit-heading', 'is-strength');
+  if (gapHeading) gapHeading.classList.add('candidate-profile-fit-heading', 'is-risk');
+}
+ 
+function candidateAssessmentNumber_(value, scale) {
+  const raw = String(value === null || value === undefined ? '' : value).replace('%', '').trim();
+ 
+  // Blank historical criterion values must remain blank.
+  // Number('') returns 0 in JavaScript, which previously caused
+  // unstored historical scores/confidence to display as 0/10.
+  if (raw === '') return null;
+ 
+  const number = Number(raw);
+  if (!isFinite(number)) return null;
+  return Math.max(0, Math.min(scale, number));
+}
+ 
+function setCandidateAssessmentDonut_(id, value, scale, labelId, suffix) {
+  const donut = document.getElementById(id);
+  const label = document.getElementById(labelId);
+  const numeric = candidateAssessmentNumber_(value, scale);
+  if (!donut || !label) return;
+ 
+  if (numeric === null) {
+    donut.style.setProperty('--score-angle', '0deg');
+    donut.classList.add('is-empty');
+    label.textContent = '—';
+    return;
+  }
+ 
+  const percent = Math.round((numeric / scale) * 100);
+  donut.style.setProperty('--score-angle', (percent * 3.6) + 'deg');
+  donut.classList.remove('is-empty');
+  donut.classList.toggle('is-strong', percent >= 70);
+  donut.classList.toggle('is-medium', percent >= 45 && percent < 70);
+  donut.classList.toggle('is-low', percent < 45);
+  label.textContent = numeric + suffix;
+}
+ 
+function renderCandidateAssessmentBullets_(id, value) {
+  const container = document.getElementById(id);
+  if (!container) return;
+ 
+  const text = String(value || '').replace(/\r/g, '').trim();
+  if (!text) {
+    container.textContent = '—';
+    return;
+  }
+ 
+  let items = text
+    .split(/(?:\n+|;\s+|(?<=[.!?])\s+(?=[A-Z0-9]))/)
+    .map(function(part) { return part.trim(); })
+    .filter(Boolean);
+ 
+  if (items.length === 1 && text.length > 180) {
+    items = text.split(/,\s+(?=[A-Z][a-z]+\s)/).map(function(part) { return part.trim(); }).filter(Boolean);
+  }
+ 
+  container.innerHTML =
+    '<ul class="candidate-assessment-bullet-list">' +
+      items.map(function(part) {
+        return '<li>' + escapeCandidateDatabaseHtml_(part) + '</li>';
+      }).join('') +
+    '</ul>';
+}
+ 
+function renderCandidateAssessmentTab_(assessment) {
+  const item = assessment || {};
+  const context = [item.client, item.positionLocation, item.refNo ? 'Ref # ' + item.refNo : '']
+    .filter(Boolean).join(' • ');
+ 
+  setCandidateProfileText_('candidateAssessmentPosition', item.position || 'No selected assessment');
+  setCandidateProfileText_('candidateAssessmentContext', context || '—');
+  setCandidateProfileText_('candidateAssessmentDecision', item.decision || '—');
+  setCandidateProfileText_('candidateAssessmentMustHave', 'Must-Have: ' + (item.mustHaveFit || '—'));
+  setCandidateProfileText_('candidateAssessmentExecutive', item.executiveAssessment || '—');
+  renderCandidateAssessmentBullets_('candidateAssessmentStrengths', item.keyStrengths || '');
+  renderCandidateAssessmentBullets_('candidateAssessmentRisks', item.keyGapRisk || '');
+  setCandidateProfileText_('candidateAssessmentApplicationPosition', item.position || '—');
+  setCandidateProfileText_('candidateAssessmentRef', item.refNo || '—');
+  setCandidateProfileText_('candidateAssessmentRelevantExp', item.relevantIndustryExperience || item.relevantExperience || '—');
+  setCandidateProfileText_('candidateAssessmentStage', item.recruitmentStage || '—');
+  setCandidateProfileText_('candidateAssessmentInterview', item.interviewStatus || '—');
+  setCandidateProfileText_('candidateAssessmentClient', item.clientStatus || '—');
+  setCandidateProfileText_('candidateAssessmentDate', item.dateScreened || '—');
+ 
+  setCandidateAssessmentDonut_('candidateAssessmentAtsDonut', item.atsMatch, 100, 'candidateAssessmentAtsValue', '%');
+  setCandidateAssessmentDonut_('candidateAssessmentCoreDonut', item.coreRoleFit, 10, 'candidateAssessmentCoreValue', '/10');
+  setCandidateAssessmentDonut_('candidateAssessmentEvidenceDonut', item.evidenceStrength, 10, 'candidateAssessmentEvidenceValue', '/10');
+ 
+  const decision = document.getElementById('candidateAssessmentDecision');
+  if (decision) {
+    const value = String(item.decision || '').toLowerCase();
+    decision.className = 'candidate-assessment-decision ' +
+      (value.indexOf('shortlist') >= 0 ? 'is-positive' : value === 'reject' ? 'is-negative' : 'is-neutral');
+  }
+ 
+  renderCandidateAssessmentCriteria_(Array.isArray(item.criterionResults) ? item.criterionResults : []);
+}
+ 
+function renderCandidateAssessmentCriteria_(criteria) {
+  const container = document.getElementById('candidateAssessmentCriteria');
+  if (!container) return;
+ 
+  if (!criteria.length) {
+    container.innerHTML =
+      '<div class="candidate-assessment-empty">' +
+        '<strong>Detailed criterion results are not stored for this earlier assessment.</strong>' +
+        '<span>Future assessments saved after this update will retain the full weighted criterion review here.</span>' +
+      '</div>';
+    return;
+  }
+ 
+  container.innerHTML = criteria.map(function(item, index) {
+    const score = candidateAssessmentNumber_(item.score10 !== undefined ? item.score10 : item.score_10, 10);
+    const confidence = candidateAssessmentNumber_(item.evidenceConfidence10 !== undefined ? item.evidenceConfidence10 : item.evidence_confidence_10, 10);
+    const weight = Number(item.weight || 0);
+    const historicalFrameworkOnly = Boolean(item.historicalFrameworkOnly);
+    const status = historicalFrameworkOnly
+      ? 'Framework'
+      : (String(item.evidenceStatus || item.status || '').trim() || (score >= 6 ? 'Pass' : score >= 4 ? 'Partial' : 'Fail'));
+    const statusClass = historicalFrameworkOnly
+      ? 'is-framework'
+      : (status.toLowerCase().indexOf('pass') >= 0 ? 'is-pass' : status.toLowerCase().indexOf('partial') >= 0 ? 'is-partial' : 'is-fail');
+    const knockout = String(item.knockout || '').toLowerCase() === 'yes';
+    const scorePercent = score === null ? 0 : score * 10;
+ 
+    return '<article class="candidate-assessment-criterion">' +
+      '<div class="candidate-assessment-criterion-top">' +
+        '<div><span class="candidate-assessment-criterion-index">' + String(index + 1).padStart(2, '0') + '</span>' +
+        '<strong>' + escapeCandidateDatabaseHtml_(item.criterion || 'Criterion') + '</strong></div>' +
+        '<div class="candidate-assessment-criterion-tags">' +
+          (knockout ? '<span class="is-knockout">Must-Have</span>' : '') +
+          '<span>' + escapeCandidateDatabaseHtml_(String(weight)) + '% Weight</span>' +
+          '<span class="' + statusClass + '">' + escapeCandidateDatabaseHtml_(status) + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="candidate-assessment-criterion-meter"><i style="width:' + scorePercent + '%"></i></div>' +
+      '<div class="candidate-assessment-criterion-metrics">' +
+        '<span>Score <b>' + (score === null ? '—' : score + '/10') + '</b></span>' +
+        '<span>Evidence Confidence <b>' + (confidence === null ? '—' : confidence + '/10') + '</b></span>' +
+      '</div>' +
+      (item.evidenceFound || item.evidence_found ? '<div class="candidate-assessment-criterion-copy"><span>Evidence Found</span><p>' + escapeCandidateDatabaseHtml_(item.evidenceFound || item.evidence_found) + '</p></div>' : '') +
+      (item.assessmentRationale || item.assessment_rationale ? '<div class="candidate-assessment-criterion-copy"><span>Assessment Rationale</span><p>' + escapeCandidateDatabaseHtml_(item.assessmentRationale || item.assessment_rationale) + '</p></div>' : '') +
+      (historicalFrameworkOnly && item.evidenceExpected ? '<div class="candidate-assessment-criterion-copy"><span>Evidence Expected</span><p>' + escapeCandidateDatabaseHtml_(item.evidenceExpected) + '</p></div>' : '') +
+    '</article>';
+  }).join('');
+}
+ 
+function enhanceCandidateAssessmentCollapsibles_() {
+  document.querySelectorAll('.candidate-assessment-collapsible').forEach(function(section) {
+    if (section.dataset.collapseReady === '1') return;
+    const header = section.querySelector(':scope > .candidate-assessment-section-header');
+    if (!header) return;
+    section.dataset.collapseReady = '1';
+    header.addEventListener('click', function() {
+      const collapsed = section.classList.toggle('is-collapsed');
+      header.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      const icon = header.querySelector('b');
+      if (icon) icon.textContent = collapsed ? '+' : '−';
+    });
+  });
+}
+ 
+function switchCandidateProfileTab_(tabName) {
+  document.querySelectorAll('.candidate-profile-tab').forEach(function(button) {
+    button.classList.toggle('active', button.getAttribute('data-profile-tab') === tabName);
+  });
+ 
+  document.querySelectorAll('.candidate-profile-tab-panel').forEach(function(panel) {
+    panel.classList.remove('active');
+  });
+ 
+  const panel = document.getElementById(
+    'candidateProfileTab' + tabName.charAt(0).toUpperCase() + tabName.slice(1)
+  );
+  if (panel) panel.classList.add('active');
+}
+ 
+function selectCandidateProfileAssessment_(refNo) {
+  if (!currentCandidateProfileId_ || !refNo) return;
+  currentCandidateProfileRef_ = String(refNo);
+  loadCandidateProfile_(currentCandidateProfileId_, currentCandidateProfileRef_);
+  switchCandidateProfileTab_('assessment');
+}
+ 
+function saveCandidateProfile_() {
+  const data = currentCandidateProfileData_ || {};
+  const assessment = data.selectedAssessment || {};
+  const profile = data.profile || {};
+  const sessionToken = localStorage.getItem('OSYNIX_ATS_SESSION');
+ 
+  if (!sessionToken || !profile.candidateId || !assessment.refNo) {
+    setCandidateProfileText_('candidateProfileSaveStatus', 'Select an assessed application before saving.');
+    return;
+  }
+ 
+  const button = document.getElementById('candidateProfileSaveBtn');
+  if (button) button.disabled = true;
+  setCandidateProfileText_('candidateProfileSaveStatus', 'Saving recruitment update...');
+ 
+  const payload = {
+    candidateId: profile.candidateId,
+    refNo: assessment.refNo,
+    recruitmentStage: getCandidateProfileInputValue_('candidateProfileRecruitmentStage'),
+    interviewStatus: getCandidateProfileInputValue_('candidateProfileInterviewStatus'),
+    clientStatus: getCandidateProfileInputValue_('candidateProfileClientStatus'),
+    expectedSalary: getCandidateProfileInputValue_('candidateProfileExpectedSalary'),
+    availability: getCandidateProfileInputValue_('candidateProfileAvailability'),
+    recruiterNotes: getCandidateProfileInputValue_('candidateProfileRecruiterNotes')
+  };
+ 
+  google.script.run
+    .withSuccessHandler(function(updatedData) {
+      currentCandidateProfileData_ = updatedData || null;
+      renderCandidateProfile_(updatedData);
+      setCandidateProfileText_('candidateProfileSaveStatus', 'Saved successfully.');
+      if (button) button.disabled = false;
+      loadCandidateDatabase();
+    })
+    .withFailureHandler(function(error) {
+      console.error('Candidate Profile save failed:', error);
+      setCandidateProfileText_(
+        'candidateProfileSaveStatus',
+        'Unable to save: ' + (error && error.message ? error.message : String(error))
+      );
+      if (button) button.disabled = false;
+    })
+    .saveCandidateProfileOperational(sessionToken, payload);
+}
+ 
+function getCandidateProfileInputValue_(id) {
+  const element = document.getElementById(id);
+  return element ? String(element.value || '').trim() : '';
+}
+ 
+function setCandidateProfileText_(id, value) {
+  const element = document.getElementById(id);
+  if (!element) return;
+  element.textContent =
+    value === undefined || value === null || value === '' ? '—' : String(value);
+}
+ 
+function setCandidateProfileInput_(id, value) {
+  const element = document.getElementById(id);
+  if (!element) return;
+  element.value = value === undefined || value === null ? '' : String(value);
+}
+ 
+function populateCandidateProfileSelect_(id, values, selectedValue) {
+  const select = document.getElementById(id);
+  if (!select) return;
+ 
+  const items = Array.isArray(values) ? values : [];
+  let html = '<option value="">— Select —</option>';
+ 
+  items.forEach(function(value) {
+    const selected = String(value) === String(selectedValue) ? ' selected' : '';
+    html += '<option value="' + escapeCandidateDatabaseHtml_(value) + '"' + selected + '>' +
+      escapeCandidateDatabaseHtml_(value) + '</option>';
+  });
+ 
+  select.innerHTML = html;
+}
+ 
+function renderCandidateProfileHistory_(history, selectedRefNo) {
+  const container = document.getElementById('candidateProfileHistory');
+  if (!container) return;
+ 
+  if (!Array.isArray(history) || !history.length) {
+    container.innerHTML = '<div class="candidate-profile-empty">No assessment history available.</div>';
+    return;
+  }
+ 
+  container.innerHTML = history.map(function(item) {
+    const selected = String(item.refNo || '') === String(selectedRefNo || '');
+    return '<div class="candidate-profile-history-row' +
+      (selected ? ' candidate-profile-history-selected' : '') +
+      '" onclick="selectCandidateProfileAssessment_(\'' +
+      escapeCandidateDatabaseJs_(item.refNo || '') + '\')">' +
+      '<strong>Ref #' + escapeCandidateDatabaseHtml_(item.refNo || '—') + ' • ' +
+      escapeCandidateDatabaseHtml_(formatCandidateProfilePercent_(item.atsMatch)) + '</strong>' +
+      '<span>' + escapeCandidateDatabaseHtml_(item.position || '—') + '</span>' +
+      '<span>' + escapeCandidateDatabaseHtml_((item.decision || '—') + ' • ' + (item.recruitmentStage || '—')) + '</span>' +
+      '<span>' + escapeCandidateDatabaseHtml_(item.clientStatus || '—') + '</span>' +
+      '</div>';
+  }).join('');
+}
+ 
+function enhanceCandidateProfileOverviewApplications_(history, selectedRefNo) {
+  const rightPanel = document.querySelector('.candidate-profile-overview-right');
+  if (!rightPanel) return;
+ 
+  const oldStack = rightPanel.querySelector('.candidate-profile-application-stack');
+  if (oldStack) oldStack.remove();
+ 
+  const visibleCards = Array.from(rightPanel.querySelectorAll(':scope > .candidate-profile-context-card'))
+    .filter(function(card) { return card.style.display !== 'none'; });
+ 
+  visibleCards.forEach(function(card) {
+    if (card.classList.contains('candidate-profile-collapsible-card')) return;
+ 
+    const body = document.createElement('div');
+    body.className = 'candidate-profile-collapsible-body';
+ 
+    while (card.firstChild) body.appendChild(card.firstChild);
+ 
+    
+    const duplicateHeading = body.querySelector(
+      ':scope > h3, :scope > .candidate-profile-card-heading'
+    );
+    if (
+      duplicateHeading &&
+      /latest\s*\/\s*selected\s+position/i.test(
+        String(duplicateHeading.textContent || '')
+      )
+    ) {
+      duplicateHeading.remove();
+    }
+ 
+    const header = document.createElement('button');
+    header.type = 'button';
+    header.className = 'candidate-profile-collapsible-header';
+    header.setAttribute('aria-expanded', 'true');
+    header.innerHTML =
+      '<span>Latest / Selected Position</span>' +
+      '<span class="candidate-profile-collapse-icon">−</span>';
+    header.onclick = function() {
+      const expanded = card.classList.toggle('is-collapsed') === false;
+      header.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      const icon = header.querySelector('.candidate-profile-collapse-icon');
+      if (icon) icon.textContent = expanded ? '−' : '+';
+    };
+ 
+    card.classList.add('candidate-profile-collapsible-card');
+    card.appendChild(header);
+    card.appendChild(body);
+  });
+ 
+  const items = Array.isArray(history) ? history : [];
+  const previous = items.filter(function(item) {
+    return String(item.refNo || '') !== String(selectedRefNo || '');
+  });
+  if (!previous.length) return;
+ 
+  const stack = document.createElement('div');
+  stack.className = 'candidate-profile-application-stack';
+ 
+  const heading = document.createElement('div');
+  heading.className = 'candidate-profile-application-stack-title';
+  heading.textContent = 'Previous Applications';
+  stack.appendChild(heading);
+ 
+  const scroll = document.createElement('div');
+  scroll.className = 'candidate-profile-application-scroll';
+ 
+  previous.forEach(function(item) {
+    const card = document.createElement('div');
+    card.className = 'candidate-profile-application-card is-collapsed';
+ 
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'candidate-profile-application-card-header';
+    button.setAttribute('aria-expanded', 'false');
+    button.innerHTML =
+      '<span class="candidate-profile-application-card-main">' +
+        '<strong>' + escapeCandidateDatabaseHtml_(item.position || 'Position') + '</strong>' +
+        '<small>' +
+          escapeCandidateDatabaseHtml_(
+            ['Ref # ' + (item.refNo || '—'), item.client || '', item.recruitmentStage || '—']
+              .filter(Boolean).join(' • ')
+          ) +
+        '</small>' +
+      '</span>' +
+      '<span class="candidate-profile-collapse-icon">+</span>';
+ 
+    const body = document.createElement('div');
+    body.className = 'candidate-profile-application-card-body';
+    body.innerHTML =
+      '<div><span>ATS Match</span><strong>' + escapeCandidateDatabaseHtml_(formatCandidateProfilePercent_(item.atsMatch)) + '</strong></div>' +
+      '<div><span>AI Decision</span><strong>' + escapeCandidateDatabaseHtml_(item.decision || '—') + '</strong></div>' +
+      '<div><span>Recruitment Stage</span><strong>' + escapeCandidateDatabaseHtml_(item.recruitmentStage || '—') + '</strong></div>' +
+      '<button type="button" class="candidate-profile-application-open-btn">Open this application</button>';
+ 
+    button.onclick = function() {
+      const collapsed = card.classList.toggle('is-collapsed');
+      button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      const icon = button.querySelector('.candidate-profile-collapse-icon');
+      if (icon) icon.textContent = collapsed ? '+' : '−';
+    };
+ 
+    const openButton = body.querySelector('.candidate-profile-application-open-btn');
+    if (openButton) {
+      openButton.onclick = function() {
+        selectCandidateProfileAssessment_(item.refNo || '');
+      };
+    }
+ 
+    card.appendChild(button);
+    card.appendChild(body);
+    scroll.appendChild(card);
+  });
+ 
+  stack.appendChild(scroll);
+  rightPanel.appendChild(stack);
+}
+ 
+function renderCandidateProfileActivity_(activity) {
+  const container = document.getElementById('candidateProfileActivity');
+  if (!container) return;
+ 
+  if (!Array.isArray(activity) || !activity.length) {
+    container.innerHTML = '<div class="candidate-profile-empty">No candidate activity is available yet.</div>';
+    return;
+  }
+ 
+  container.innerHTML = activity.map(function(item) {
+    return '<div class="candidate-profile-activity-item">' +
+      '<strong>' + escapeCandidateDatabaseHtml_(item.action || 'Activity') + '</strong>' +
+      '<span>' + escapeCandidateDatabaseHtml_(item.details || '—') + '</span>' +
+      '<small>' + escapeCandidateDatabaseHtml_([item.timestamp, item.userName].filter(Boolean).join(' • ') || '—') + '</small>' +
+      '</div>';
+  }).join('');
+}
+ 
+function toggleCandidateProfileSection_(id, value) {
+  const element = document.getElementById(id);
+  if (element) element.style.display = value ? '' : 'none';
+}
+ 
+function formatCandidateProfilePercent_(value) {
+  if (value === undefined || value === null || value === '') return '—';
+  const text = String(value);
+  return text.indexOf('%') === -1 ? text + '%' : text;
+}
+ 
+function showCandidateProfileError_(message) {
+  const loading = document.getElementById('candidateProfileLoading');
+  const content = document.getElementById('candidateProfileContent');
+  if (content) content.style.display = 'none';
+  if (loading) {
+    loading.style.display = 'flex';
+    loading.textContent = 'Unable to load candidate profile: ' + message;
+  }
+}
+ 
+function closeCandidateProfile_() {
+  const drawer = document.getElementById('candidateProfileSection');
+  const overlay = document.getElementById('candidateProfileOverlay');
+ 
+  if (drawer) {
+    drawer.classList.remove('is-open');
+    drawer.setAttribute('aria-hidden', 'true');
+  }
+ 
+  if (overlay) {
+    overlay.classList.remove('is-open');
+    overlay.setAttribute('aria-hidden', 'true');
+  }
+ 
+  document.body.classList.remove('candidate-profile-open');
+}
+ 
+ 
+document.addEventListener(
+  'input',
+  function(event) {
+ 
+    if (
+      event.target &&
+      event.target.id ===
+        'candidateReactiveSearch'
+    ) {
+ 
+      filterCandidateReactiveView_();
+ 
+    }
+ 
+  }
+);
+ 
+/* =========================================================
+   STICKY REACTIVE TABLE HEADER
+   ========================================================= */
+ 
+function updateCandidateReactiveStickyHeader_() {
+ 
+  const stickyHeader =
+    document.getElementById(
+      'candidateReactiveStickyHeader'
+    );
+ 
+  const table =
+    document.querySelector(
+      '#candidateReactiveSection .candidate-db-table'
+    );
+ 
+  const normalHeader =
+    document.querySelector(
+      '#candidateReactiveSection .candidate-db-table thead'
+    );
+ 
+ 
+  if (
+    !stickyHeader ||
+    !table ||
+    !normalHeader
+  ) {
+    return;
+  }
+ 
+ 
+  const section =
+    document.getElementById(
+      'candidateReactiveSection'
+    );
+ 
+ 
+  if (
+    !section ||
+    section.style.display === 'none'
+  ) {
+ 
+    stickyHeader.classList.remove(
+      'is-visible'
+    );
+ 
+    return;
+ 
+  }
+ 
+ 
+  const tableRect =
+    table.getBoundingClientRect();
+ 
+  const headerRect =
+    normalHeader.getBoundingClientRect();
+ 
+ 
+  /*
+   * Main ATS navigation occupies approximately
+   * the first 66px of the viewport.
+   *
+   * Show the duplicate column bar after the normal
+   * table heading scrolls underneath navigation,
+   * and hide it again after the table has ended.
+   */
+ 
+  const navigationBottom = 66;
+ 
+  const shouldShow =
+    headerRect.bottom <= navigationBottom &&
+    tableRect.bottom > navigationBottom + 46;
+ 
+ 
+  stickyHeader.classList.toggle(
+    'is-visible',
+    shouldShow
+  );
+ 
+}
+ 
+ 
+window.addEventListener(
+  'scroll',
+  updateCandidateReactiveStickyHeader_,
+  { passive: true }
+);
+ 
+ 
+window.addEventListener(
+  'resize',
+  updateCandidateReactiveStickyHeader_
+);
+ 
+ 
+  function clearCandidateDatabaseFilters() {
+ 
+    const search =
+      document.getElementById(
+        'candidateSearch'
+      );
+ 
+    const position =
+      document.getElementById(
+        'candidatePositionFilter'
+      );
+ 
+    const stage =
+      document.getElementById(
+        'candidateStageFilter'
+      );
+ 
+    const decision =
+      document.getElementById(
+        'candidateDecisionFilter'
+      );
+ 
+    const location =
+      document.getElementById(
+        'candidateLocationFilter'
+      );
+ 
+ 
+    if (search) {
+      search.value = '';
+    }
+ 
+    if (position) {
+      position.value = '';
+    }
+ 
+    if (stage) {
+      stage.value = '';
+    }
+ 
+    if (decision) {
+      decision.value = '';
+    }
+ 
+    if (location) {
+      location.value = '';
+    }
+ 
+  }
+/* =========================================================
+   TALENT POOL NAVIGATION
+   ========================================================= */
+ 
+function openTalentPoolDatabase() {
+ 
+  const sessionToken =
+    localStorage.getItem(
+      'OSYNIX_ATS_SESSION'
+    );
+ 
+  google.script.run
+ 
+    .withSuccessHandler(
+      function(baseUrl) {
+ 
+        window.top.location.href =
+          baseUrl +
+          '?page=talentpool&session=' +
+          encodeURIComponent(
+            sessionToken || ''
+          );
+ 
+      }
+    )
+ 
+    .withFailureHandler(
+      function(error) {
+ 
+        console.error(
+          'Talent Pool navigation failed:',
+          error
+        );
+ 
+      }
+    )
+ 
+    .getWebAppUrl();
+ 
+}
+ 
+ 
+ 
+</script>

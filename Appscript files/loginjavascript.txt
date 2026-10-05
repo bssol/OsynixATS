@@ -1,0 +1,1387 @@
+<script>
+ 
+let currentLoginEmail = '';
+let loginFlowBusy = false;
+ 
+ 
+/* -------------------------------------------------
+   PAGE LOAD
+   ------------------------------------------------- */
+ 
+document.addEventListener(
+  'DOMContentLoaded',
+  function() {
+ 
+    restoreKeepSignedInPreference_();
+ 
+    const savedToken =
+      localStorage.getItem(
+        'OSYNIX_ATS_SESSION'
+      );
+ 
+ 
+    /*
+     * No current session:
+     * show the normal email login.
+     *
+     * IMPORTANT:
+     * We do NOT automatically perform a
+     * trusted-device login here.
+     */
+    if (!savedToken) {
+      setLoginFormReady_();
+      return;
+    }
+ 
+ 
+    /*
+     * Existing session:
+     * validate it once before showing login.
+     */
+    loginFlowBusy = true;
+ 
+    setLoginInterfaceLocked_(
+      true,
+      'Checking session...'
+    );
+ 
+    showLoginStatus(
+      'Checking your current session...',
+      'info'
+    );
+ 
+ 
+    google.script.run
+ 
+      .withSuccessHandler(
+        function(result) {
+ 
+          if (
+            result &&
+            result.valid &&
+            result.user
+          ) {
+ 
+            localStorage.setItem(
+              'OSYNIX_ATS_USER',
+              JSON.stringify(
+                result.user
+              )
+            );
+ 
+            showLoginStatus(
+              'Session verified. Opening Osynix ATS...',
+              'success'
+            );
+ 
+            continueToATS(
+              result.user
+            );
+ 
+            return;
+          }
+ 
+ 
+          clearCurrentSession_();
+ 
+          loginFlowBusy = false;
+ 
+          setLoginFormReady_();
+ 
+        }
+      )
+ 
+      .withFailureHandler(
+        function() {
+ 
+          clearCurrentSession_();
+ 
+          loginFlowBusy = false;
+ 
+          setLoginFormReady_();
+ 
+        }
+      )
+ 
+      .validateATSSession(
+        savedToken
+      );
+ 
+  }
+);
+ 
+ 
+/* -------------------------------------------------
+   EMAIL / TRUSTED DEVICE CHECK
+   ------------------------------------------------- */
+ 
+function sendLoginCode() {
+ 
+  if (loginFlowBusy) {
+    return;
+  }
+ 
+ 
+  const emailInput =
+    document.getElementById(
+      'loginEmail'
+    );
+ 
+ 
+  const email =
+    emailInput
+      ? emailInput.value
+          .trim()
+          .toLowerCase()
+      : '';
+ 
+ 
+  if (!email) {
+ 
+    showLoginStatus(
+      'Please enter your email address.',
+      'error'
+    );
+ 
+    return;
+  }
+ 
+ 
+  currentLoginEmail =
+    email;
+ 
+ 
+  const deviceToken =
+    localStorage.getItem(
+      'OSYNIX_ATS_DEVICE'
+    ) || '';
+ 
+ 
+  loginFlowBusy = true;
+ 
+ 
+  setLoginBusy(
+    'sendCodeBtn',
+    true,
+    'Checking...'
+  );
+ 
+ 
+  showLoginStatus(
+    'Checking your access...',
+    'info'
+  );
+ 
+ 
+  google.script.run
+ 
+    .withSuccessHandler(
+      function(result) {
+ 
+        if (
+          !result ||
+          !result.success
+        ) {
+ 
+          loginFlowBusy = false;
+ 
+          setLoginBusy(
+            'sendCodeBtn',
+            false,
+            'Continue with Email'
+          );
+ 
+ 
+          showLoginStatus(
+            result &&
+            result.message
+              ? result.message
+              : 'Access could not be verified.',
+            'error'
+          );
+ 
+          return;
+        }
+ 
+ 
+        /*
+         * Trusted-device path.
+         * requestLoginCode() has NOT sent an OTP
+         * when skipOtp is true.
+         */
+        if (
+          result.skipOtp === true
+        ) {
+ 
+          loginWithTrustedDeviceUI_(
+            email,
+            deviceToken
+          );
+ 
+          return;
+        }
+ 
+ 
+        /*
+         * New/untrusted device:
+         * OTP has been sent.
+         */
+        loginFlowBusy = false;
+ 
+        setLoginBusy(
+          'sendCodeBtn',
+          false,
+          'Continue with Email'
+        );
+ 
+ 
+        showOtpStep_(
+          email
+        );
+ 
+ 
+        showLoginStatus(
+          result.message ||
+          'Verification code sent.',
+          'success'
+        );
+ 
+      }
+    )
+ 
+    .withFailureHandler(
+      function(error) {
+ 
+        loginFlowBusy = false;
+ 
+        setLoginBusy(
+          'sendCodeBtn',
+          false,
+          'Continue with Email'
+        );
+ 
+ 
+        showLoginStatus(
+          getLoginErrorMessage(
+            error
+          ),
+          'error'
+        );
+ 
+      }
+    )
+ 
+    .requestLoginCode(
+      email,
+      deviceToken
+    );
+ 
+}
+ 
+ 
+/* -------------------------------------------------
+   TRUSTED DEVICE LOGIN
+   ------------------------------------------------- */
+ 
+function loginWithTrustedDeviceUI_(
+  email,
+  deviceToken
+) {
+ 
+  if (
+    !email ||
+    !deviceToken
+  ) {
+ 
+    loginFlowBusy = false;
+ 
+    setLoginInterfaceLocked_(
+      false
+    );
+ 
+    showLoginStatus(
+      'This browser could not be verified as a trusted device. Please sign in with a verification code.',
+      'error'
+    );
+ 
+    return;
+  }
+ 
+ 
+  loginFlowBusy = true;
+ 
+  setLoginInterfaceLocked_(
+    true,
+    'Signing you in...'
+  );
+ 
+ 
+  showLoginStatus(
+    'Trusted device recognized. Signing you in...',
+    'info'
+  );
+ 
+ 
+  google.script.run
+ 
+    .withSuccessHandler(
+      function(result) {
+ 
+        if (
+          !result ||
+          !result.success ||
+          !result.user ||
+          !result.sessionToken
+        ) {
+ 
+          loginFlowBusy = false;
+ 
+          setLoginInterfaceLocked_(
+            false
+          );
+ 
+ 
+          showLoginStatus(
+            result &&
+            result.message
+              ? result.message
+              : 'Trusted-device login could not be completed.',
+            'error'
+          );
+ 
+          return;
+        }
+ 
+ 
+        saveSuccessfulLogin_(
+          result
+        );
+ 
+ 
+        localStorage.setItem(
+          'OSYNIX_ATS_KEEP_SIGNED_IN',
+          'true'
+        );
+ 
+ 
+        loginFlowBusy = false;
+ 
+ 
+        const emailInput =
+          document.getElementById(
+            'loginEmail'
+          );
+ 
+        const sendButton =
+          document.getElementById(
+            'sendCodeBtn'
+          );
+ 
+ 
+        if (emailInput) {
+          emailInput.disabled =
+            true;
+        }
+ 
+ 
+        if (sendButton) {
+ 
+          sendButton.disabled =
+            false;
+ 
+          setButtonLabel_(
+            sendButton,
+            'Open Osynix ATS'
+          );
+ 
+ 
+          sendButton.onclick =
+            function() {
+ 
+              continueToATS(
+                result.user
+              );
+ 
+            };
+ 
+        }
+ 
+ 
+        showLoginStatus(
+          'Login successful. Click Open Osynix ATS to continue.',
+          'success'
+        );
+ 
+      }
+    )
+ 
+    .withFailureHandler(
+      function(error) {
+ 
+        loginFlowBusy = false;
+ 
+        setLoginInterfaceLocked_(
+          false
+        );
+ 
+ 
+        showLoginStatus(
+          getLoginErrorMessage(
+            error
+          ),
+          'error'
+        );
+ 
+      }
+    )
+ 
+    .loginWithTrustedDevice(
+      email,
+      deviceToken
+    );
+ 
+}
+ 
+ 
+/* -------------------------------------------------
+   OTP VERIFICATION
+   ------------------------------------------------- */
+ 
+function verifyLoginCodeUI() {
+ 
+  const codeInput =
+    document.getElementById(
+      'loginCode'
+    );
+ 
+ 
+  const code =
+    codeInput
+      ? codeInput.value.trim()
+      : '';
+ 
+ 
+  const keepSignedInElement =
+    document.getElementById(
+      'keepSignedIn'
+    );
+ 
+ 
+  const keepSignedIn =
+    keepSignedInElement
+      ? keepSignedInElement.checked
+      : false;
+ 
+ 
+  if (
+    !currentLoginEmail
+  ) {
+ 
+    showLoginStatus(
+      'Please enter your email again.',
+      'error'
+    );
+ 
+    backToEmailLogin();
+ 
+    return;
+  }
+ 
+ 
+  if (
+    !/^\d{6}$/.test(
+      code
+    )
+  ) {
+ 
+    showLoginStatus(
+      'Enter the 6-digit verification code.',
+      'error'
+    );
+ 
+    return;
+  }
+ 
+ 
+  let deviceToken =
+    localStorage.getItem(
+      'OSYNIX_ATS_DEVICE'
+    );
+ 
+ 
+  if (!deviceToken) {
+ 
+    deviceToken =
+      createDeviceToken_();
+ 
+ 
+    localStorage.setItem(
+      'OSYNIX_ATS_DEVICE',
+      deviceToken
+    );
+ 
+  }
+ 
+ 
+  loginFlowBusy = true;
+ 
+ 
+  setLoginBusy(
+    'verifyCodeBtn',
+    true,
+    'Verifying...'
+  );
+ 
+ 
+  showLoginStatus(
+    'Verifying your account...',
+    'info'
+  );
+ 
+ 
+  google.script.run
+ 
+    .withSuccessHandler(
+      function(result) {
+ 
+        if (
+          !result ||
+          !result.success
+        ) {
+ 
+          loginFlowBusy = false;
+ 
+          setLoginBusy(
+            'verifyCodeBtn',
+            false,
+            'Verify & Sign In'
+          );
+ 
+ 
+          showLoginStatus(
+            result &&
+            result.message
+              ? result.message
+              : 'Verification failed.',
+            'error'
+          );
+ 
+          return;
+        }
+ 
+ 
+        saveSuccessfulLogin_(
+          result
+        );
+ 
+ 
+        if (
+          result.keepSignedIn
+        ) {
+ 
+          localStorage.setItem(
+            'OSYNIX_ATS_KEEP_SIGNED_IN',
+            'true'
+          );
+ 
+        } else {
+ 
+          localStorage.removeItem(
+            'OSYNIX_ATS_KEEP_SIGNED_IN'
+          );
+ 
+        }
+ 
+ 
+        loginFlowBusy = false;
+
+
+const verifyButton =
+  document.getElementById(
+    'verifyCodeBtn'
+  );
+
+
+if (verifyButton) {
+
+  verifyButton.disabled =
+    false;
+
+  setButtonLabel_(
+    verifyButton,
+    'Open Osynix ATS'
+  );
+
+
+  verifyButton.onclick =
+    function() {
+
+      continueToATS(
+        result.user
+      );
+
+    };
+
+}
+
+
+showLoginStatus(
+  'Login successful. Click Open Osynix ATS to continue.',
+  'success'
+);
+ 
+      }
+    )
+ 
+    .withFailureHandler(
+      function(error) {
+ 
+        loginFlowBusy = false;
+ 
+        setLoginBusy(
+          'verifyCodeBtn',
+          false,
+          'Verify & Sign In'
+        );
+ 
+ 
+        showLoginStatus(
+          getLoginErrorMessage(
+            error
+          ),
+          'error'
+        );
+ 
+      }
+    )
+ 
+    .verifyLoginCode(
+      currentLoginEmail,
+      code,
+      deviceToken,
+      keepSignedIn
+    );
+ 
+}
+ 
+ 
+/* -------------------------------------------------
+   RESEND OTP
+   ------------------------------------------------- */
+ 
+function resendLoginCode() {
+ 
+  if (
+    loginFlowBusy ||
+    !currentLoginEmail
+  ) {
+ 
+    if (!currentLoginEmail) {
+      backToEmailLogin();
+    }
+ 
+    return;
+  }
+ 
+ 
+  loginFlowBusy = true;
+ 
+ 
+  showLoginStatus(
+    'Sending a new verification code...',
+    'info'
+  );
+ 
+ 
+  google.script.run
+ 
+    .withSuccessHandler(
+      function(result) {
+ 
+        loginFlowBusy = false;
+ 
+ 
+        if (
+          result &&
+          result.success &&
+          result.skipOtp !== true
+        ) {
+ 
+          showLoginStatus(
+            'A new verification code has been sent.',
+            'success'
+          );
+ 
+          return;
+        }
+ 
+ 
+        showLoginStatus(
+          result &&
+          result.message
+            ? result.message
+            : 'A new code could not be sent.',
+          'error'
+        );
+ 
+      }
+    )
+ 
+    .withFailureHandler(
+      function(error) {
+ 
+        loginFlowBusy = false;
+ 
+ 
+        showLoginStatus(
+          getLoginErrorMessage(
+            error
+          ),
+          'error'
+        );
+ 
+      }
+    )
+ 
+    /*
+     * No device token here.
+     * If the user is already on the OTP screen,
+     * resend must actually issue a new OTP.
+     */
+    .requestLoginCode(
+      currentLoginEmail,
+      ''
+    );
+ 
+}
+ 
+ 
+/* -------------------------------------------------
+   LOGIN VIEW HELPERS
+   ------------------------------------------------- */
+ 
+function showOtpStep_(
+  email
+) {
+ 
+  const emailStep =
+    document.getElementById(
+      'emailLoginStep'
+    );
+ 
+  const otpStep =
+    document.getElementById(
+      'otpLoginStep'
+    );
+ 
+  const otpEmail =
+    document.getElementById(
+      'otpEmailDisplay'
+    );
+ 
+  const codeInput =
+    document.getElementById(
+      'loginCode'
+    );
+ 
+ 
+  if (emailStep) {
+    emailStep.classList.add(
+      'hidden'
+    );
+  }
+ 
+ 
+  if (otpStep) {
+    otpStep.classList.remove(
+      'hidden'
+    );
+  }
+ 
+ 
+  if (otpEmail) {
+    otpEmail.textContent =
+      email;
+  }
+ 
+ 
+  if (codeInput) {
+ 
+    codeInput.value =
+      '';
+ 
+    codeInput.focus();
+ 
+  }
+ 
+}
+ 
+ 
+function backToEmailLogin() {
+ 
+  if (loginFlowBusy) {
+    return;
+  }
+ 
+ 
+  const otpStep =
+    document.getElementById(
+      'otpLoginStep'
+    );
+ 
+  const emailStep =
+    document.getElementById(
+      'emailLoginStep'
+    );
+ 
+  const codeInput =
+    document.getElementById(
+      'loginCode'
+    );
+ 
+  const emailInput =
+    document.getElementById(
+      'loginEmail'
+    );
+ 
+ 
+  if (otpStep) {
+    otpStep.classList.add(
+      'hidden'
+    );
+  }
+ 
+ 
+  if (emailStep) {
+    emailStep.classList.remove(
+      'hidden'
+    );
+  }
+ 
+ 
+  if (codeInput) {
+    codeInput.value =
+      '';
+  }
+ 
+ 
+  showLoginStatus(
+    '',
+    ''
+  );
+ 
+ 
+  if (emailInput) {
+    emailInput.focus();
+  }
+ 
+}
+ 
+ 
+function setLoginFormReady_() {
+ 
+  setLoginInterfaceLocked_(
+    false
+  );
+ 
+ 
+  showLoginStatus(
+    '',
+    ''
+  );
+ 
+ 
+  const emailInput =
+    document.getElementById(
+      'loginEmail'
+    );
+ 
+ 
+  if (emailInput) {
+    emailInput.focus();
+  }
+ 
+}
+ 
+ 
+function setLoginInterfaceLocked_(
+  isLocked,
+  buttonLabel
+) {
+ 
+  const emailInput =
+    document.getElementById(
+      'loginEmail'
+    );
+ 
+  const sendButton =
+    document.getElementById(
+      'sendCodeBtn'
+    );
+ 
+  const verifyButton =
+    document.getElementById(
+      'verifyCodeBtn'
+    );
+ 
+  const codeInput =
+    document.getElementById(
+      'loginCode'
+    );
+ 
+ 
+  if (emailInput) {
+    emailInput.disabled =
+      isLocked;
+  }
+ 
+ 
+  if (sendButton) {
+ 
+    sendButton.disabled =
+      isLocked;
+ 
+    setButtonLabel_(
+      sendButton,
+      buttonLabel ||
+      'Continue with Email'
+    );
+ 
+  }
+ 
+ 
+  if (verifyButton) {
+ 
+    verifyButton.disabled =
+      isLocked;
+ 
+    if (isLocked) {
+      setButtonLabel_(
+        verifyButton,
+        buttonLabel ||
+        'Signing you in...'
+      );
+    } else {
+      setButtonLabel_(
+        verifyButton,
+        'Verify & Sign In'
+      );
+    }
+ 
+  }
+ 
+ 
+  if (codeInput) {
+    codeInput.disabled =
+      isLocked;
+  }
+ 
+}
+ 
+ 
+function restoreKeepSignedInPreference_() {
+ 
+  const keepSignedIn =
+    localStorage.getItem(
+      'OSYNIX_ATS_KEEP_SIGNED_IN'
+    ) === 'true';
+ 
+ 
+  const checkbox =
+    document.getElementById(
+      'keepSignedIn'
+    );
+ 
+ 
+  if (checkbox) {
+    checkbox.checked =
+      keepSignedIn;
+  }
+ 
+}
+ 
+ 
+/* -------------------------------------------------
+   STORAGE HELPERS
+   ------------------------------------------------- */
+ 
+function saveSuccessfulLogin_(
+  result
+) {
+ 
+  localStorage.setItem(
+    'OSYNIX_ATS_SESSION',
+    result.sessionToken
+  );
+ 
+ 
+  localStorage.setItem(
+    'OSYNIX_ATS_USER',
+    JSON.stringify(
+      result.user
+    )
+  );
+ 
+ 
+  if (
+    result.deviceToken
+  ) {
+ 
+    localStorage.setItem(
+      'OSYNIX_ATS_DEVICE',
+      result.deviceToken
+    );
+ 
+  }
+ 
+}
+ 
+ 
+function clearCurrentSession_() {
+ 
+  localStorage.removeItem(
+    'OSYNIX_ATS_SESSION'
+  );
+ 
+ 
+  localStorage.removeItem(
+    'OSYNIX_ATS_USER'
+  );
+ 
+}
+ 
+ 
+function createDeviceToken_() {
+ 
+  if (
+    window.crypto &&
+    typeof window.crypto.randomUUID ===
+      'function'
+  ) {
+ 
+    return (
+      window.crypto.randomUUID() +
+      '-' +
+      window.crypto.randomUUID()
+    );
+ 
+  }
+ 
+ 
+  return (
+    'device-' +
+    Date.now() +
+    '-' +
+    Math.random()
+      .toString(36)
+      .slice(2) +
+    '-' +
+    Math.random()
+      .toString(36)
+      .slice(2)
+  );
+ 
+}
+ 
+ 
+/* -------------------------------------------------
+   REQUEST ACCESS
+   ------------------------------------------------- */
+ 
+function requestAccess() {
+ 
+  const emailInput =
+    document.getElementById(
+      'loginEmail'
+    );
+ 
+ 
+  const email =
+    emailInput
+      ? emailInput.value.trim()
+      : '';
+ 
+ 
+  if (!email) {
+ 
+    showLoginStatus(
+      'Enter your email first, then request access.',
+      'info'
+    );
+ 
+    return;
+  }
+ 
+ 
+  showLoginStatus(
+    'Access requests will be reviewed by the Osynix ATS administrator.',
+    'info'
+  );
+ 
+}
+ 
+ 
+/* -------------------------------------------------
+   REDIRECT TO ATS
+   ------------------------------------------------- */
+ 
+function continueToATS(
+  user
+) {
+ 
+  const role =
+    String(
+      user &&
+      user.role
+        ? user.role
+        : ''
+    )
+      .trim()
+      .toLowerCase();
+ 
+ 
+  const sessionToken =
+    localStorage.getItem(
+      'OSYNIX_ATS_SESSION'
+    );
+ 
+ 
+  if (!sessionToken) {
+ 
+    loginFlowBusy =
+      false;
+ 
+    setLoginInterfaceLocked_(
+      false
+    );
+ 
+ 
+    showLoginStatus(
+      'A login session could not be created. Please try again.',
+      'error'
+    );
+ 
+    return;
+  }
+ 
+ 
+  let page =
+    'candidate';
+ 
+ 
+  if (
+    role === 'admin'
+  ) {
+    page =
+      'dashboard';
+  }
+ 
+ 
+  const baseUrl =
+    'https://script.google.com/macros/s/AKfycbxLxFOev8XGW622Z9Xj7Vgr8PhrHvsChDedYs9vfC7uflI__xuNbUQJTfCFy7vYRV9VOg/exec';
+ 
+ 
+  const targetUrl =
+    baseUrl +
+    '?page=' +
+    encodeURIComponent(
+      page
+    ) +
+    '&session=' +
+    encodeURIComponent(
+      sessionToken
+    );
+ 
+ 
+  window.top.location.href =
+    targetUrl;
+ 
+}
+ 
+ 
+/* -------------------------------------------------
+   GENERAL UI HELPERS
+   ------------------------------------------------- */
+ 
+function showLoginStatus(
+  message,
+  type
+) {
+ 
+  const status =
+    document.getElementById(
+      'loginStatus'
+    );
+ 
+ 
+  if (!status) {
+    return;
+  }
+ 
+ 
+  if (!message) {
+ 
+    status.textContent =
+      '';
+ 
+    status.className =
+      'login-status hidden';
+ 
+    return;
+  }
+ 
+ 
+  status.textContent =
+    message;
+ 
+ 
+  status.className =
+    'login-status ' +
+    (
+      type ||
+      'info'
+    );
+ 
+}
+ 
+ 
+function setLoginBusy(
+  buttonId,
+  isBusy,
+  label
+) {
+ 
+  const button =
+    document.getElementById(
+      buttonId
+    );
+ 
+ 
+  if (!button) {
+    return;
+  }
+ 
+ 
+  button.disabled =
+    isBusy;
+ 
+ 
+  if (label) {
+    setButtonLabel_(
+      button,
+      label
+    );
+  }
+ 
+}
+ 
+ 
+function setButtonLabel_(
+  button,
+  label
+) {
+ 
+  if (
+    !button ||
+    !label
+  ) {
+    return;
+  }
+ 
+ 
+  const textSpan =
+    button.querySelector(
+      'span'
+    );
+ 
+ 
+  if (textSpan) {
+ 
+    textSpan.textContent =
+      label;
+ 
+  } else {
+ 
+    button.textContent =
+      label;
+ 
+  }
+ 
+}
+ 
+ 
+function getLoginErrorMessage(
+  error
+) {
+ 
+  if (!error) {
+    return 'An unexpected error occurred.';
+  }
+ 
+ 
+  if (
+    typeof error ===
+    'string'
+  ) {
+    return error;
+  }
+ 
+ 
+  return (
+    error.message ||
+    'An unexpected error occurred.'
+  );
+ 
+}
+ 
+ 
+/* -------------------------------------------------
+   ENTER KEY
+   ------------------------------------------------- */
+ 
+document.addEventListener(
+  'keydown',
+  function(event) {
+ 
+    if (
+      event.key !==
+      'Enter'
+    ) {
+      return;
+    }
+ 
+ 
+    const otpStep =
+      document.getElementById(
+        'otpLoginStep'
+      );
+ 
+ 
+    const otpVisible =
+      otpStep
+        ? !otpStep
+            .classList
+            .contains(
+              'hidden'
+            )
+        : false;
+ 
+ 
+    if (otpVisible) {
+ 
+      verifyLoginCodeUI();
+ 
+    } else {
+ 
+      if (loginFlowBusy) {
+        return;
+      }
+ 
+      sendLoginCode();
+ 
+    }
+ 
+  }
+);
+ 
+</script>

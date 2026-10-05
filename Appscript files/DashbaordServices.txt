@@ -1,0 +1,1598 @@
+/**
+ * Osynix ATS - DashboardService.gs
+ *
+ * Dashboard rules:
+ * 1) Admin and Recruiter can see all ACTIVE positions operationally.
+ * 2) Candidate KPIs / candidate drawers use ONLY candidates attached
+ *    to currently ACTIVE positions.
+ * 3) Admin and Recruiter can update position Status, Priority and
+ *    Hiring Target from the web dashboard.
+ * 4) The live Positions Master sheet remains the source of truth.
+ * 5) Historical closure audit fields are preserved when a position
+ *    is reopened.
+ */
+
+function getRecruiterDashboardData(sessionToken) {
+  const user =
+    requireATSOperationalUser_(
+      sessionToken
+    );
+
+  const ss =
+    getSpreadsheet_();
+
+  const positionsSheet =
+    ss.getSheetByName(
+      CONFIG.SHEETS.POSITIONS
+    );
+
+  const candidatesSheet =
+    ss.getSheetByName(
+      CONFIG.SHEETS.CANDIDATES
+    );
+
+  if (!positionsSheet) {
+    throw new Error(
+      'Positions Master sheet was not found.'
+    );
+  }
+
+  if (!candidatesSheet) {
+    throw new Error(
+      'Candidates sheet was not found.'
+    );
+  }
+
+  const positions =
+    dashboardReadObjects_(
+      positionsSheet
+    );
+
+  const candidates =
+    dashboardReadObjects_(
+      candidatesSheet
+    );
+
+  const allPositionRows =
+    positions.map(
+      dashboardPositionObject_
+    );
+
+  const activePositionRows =
+    allPositionRows.filter(
+      function(item) {
+        return (
+          dashboardNormalize_(
+            item.status
+          ) === 'active'
+        );
+      }
+    );
+
+  const activeRefMap = {};
+
+  activePositionRows.forEach(
+    function(item) {
+      activeRefMap[item.refNo] =
+        item;
+    }
+  );
+
+  // IMPORTANT:
+  // Dashboard candidate data must only represent
+  // candidates belonging to CURRENTLY ACTIVE positions.
+  const activeCandidates =
+    candidates.filter(
+      function(item) {
+        const refNo =
+          dashboardRef_(
+            item['Ref #']
+          );
+
+        return !!activeRefMap[
+          refNo
+        ];
+      }
+    );
+
+  const candidateRows =
+    activeCandidates.map(
+      function(item) {
+        const refNo =
+          dashboardRef_(
+            item['Ref #']
+          );
+
+        const position =
+          activeRefMap[
+            refNo
+          ];
+
+        return {
+          candidateId:
+            String(
+              item['Candidate ID'] || ''
+            ).trim(),
+
+          refNo:
+            refNo,
+
+          name:
+            String(
+              item['Candidate Name'] || ''
+            ).trim(),
+
+          phone:
+            String(
+              item[
+                'Mobile / Phone Number'
+              ] || ''
+            ).trim(),
+
+          email:
+            String(
+              item['Email ID'] || ''
+            ).trim(),
+
+          designation:
+            String(
+              item[
+                'Current Designation'
+              ] || ''
+            ).trim(),
+
+          company:
+            String(
+              item[
+                'Current Company'
+              ] || ''
+            ).trim(),
+
+          location:
+            String(
+              item['Location'] || ''
+            ).trim(),
+
+          atsMatch:
+            dashboardPercentNumber_(
+              item['ATS Match %']
+            ),
+
+          mustHave:
+            String(
+              item['Must-Have Fit'] || ''
+            ).trim(),
+
+          decision:
+            String(
+              item['Decision'] || ''
+            ).trim(),
+
+          stage:
+            String(
+              item[
+                'Recruitment Stage'
+              ] || ''
+            ).trim(),
+
+          interviewStatus:
+            String(
+              item[
+                'Interview Status'
+              ] || ''
+            ).trim(),
+
+          clientStatus:
+            String(
+              item['Client Status'] || ''
+            ).trim(),
+
+          lastUpdated:
+            dashboardDisplay_(
+              item['Last Updated']
+            ),
+
+          client:
+            position
+              ? position.client
+              : '',
+
+          position:
+            position
+              ? position.position
+              : ''
+        };
+      }
+    );
+
+  const shortlisted =
+    candidateRows.filter(
+      function(item) {
+        return (
+          dashboardNormalize_(
+            item.stage
+          ) === 'shortlisted'
+        );
+      }
+    );
+
+  const holds =
+    candidateRows.filter(
+      function(item) {
+        return (
+          dashboardNormalize_(
+            item.stage
+          ) === 'hold'
+        );
+      }
+    );
+
+  const rejected =
+    candidateRows.filter(
+      function(item) {
+        return (
+          dashboardNormalize_(
+            item.stage
+          ) === 'rejected'
+        );
+      }
+    );
+
+  const interviewCandidates =
+    candidateRows.filter(
+      function(item) {
+        return !!item.interviewStatus;
+      }
+    );
+
+  const offerCandidates =
+    candidateRows.filter(
+      function(item) {
+        const stage =
+          dashboardNormalize_(
+            item.stage
+          );
+
+        return (
+          stage === 'offer sent' ||
+          stage === 'offered' ||
+          stage === 'offer'
+        );
+      }
+    );
+
+  const hiredCandidates =
+    candidateRows.filter(
+      function(item) {
+        return (
+          dashboardNormalize_(
+            item.stage
+          ) === 'hired'
+        );
+      }
+    );
+
+  const totalInterviews =
+    activePositionRows.reduce(
+      function(sum, item) {
+        return (
+          sum +
+          dashboardNumber_(
+            item.interviews
+          )
+        );
+      },
+      0
+    );
+
+  const totalOffers =
+    activePositionRows.reduce(
+      function(sum, item) {
+        return (
+          sum +
+          dashboardNumber_(
+            item.offers
+          )
+        );
+      },
+      0
+    );
+
+  const totalHired =
+    activePositionRows.reduce(
+      function(sum, item) {
+        return (
+          sum +
+          dashboardNumber_(
+            item.hired
+          )
+        );
+      },
+      0
+    );
+
+  const clientMap = {};
+
+  allPositionRows.forEach(
+    function(item) {
+      const client =
+        String(
+          item.client || ''
+        ).trim();
+
+      if (!client) {
+        return;
+      }
+
+      const key =
+        dashboardNormalize_(
+          client
+        );
+
+      if (!clientMap[key]) {
+        clientMap[key] = {
+          client:
+            client,
+
+          totalPositions:
+            0,
+
+          activePositions:
+            0,
+
+          filledPositions:
+            0,
+
+          hiringTarget:
+            0,
+
+          screened:
+            0,
+
+          shortlisted:
+            0,
+
+          interviews:
+            0,
+
+          offers:
+            0,
+
+          hired:
+            0
+        };
+      }
+
+      clientMap[key]
+        .totalPositions += 1;
+
+      if (
+        dashboardNormalize_(
+          item.status
+        ) === 'active'
+      ) {
+        clientMap[key]
+          .activePositions += 1;
+      }
+
+      if (
+        dashboardNormalize_(
+          item.status
+        ) === 'filled'
+      ) {
+        clientMap[key]
+          .filledPositions += 1;
+      }
+
+      clientMap[key]
+        .hiringTarget +=
+          dashboardNumber_(
+            item.hiringTarget
+          );
+
+      clientMap[key]
+        .screened +=
+          dashboardNumber_(
+            item.screened
+          );
+
+      clientMap[key]
+        .shortlisted +=
+          dashboardNumber_(
+            item.shortlisted
+          );
+
+      clientMap[key]
+        .interviews +=
+          dashboardNumber_(
+            item.interviews
+          );
+
+      clientMap[key]
+        .offers +=
+          dashboardNumber_(
+            item.offers
+          );
+
+      clientMap[key]
+        .hired +=
+          dashboardNumber_(
+            item.hired
+          );
+    }
+  );
+
+  const clientPortfolio =
+    Object.keys(
+      clientMap
+    )
+      .map(
+        function(key) {
+          return clientMap[key];
+        }
+      )
+      .sort(
+        function(a, b) {
+          if (
+            b.activePositions !==
+            a.activePositions
+          ) {
+            return (
+              b.activePositions -
+              a.activePositions
+            );
+          }
+
+          return a.client
+            .localeCompare(
+              b.client
+            );
+        }
+      );
+
+  const recentActivity =
+    candidateRows
+      .slice()
+      .sort(
+        function(a, b) {
+          return String(
+            b.lastUpdated || ''
+          ).localeCompare(
+            String(
+              a.lastUpdated || ''
+            )
+          );
+        }
+      )
+      .slice(
+        0,
+        8
+      );
+
+  const topShortlisted =
+    candidateRows
+      .filter(
+        function(item) {
+          return (
+            dashboardNormalize_(
+              item.stage
+            ) === 'shortlisted'
+          );
+        }
+      )
+      .sort(
+        function(a, b) {
+          return (
+            b.atsMatch -
+            a.atsMatch
+          );
+        }
+      )
+      .slice(
+        0,
+        8
+      );
+
+  const pendingActions = [
+    {
+      key:
+        'hold',
+
+      label:
+        'Candidates on Hold',
+
+      count:
+        holds.length
+    },
+    {
+      key:
+        'shortlisted-no-interview',
+
+      label:
+        'Shortlisted — interview not logged',
+
+      count:
+        candidateRows.filter(
+          function(item) {
+            return (
+              dashboardNormalize_(
+                item.stage
+              ) ===
+                'shortlisted' &&
+              !item.interviewStatus
+            );
+          }
+        ).length
+    },
+    {
+      key:
+        'zero-screened',
+
+      label:
+        'Active positions with zero screened',
+
+      count:
+        activePositionRows.filter(
+          function(item) {
+            return (
+              item.screened === 0
+            );
+          }
+        ).length
+    },
+    {
+      key:
+        'high-priority',
+
+      label:
+        'High-priority active positions',
+
+      count:
+        activePositionRows.filter(
+          function(item) {
+            return (
+              dashboardNormalize_(
+                item.priority
+              ) === 'high'
+            );
+          }
+        ).length
+    },
+    {
+      key:
+        'client-status',
+
+      label:
+        'Client status pending',
+
+      count:
+        candidateRows.filter(
+          function(item) {
+            return (
+              dashboardNormalize_(
+                item.clientStatus
+              ) === 'pending'
+            );
+          }
+        ).length
+    },
+    {
+      key:
+        'offers',
+
+      label:
+        'Offers to follow up',
+
+      count:
+        offerCandidates.length
+    }
+  ];
+
+  return {
+    user: {
+      userId:
+        user.userId || '',
+
+      fullName:
+        user.fullName || '',
+
+      email:
+        user.email || '',
+
+      role:
+        user.role || '',
+
+      permissions:
+        user.permissions || {}
+    },
+
+    kpis: {
+      activePositions:
+        activePositionRows.length,
+
+      totalCandidates:
+        candidateRows.length,
+
+      shortlisted:
+        shortlisted.length,
+
+      interviews:
+        totalInterviews ||
+        interviewCandidates.length,
+
+      offers:
+        totalOffers ||
+        offerCandidates.length,
+
+      hired:
+        totalHired ||
+        hiredCandidates.length
+    },
+
+    funnel: [
+      {
+        key:
+          'screened',
+
+        label:
+          'Screened',
+
+        count:
+          candidateRows.length
+      },
+      {
+        key:
+          'shortlisted',
+
+        label:
+          'Shortlisted',
+
+        count:
+          shortlisted.length
+      },
+      {
+        key:
+          'interview',
+
+        label:
+          'Client Interview',
+
+        count:
+          totalInterviews ||
+          interviewCandidates.length
+      },
+      {
+        key:
+          'offer',
+
+        label:
+          'Offer Sent',
+
+        count:
+          totalOffers ||
+          offerCandidates.length
+      },
+      {
+        key:
+          'hired',
+
+        label:
+          'Hired',
+
+        count:
+          totalHired ||
+          hiredCandidates.length
+      }
+    ],
+
+    decisionMix: [
+      {
+        key:
+          'shortlisted',
+
+        label:
+          'Shortlisted',
+
+        count:
+          shortlisted.length
+      },
+      {
+        key:
+          'hold',
+
+        label:
+          'Hold',
+
+        count:
+          holds.length
+      },
+      {
+        key:
+          'rejected',
+
+        label:
+          'Rejected',
+
+        count:
+          rejected.length
+      },
+      {
+        key:
+          'hired',
+
+        label:
+          'Hired',
+
+        count:
+          hiredCandidates.length
+      }
+    ],
+
+    activePositions:
+      activePositionRows,
+
+    // Needed by Manage Positions so closed / filled / on-hold /
+    // cancelled positions can be reopened through the web app.
+    allPositions:
+      allPositionRows,
+
+    candidates:
+      candidateRows,
+
+    clientPortfolio:
+      clientPortfolio,
+
+    pendingActions:
+      pendingActions,
+
+    recentActivity:
+      recentActivity,
+
+    topShortlisted:
+      topShortlisted,
+
+    interviewCandidates:
+      candidateRows.filter(
+        function(item) {
+          return !!item.interviewStatus;
+        }
+      )
+  };
+}
+
+
+/**
+ * Admin + Recruiter position-management endpoint.
+ *
+ * Allowed changes:
+ * - Status
+ * - Priority
+ * - Hiring Target
+ *
+ * Closure audit fields:
+ * - Position Closed By
+ * - Position Closed Date
+ * - Closure Status
+ * - Last Updated By
+ *
+ * Historical Position Closed By / Date are never erased or overwritten.
+ */
+function updatePositionManagement(
+  sessionToken,
+  payload
+) {
+  const user =
+    requireATSOperationalUser_(
+      sessionToken
+    );
+
+  if (!payload) {
+    throw new Error(
+      'Missing position update payload.'
+    );
+  }
+
+  const refNo =
+    dashboardRef_(
+      payload.refNo
+    );
+
+  if (!refNo) {
+    throw new Error(
+      'A valid Ref # is required.'
+    );
+  }
+
+  const allowedStatuses = [
+    'Active',
+    'On Hold',
+    'Closed',
+    'Filled',
+    'Cancelled'
+  ];
+
+  const allowedPriorities = [
+    'High',
+    'Medium',
+    'Low'
+  ];
+
+  const newStatus =
+    String(
+      payload.status || ''
+    ).trim();
+
+  const newPriority =
+    String(
+      payload.priority || ''
+    ).trim();
+
+  const newHiringTarget =
+    Number(
+      payload.hiringTarget
+    );
+
+  if (
+    allowedStatuses.indexOf(
+      newStatus
+    ) === -1
+  ) {
+    throw new Error(
+      'Invalid position status.'
+    );
+  }
+
+  if (
+    allowedPriorities.indexOf(
+      newPriority
+    ) === -1
+  ) {
+    throw new Error(
+      'Invalid position priority.'
+    );
+  }
+
+  if (
+    !Number.isFinite(
+      newHiringTarget
+    ) ||
+    newHiringTarget < 1 ||
+    Math.floor(
+      newHiringTarget
+    ) !== newHiringTarget
+  ) {
+    throw new Error(
+      'Hiring Target must be a whole number of 1 or more.'
+    );
+  }
+
+  const lock =
+    LockService.getScriptLock();
+
+  if (
+    !lock.tryLock(
+      30000
+    )
+  ) {
+    throw new Error(
+      'The ATS is busy with another update. Please try again.'
+    );
+  }
+
+  try {
+    const ss =
+      getSpreadsheet_();
+
+    const sheet =
+      ss.getSheetByName(
+        CONFIG.SHEETS.POSITIONS
+      );
+
+    if (!sheet) {
+      throw new Error(
+        'Positions Master sheet was not found.'
+      );
+    }
+
+    const lastRow =
+      sheet.getLastRow();
+
+    const lastColumn =
+      sheet.getLastColumn();
+
+    if (
+      lastRow < 2 ||
+      lastColumn < 1
+    ) {
+      throw new Error(
+        'No position records were found.'
+      );
+    }
+
+    const values =
+      sheet.getRange(
+        1,
+        1,
+        lastRow,
+        lastColumn
+      ).getDisplayValues();
+
+    const headers =
+      values[0].map(
+        function(value) {
+          return String(
+            value || ''
+          ).trim();
+        }
+      );
+
+    const requiredHeaders = [
+      'Ref #',
+      'Client',
+      'Position',
+      'Status',
+      'Priority',
+      'Hiring Target',
+      'Last Updated'
+    ];
+
+    requiredHeaders.forEach(
+      function(header) {
+        if (
+          headers.indexOf(
+            header
+          ) < 0
+        ) {
+          throw new Error(
+            'Required Positions Master column not found: ' +
+            header
+          );
+        }
+      }
+    );
+
+    const refIndex =
+      headers.indexOf(
+        'Ref #'
+      );
+
+    let rowNumber =
+      -1;
+
+    for (
+      let i = 1;
+      i < values.length;
+      i++
+    ) {
+      if (
+        dashboardRef_(
+          values[i][refIndex]
+        ) === refNo
+      ) {
+        rowNumber =
+          i + 1;
+
+        break;
+      }
+    }
+
+    if (
+      rowNumber < 2
+    ) {
+      throw new Error(
+        'Position Ref #' +
+        refNo +
+        ' was not found.'
+      );
+    }
+
+    const rowDisplay =
+      values[
+        rowNumber - 1
+      ];
+
+    const previous = {
+      status:
+        dashboardCellByHeader_(
+          headers,
+          rowDisplay,
+          'Status'
+        ),
+
+      priority:
+        dashboardCellByHeader_(
+          headers,
+          rowDisplay,
+          'Priority'
+        ),
+
+      hiringTarget:
+        dashboardCellByHeader_(
+          headers,
+          rowDisplay,
+          'Hiring Target'
+        )
+    };
+
+    const client =
+      dashboardCellByHeader_(
+        headers,
+        rowDisplay,
+        'Client'
+      );
+
+    const position =
+      dashboardCellByHeader_(
+        headers,
+        rowDisplay,
+        'Position'
+      );
+
+    const now =
+      new Date();
+
+    const today =
+      Utilities.formatDate(
+        now,
+        CONFIG.TIMEZONE,
+        'yyyy-MM-dd'
+      );
+
+    dashboardSetCellByHeader_(
+      sheet,
+      headers,
+      rowNumber,
+      'Status',
+      newStatus
+    );
+
+    dashboardSetCellByHeader_(
+      sheet,
+      headers,
+      rowNumber,
+      'Priority',
+      newPriority
+    );
+
+    dashboardSetCellByHeader_(
+      sheet,
+      headers,
+      rowNumber,
+      'Hiring Target',
+      newHiringTarget
+    );
+
+    dashboardSetCellByHeader_(
+      sheet,
+      headers,
+      rowNumber,
+      'Last Updated',
+      now
+    );
+
+    // Z - Last Updated By
+    if (
+      headers.indexOf(
+        'Last Updated By'
+      ) >= 0
+    ) {
+      dashboardSetCellByHeader_(
+        sheet,
+        headers,
+        rowNumber,
+        'Last Updated By',
+        user.fullName ||
+        user.email ||
+        'ATS User'
+      );
+    }
+
+    const closureStatuses = [
+      'Closed',
+      'Filled',
+      'Cancelled'
+    ];
+
+    if (
+      closureStatuses.indexOf(
+        newStatus
+      ) !== -1
+    ) {
+      // Historical closed-by value is populated once only.
+      if (
+        headers.indexOf(
+          'Position Closed By'
+        ) >= 0
+      ) {
+        const existingClosedBy =
+          dashboardCellByHeader_(
+            headers,
+            rowDisplay,
+            'Position Closed By'
+          );
+
+        if (!existingClosedBy) {
+          dashboardSetCellByHeader_(
+            sheet,
+            headers,
+            rowNumber,
+            'Position Closed By',
+            user.fullName ||
+            user.email ||
+            'ATS User'
+          );
+        }
+      }
+
+      // Historical closed-date value is populated once only.
+      if (
+        headers.indexOf(
+          'Position Closed Date'
+        ) >= 0
+      ) {
+        const existingClosedDate =
+          dashboardCellByHeader_(
+            headers,
+            rowDisplay,
+            'Position Closed Date'
+          );
+
+        if (!existingClosedDate) {
+          dashboardSetCellByHeader_(
+            sheet,
+            headers,
+            rowNumber,
+            'Position Closed Date',
+            today
+          );
+        }
+      }
+
+      if (
+        headers.indexOf(
+          'Closure Status'
+        ) >= 0
+      ) {
+        dashboardSetCellByHeader_(
+          sheet,
+          headers,
+          rowNumber,
+          'Closure Status',
+          newStatus
+        );
+      }
+    }
+
+    // Reopening or putting a position on hold DOES NOT erase
+    // historical close-by/date/closure data.
+    SpreadsheetApp.flush();
+
+    dashboardLogPositionUpdate_(
+      user,
+      refNo,
+      client,
+      position,
+      previous,
+      {
+        status:
+          newStatus,
+
+        priority:
+          newPriority,
+
+        hiringTarget:
+          newHiringTarget
+      }
+    );
+
+    return {
+      success:
+        true,
+
+      refNo:
+        refNo,
+
+      status:
+        newStatus,
+
+      priority:
+        newPriority,
+
+      hiringTarget:
+        newHiringTarget,
+
+      message:
+        'Position Ref #' +
+        refNo +
+        ' updated successfully.'
+    };
+  }
+  finally {
+    lock.releaseLock();
+  }
+}
+
+
+function dashboardPositionObject_(item) {
+  return {
+    refNo:
+      dashboardRef_(
+        item['Ref #']
+      ),
+
+    client:
+      String(
+        item['Client'] || ''
+      ).trim(),
+
+    position:
+      String(
+        item['Position'] || ''
+      ).trim(),
+
+    location:
+      String(
+        item['Location'] || ''
+      ).trim(),
+
+    priority:
+      String(
+        item['Priority'] ||
+        'Medium'
+      ).trim(),
+
+    hiringTarget:
+      dashboardNumber_(
+        item['Hiring Target']
+      ),
+
+    screened:
+      dashboardNumber_(
+        item[
+          'Profiles Screened'
+        ]
+      ),
+
+    shortlisted:
+      dashboardNumber_(
+        item['Shortlisted']
+      ),
+
+    interviews:
+      dashboardNumber_(
+        item[
+          'Client Interviews'
+        ]
+      ),
+
+    offers:
+      dashboardNumber_(
+        item['Offers']
+      ),
+
+    hired:
+      dashboardNumber_(
+        item['Hired']
+      ),
+
+    averageMatch:
+      dashboardPercentNumber_(
+        item[
+          'Average ATS Match'
+        ]
+      ),
+
+    openDate:
+      dashboardDisplay_(
+        item['Open Date']
+      ),
+
+    status:
+      String(
+        item['Status'] || ''
+      ).trim(),
+
+    jdUrl:
+      String(
+        item[
+          'JD / File Link'
+        ] || ''
+      ).trim(),
+
+    notes:
+      String(
+        item['Notes'] || ''
+      ).trim(),
+
+    lastUpdated:
+      dashboardDisplay_(
+        item['Last Updated']
+      )
+  };
+}
+
+
+function dashboardReadObjects_(sheet) {
+  const lastRow =
+    sheet.getLastRow();
+
+  const lastColumn =
+    sheet.getLastColumn();
+
+  if (
+    lastRow < 2 ||
+    lastColumn < 1
+  ) {
+    return [];
+  }
+
+  const values =
+    sheet.getRange(
+      1,
+      1,
+      lastRow,
+      lastColumn
+    ).getDisplayValues();
+
+  const headers =
+    values[0].map(
+      function(value) {
+        return String(
+          value || ''
+        ).trim();
+      }
+    );
+
+  return values
+    .slice(1)
+    .filter(
+      function(row) {
+        return row.some(
+          function(value) {
+            return String(
+              value || ''
+            ).trim() !== '';
+          }
+        );
+      }
+    )
+    .map(
+      function(row) {
+        const item = {};
+
+        headers.forEach(
+          function(
+            header,
+            index
+          ) {
+            if (header) {
+              item[header] =
+                row[index];
+            }
+          }
+        );
+
+        return item;
+      }
+    );
+}
+
+
+function dashboardCellByHeader_(
+  headers,
+  row,
+  header
+) {
+  const index =
+    headers.indexOf(
+      header
+    );
+
+  if (index < 0) {
+    return '';
+  }
+
+  return String(
+    row[index] || ''
+  ).trim();
+}
+
+
+function dashboardSetCellByHeader_(
+  sheet,
+  headers,
+  rowNumber,
+  header,
+  value
+) {
+  const index =
+    headers.indexOf(
+      header
+    );
+
+  if (index < 0) {
+    return;
+  }
+
+  sheet
+    .getRange(
+      rowNumber,
+      index + 1
+    )
+    .setValue(
+      value
+    );
+}
+
+
+function dashboardLogPositionUpdate_(
+  user,
+  refNo,
+  client,
+  position,
+  previous,
+  next
+) {
+  const ss =
+    getSpreadsheet_();
+
+  const sheet =
+    ss.getSheetByName(
+      'Activity Log'
+    );
+
+  if (!sheet) {
+    return;
+  }
+
+  const lastColumn =
+    sheet.getLastColumn();
+
+  if (lastColumn < 1) {
+    return;
+  }
+
+  const headers =
+    sheet
+      .getRange(
+        1,
+        1,
+        1,
+        lastColumn
+      )
+      .getDisplayValues()[0]
+      .map(
+        function(value) {
+          return String(
+            value || ''
+          ).trim();
+        }
+      );
+
+  const values = {
+    'Timestamp':
+      new Date(),
+
+    'User Email':
+      user.email || '',
+
+    'User Name':
+      user.fullName || '',
+
+    'Role':
+      user.role || '',
+
+    'Action':
+      'POSITION_UPDATED',
+
+    'Entity Type':
+      'Position',
+
+    'Entity ID / Ref #':
+      refNo,
+
+    'Client':
+      client || '',
+
+    'Details':
+      (
+        position ||
+        'Position'
+      ) +
+      ' updated through ATS Dashboard',
+
+    'Previous Value':
+      JSON.stringify(
+        previous || {}
+      ),
+
+    'New Value':
+      JSON.stringify(
+        next || {}
+      )
+  };
+
+  const row =
+    headers.map(
+      function(header) {
+        return Object.prototype
+          .hasOwnProperty.call(
+            values,
+            header
+          )
+          ? values[header]
+          : '';
+      }
+    );
+
+  sheet.appendRow(
+    row
+  );
+}
+
+
+function dashboardNormalize_(value) {
+  return String(
+    value || ''
+  )
+    .trim()
+    .toLowerCase();
+}
+
+
+function dashboardRef_(value) {
+  const clean =
+    String(
+      value || ''
+    )
+      .replace(
+        /[^\d]/g,
+        ''
+      )
+      .trim();
+
+  return clean
+    ? clean.padStart(
+        3,
+        '0'
+      )
+    : '';
+}
+
+
+function dashboardNumber_(value) {
+  const number =
+    Number(
+      String(
+        value || '0'
+      )
+        .replace(
+          /,/g,
+          ''
+        )
+        .replace(
+          /%/g,
+          ''
+        )
+    );
+
+  return isNaN(
+    number
+  )
+    ? 0
+    : number;
+}
+
+
+function dashboardPercentNumber_(value) {
+  return dashboardNumber_(
+    value
+  );
+}
+
+
+function dashboardDisplay_(value) {
+  return String(
+    value || ''
+  ).trim();
+}

@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <?!= include('Styles'); ?>
+</head>
+
+<body>
+<?!= include('AccessGuard'); ?>
+<?!= include('Navigation'); ?>
+<div class="shell ats-dashboard-shell">
+
+  <div class="assessment-layout">
+
+    <!-- =====================================================
+         LEFT SIDE — CANDIDATE ASSESSMENT
+         ===================================================== -->
+    <main class="assessment-workspace">
+
+      <div class="assessment-page-heading">
+        <div>
+          <h1>Candidate Assessment</h1>
+          <p>
+            Analyze candidate CV against the approved
+            position criteria.
+          </p>
+        </div>
+      </div>
+<div class="assessment-mode-switch" id="assessmentModeSwitch">
+
+  <button
+    type="button"
+    id="singleModeBtn"
+    class="assessment-mode-btn active"
+    onclick="switchAssessmentMode('single')"
+  >
+    Single CV
+  </button>
+
+  <button
+    type="button"
+    id="batchModeBtn"
+    class="assessment-mode-btn"
+    onclick="switchAssessmentMode('batch')"
+  >
+    Batch CV
+    <span class="assessment-mode-limit">
+      Max 5
+    </span>
+  </button>
+
+</div>
+
+      <!-- TOP WORKFLOW -->
+      <section class="card assessment-control-card">
+
+        <div class="assessment-control-grid">
+
+          <!-- CLIENT -->
+          <div class="assessment-control-item">
+            <label class="assessment-step-label">
+              1. Select Client
+            </label>
+
+            <div class="client-select-wrap">
+              <select
+                id="clientSelect"
+                onchange="handleClientChange()"
+              >
+                <option value="">
+                  Select a client
+                </option>
+              </select>
+            </div>
+          </div>
+
+
+          <!-- POSITION -->
+          <div
+            class="assessment-control-item hidden"
+            id="positionSelectorCard"
+          >
+            <label class="assessment-step-label">
+              2. Select Active Position
+            </label>
+
+            <div
+              id="positionCards"
+              class="position-card-grid"
+            ></div>
+
+            <select
+              id="positionSelect"
+              class="hidden"
+              aria-hidden="true"
+            ></select>
+
+            <div
+              id="positionMeta"
+              class="meta"
+            ></div>
+          </div>
+
+
+          <!-- CV UPLOAD -->
+          <div id="singleUploadSection">
+          <div class="assessment-control-item">
+            <label class="assessment-step-label">
+              3. Upload Candidate CV
+            </label>
+
+            <div class="compact-upload-box">
+
+              <input
+                id="cvFile"
+                type="file"
+                accept=".pdf,.doc,.docx,.txt,.rtf"
+              >
+              </div>
+
+              </div>
+              </div>
+<div
+  id="batchUploadSection"
+  class="batch-upload-section hidden"
+>
+
+  <h2>3. Upload Multiple CVs</h2>
+
+  <input
+    id="batchCvFiles"
+    type="file"
+    accept=".pdf,.doc,.docx,.txt,.rtf"
+    multiple
+    onchange="handleBatchFiles()"
+  >
+
+  <p class="help">
+    Upload up to 5 candidate CVs for the selected position.
+  </p>
+
+  <div
+    id="batchFileSummary"
+    class="batch-file-summary"
+  >
+    No files selected.
+  </div>
+
+  <button
+    id="assessBatchBtn"
+    type="button"
+    onclick="assessBatch()"
+  >
+    Assess Batch
+  </button>
+
+</div>
+              <p class="help compact-help">
+                CV is processed for assessment
+                and is not permanently stored.
+              </p>
+
+            </div>
+          </div>
+
+
+          <!-- ASSESS -->
+          <div class="assessment-control-item assessment-action-item">
+
+            <label class="assessment-step-label">
+              &nbsp;
+            </label>
+
+            <button
+              id="assessBtn"
+              type="button"
+              onclick="assess()"
+              class="assessment-primary-action"
+            >
+              Assess Candidate
+            </button>
+
+          </div>
+
+        </div>
+
+        <div id="status"></div>
+
+      </section>
+
+
+      <!-- =====================================================
+           ASSESSMENT RESULTS
+           ===================================================== -->
+      <section
+  id="batchResultCard"
+  class="batch-result-card hidden"
+>
+
+  <div class="batch-result-header">
+
+    <div>
+      <h2>Batch Assessment Results</h2>
+
+      <p id="batchResultSummary">
+        No batch assessment completed.
+      </p>
+    </div>
+
+    <div class="batch-result-actions">
+
+  <button
+    type="button"
+    id="downloadBatchPdfBtn"
+    class="secondary"
+    onclick="downloadBatchPdf()"
+    disabled
+  >
+    Download Batch PDF
+  </button>
+
+  <button
+    type="button"
+    id="saveBatchBtn"
+    onclick="saveBatchToATS()"
+    disabled
+  >
+    Save Batch to ATS
+  </button>
+
+</div>
+
+  </div>
+
+  <div class="batch-result-table-wrap">
+
+    <table class="batch-result-table">
+
+      <thead>
+        <tr>
+          <th>Candidate</th>
+          <th>ATS Match</th>
+          <th>Must-Have Fit</th>
+          <th>Core Role Fit</th>
+          <th>Decision</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+
+      <tbody id="batchResultBody">
+      </tbody>
+
+    </table>
+
+  </div>
+
+</section>
+      <section
+        class="card hidden assessment-results-card"
+        id="resultCard"
+      >
+
+        <div class="assessment-results-header">
+
+          <div>
+            <h2>Assessment Results</h2>
+            <p>
+              Candidate evaluation against the
+              approved position criteria.
+            </p>
+          </div>
+
+        </div>
+
+
+        <!-- Result content continues to be generated by JS -->
+        <div id="result"></div>
+
+
+        <div class="actions assessment-save-actions">
+
+          <button
+  type="button"
+  id="downloadSinglePdfBtn"
+  class="secondary"
+  onclick="downloadSinglePdf()"
+>
+  Download PDF Report
+</button>
+
+<button
+  type="button"
+  id="saveBtn"
+  onclick="save()"
+>
+  Save to ATS
+</button>
+
+<button
+  type="button"
+  class="secondary"
+  onclick="resetAssessment()"
+>
+  Cancel
+</button>
+
+        </div>
+
+      </section>
+
+    </main>
+
+
+
+    <!-- =====================================================
+         RIGHT SIDE — POSITION CONTEXT
+         ===================================================== -->
+    <aside
+      class="position-context-panel"
+      id="positionContextPanel"
+    >
+
+      <div class="position-context-card">
+
+        <div class="position-context-header">
+
+          <div>
+            <div class="position-context-eyebrow">
+              ACTIVE POSITION
+            </div>
+
+            <h2>Position Details</h2>
+          </div>
+
+          <span
+            class="position-status-badge"
+            id="sidePositionStatus"
+          >
+            —
+          </span>
+
+        </div>
+
+
+        <div
+          class="position-empty-state"
+          id="positionContextEmpty"
+        >
+          <div class="position-empty-icon">
+            📋
+          </div>
+
+          <strong>
+            Select a position
+          </strong>
+
+          <p>
+            Position details, original JD and approved
+            criteria will appear here.
+          </p>
+        </div>
+
+
+        <div
+          class="position-context-content hidden"
+          id="positionContextContent"
+        >
+
+          <!-- POSITION DETAILS -->
+          <div class="position-detail-list">
+
+            <div class="position-detail-row">
+              <span>Client</span>
+              <strong id="sideClient">—</strong>
+            </div>
+
+            <div class="position-detail-row">
+              <span>Ref #</span>
+              <strong id="sideRefNo">—</strong>
+            </div>
+
+            <div class="position-detail-row">
+              <span>Position</span>
+              <strong id="sidePosition">—</strong>
+            </div>
+
+            <div class="position-detail-row">
+              <span>Location</span>
+              <strong id="sideLocation">—</strong>
+            </div>
+
+            <div class="position-detail-row">
+              <span>Priority</span>
+              <strong id="sidePriority">—</strong>
+            </div>
+
+          </div>
+
+
+          <!-- ORIGINAL JD -->
+          <div class="position-jd-section">
+
+            <div class="position-section-title">
+              Original Job Description
+            </div>
+
+            <a
+              id="sideJDLink"
+              class="open-jd-btn hidden"
+              href="#"
+              target="_blank"
+              rel="noopener"
+            >
+              Open Original JD
+            </a>
+
+            <div
+              id="sideJDUnavailable"
+              class="jd-unavailable"
+            >
+              No stored JD available.
+            </div>
+
+          </div>
+
+
+          <!-- APPROVED CRITERIA -->
+          <div class="position-criteria-section">
+
+            <div class="position-section-title">
+              Approved JD Criteria
+            </div>
+
+            <div
+              id="sideCriteria"
+              class="side-criteria-list"
+            >
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </aside>
+
+  </div>
+
+</div>
+
+
+  <?!= include('Javascript'); ?>
+<script>
+  document.addEventListener(
+    'DOMContentLoaded',
+    function() {
+      const button =
+        document.getElementById(
+          'navCandidate'
+        );
+
+      if (button) {
+        button.classList.add(
+          'active'
+        );
+      }
+    }
+  );
+</script>
+</body>
+</html>

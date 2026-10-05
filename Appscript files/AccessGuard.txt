@@ -1,0 +1,186 @@
+<script>
+
+(function () {
+
+  const urlParams =
+  new URLSearchParams(
+    window.location.search
+  );
+
+const urlSession =
+  urlParams.get(
+    'session'
+  );
+
+if (urlSession) {
+  localStorage.setItem(
+    'OSYNIX_ATS_SESSION',
+    urlSession
+  );
+}
+
+const sessionToken =
+  urlSession ||
+  localStorage.getItem(
+    'OSYNIX_ATS_SESSION'
+  );
+
+  if (!sessionToken) {
+    redirectToLogin();
+    return;
+  }
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        if (
+          !result ||
+          !result.valid ||
+          !result.user
+        ) {
+          clearSessionAndRedirect();
+          return;
+        }
+
+
+        const user =
+          result.user;
+
+        const role =
+          String(
+            user.role || ''
+          )
+            .trim()
+            .toLowerCase();
+
+
+        const currentPage =
+          new URLSearchParams(
+            window.location.search
+          ).get('page') || 'candidate';
+
+
+        if (
+          currentPage === 'position' &&
+          !user.permissions
+            .canCreatePositions
+        ) {
+          redirectToCandidate();
+          return;
+        }
+
+
+        if (
+  currentPage === 'dashboard' ||
+  currentPage === 'managepositions'
+) {
+
+          if (
+            role !== 'admin' &&
+            role !== 'recruiter'
+          ) {
+            redirectToCandidate();
+            return;
+          }
+
+        }
+
+
+        window.OSYNIX_ATS_USER =
+          user;
+
+        document.dispatchEvent(
+          new CustomEvent(
+            'osynixUserReady',
+            {
+              detail: user
+            }
+          )
+        );
+
+      }
+    )
+
+    .withFailureHandler(
+      function() {
+        clearSessionAndRedirect();
+      }
+    )
+
+    .validateATSSession(
+      sessionToken
+    );
+
+
+  function redirectToLogin() {
+
+  google.script.run
+    .withSuccessHandler(
+      function(baseUrl) {
+
+        if (!baseUrl) {
+          return;
+        }
+
+        window.top.location.href =
+          baseUrl;
+      }
+    )
+    .getWebAppUrl();
+}
+
+
+function redirectToCandidate() {
+
+  const sessionToken =
+    localStorage.getItem(
+      'OSYNIX_ATS_SESSION'
+    );
+
+  google.script.run
+    .withSuccessHandler(
+      function(baseUrl) {
+
+        if (!baseUrl) {
+          return;
+        }
+
+        let targetUrl =
+          baseUrl +
+          '?page=candidate';
+
+        if (sessionToken) {
+          targetUrl +=
+            '&session=' +
+            encodeURIComponent(
+              sessionToken
+            );
+        }
+
+        window.top.location.href =
+          targetUrl;
+      }
+    )
+    .getWebAppUrl();
+}
+
+
+function clearSessionAndRedirect() {
+
+  localStorage.removeItem(
+    'OSYNIX_ATS_SESSION'
+  );
+
+  localStorage.removeItem(
+    'OSYNIX_ATS_USER'
+  );
+
+  redirectToLogin();
+}
+
+})();
+
+</script>

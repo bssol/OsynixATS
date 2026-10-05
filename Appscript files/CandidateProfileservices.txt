@@ -1,0 +1,995 @@
+/**
+ * Osynix ATS - Candidate Profile Service
+ * --------------------------------------
+ * Shared backend for Candidate View/Profile.
+ *
+ * Talent Pool Master = permanent candidate identity/profile
+ * Candidates          = Candidate + Ref # assessment/lifecycle history
+ * Positions Master    = position/client information
+ */
+ 
+ 
+/* =========================================================
+   CANDIDATE PROFILE
+   ========================================================= */
+ 
+function getCandidateProfile(
+  sessionToken,
+  candidateId,
+  selectedRefNo
+) {
+ 
+  requireATSOperationalUser_(
+    sessionToken
+  );
+ 
+ 
+  candidateId =
+    candText_(
+      candidateId
+    );
+ 
+ 
+  selectedRefNo =
+    candNormalizeRefNo_(
+      selectedRefNo
+    );
+ 
+ 
+  if (!candidateId) {
+    throw new Error(
+      'Candidate ID is required.'
+    );
+  }
+ 
+ 
+  const ss =
+    getSpreadsheet_();
+ 
+ 
+  const talentSheet =
+    ss.getSheetByName(
+      CONFIG.SHEETS.TALENT_POOL
+    );
+ 
+ 
+  const candidateSheet =
+    ss.getSheetByName(
+      CONFIG.SHEETS.CANDIDATES
+    );
+ 
+ 
+  const positionSheet =
+    ss.getSheetByName(
+      CONFIG.SHEETS.POSITIONS
+    );
+ 
+ 
+  if (!talentSheet) {
+    throw new Error(
+      'Talent Pool Master sheet was not found.'
+    );
+  }
+ 
+ 
+  if (!candidateSheet) {
+    throw new Error(
+      'Candidates sheet was not found.'
+    );
+  }
+ 
+ 
+  if (!positionSheet) {
+    throw new Error(
+      'Positions Master sheet was not found.'
+    );
+  }
+ 
+ 
+  const talentValues =
+    talentSheet
+      .getDataRange()
+      .getDisplayValues();
+ 
+ 
+  const candidateValues =
+    candidateSheet
+      .getDataRange()
+      .getDisplayValues();
+ 
+ 
+  const positionValues =
+    positionSheet
+      .getDataRange()
+      .getDisplayValues();
+ 
+ 
+  const talentHeaders =
+    talentValues.length
+      ? talentValues[0]
+      : [];
+ 
+ 
+  const candidateHeaders =
+    candidateValues.length
+      ? candidateValues[0]
+      : [];
+ 
+ 
+  const positionHeaders =
+    positionValues.length
+      ? positionValues[0]
+      : [];
+ 
+ 
+  const talentIndex =
+    createCandidateHeaderIndex_(
+      talentHeaders
+    );
+ 
+ 
+  const candidateIndex =
+    createCandidateHeaderIndex_(
+      candidateHeaders
+    );
+ 
+ 
+  const positionIndex =
+    createCandidateHeaderIndex_(
+      positionHeaders
+    );
+ 
+ 
+  /*
+   * ---------------------------------------------------------
+   * MASTER CANDIDATE PROFILE
+   * ---------------------------------------------------------
+   */
+ 
+  let talentRow = null;
+ 
+ 
+  for (
+    let i = 1;
+    i < talentValues.length;
+    i++
+  ) {
+ 
+    const rowCandidateId =
+      getCandidateCell_(
+        talentValues[i],
+        talentIndex,
+        'Candidate ID'
+      );
+ 
+ 
+    if (
+      candText_(
+        rowCandidateId
+      ) === candidateId
+    ) {
+ 
+      talentRow =
+        talentValues[i];
+ 
+      break;
+ 
+    }
+ 
+  }
+ 
+ 
+  if (!talentRow) {
+    throw new Error(
+      'Candidate not found in Talent Pool Master: ' +
+      candidateId
+    );
+  }
+ 
+ 
+  const profile = {
+ 
+    candidateId:
+      candidateId,
+ 
+    candidateName:
+      getCandidateCell_(
+        talentRow,
+        talentIndex,
+        'Candidate Name'
+      ),
+ 
+    phone:
+      getCandidateCell_(
+        talentRow,
+        talentIndex,
+        'Mobile / Phone Number'
+      ),
+ 
+    email:
+      getCandidateCell_(
+        talentRow,
+        talentIndex,
+        'Email ID'
+      ),
+ 
+    location:
+      getCandidateCell_(
+        talentRow,
+        talentIndex,
+        'Location'
+      ),
+ 
+    currentDesignation:
+      getCandidateCell_(
+        talentRow,
+        talentIndex,
+        'Current / Latest Designation'
+      ),
+ 
+    currentCompany:
+      getCandidateCell_(
+        talentRow,
+        talentIndex,
+        'Current / Latest Company'
+      ),
+ 
+    totalExperience:
+      getCandidateCell_(
+        talentRow,
+        talentIndex,
+        'Total Experience (Yrs)'
+      ),
+ 
+    primaryFunction:
+      getCandidateCell_(
+        talentRow,
+        talentIndex,
+        'Primary Function'
+      ),
+ 
+    secondaryFunction:
+      getCandidateCell_(
+        talentRow,
+        talentIndex,
+        'Secondary Function / Specialization'
+      ),
+ 
+    industries:
+      getCandidateCell_(
+        talentRow,
+        talentIndex,
+        'Industries / Domains'
+      ),
+ 
+    coreSkills:
+      getCandidateCell_(
+        talentRow,
+        talentIndex,
+        'Core Skills'
+      ),
+ 
+    seniorityLevel:
+      getCandidateCell_(
+        talentRow,
+        talentIndex,
+        'Seniority Level'
+      ),
+ 
+    systemsTools:
+      getCandidateCell_(
+        talentRow,
+        talentIndex,
+        'Systems / Tools'
+      ),
+ 
+    marketExposure:
+      getCandidateCell_(
+        talentRow,
+        talentIndex,
+        'Geographic / Market Exposure'
+      ),
+ 
+    careerSummary:
+      getCandidateCell_(
+        talentRow,
+        talentIndex,
+        'Career Profile Summary'
+      ),
+ 
+    talentPoolStatus:
+      getCandidateCell_(
+        talentRow,
+        talentIndex,
+        'Talent Pool Status'
+      ),
+ 
+    firstScreenedDate:
+      getCandidateCell_(
+        talentRow,
+        talentIndex,
+        'First Screened Date'
+      ),
+ 
+    lastAssessedDate:
+      getCandidateCell_(
+        talentRow,
+        talentIndex,
+        'Last Assessed Date'
+      ),
+ 
+    assessmentCount:
+      getCandidateCell_(
+        talentRow,
+        talentIndex,
+        'Assessment Count'
+      ),
+ 
+    sourceCv:
+      getCandidateCell_(
+        talentRow,
+        talentIndex,
+        'Source CV / File'
+      ),
+ 
+    talentPoolNotes:
+      getCandidateCell_(
+        talentRow,
+        talentIndex,
+        'Talent Pool Notes'
+      ),
+ 
+    professionalSummary:
+      getCandidateCell_(
+        talentRow,
+        talentIndex,
+        'Professional Summary'
+      ),
+ 
+    employmentCareerHistory:
+      parseCandidateStructuredProfileField_(
+        getCandidateCell_(
+          talentRow,
+          talentIndex,
+          'Employment / Career History'
+        )
+      ),
+ 
+    education:
+      parseCandidateStructuredProfileField_(
+        getCandidateCell_(
+          talentRow,
+          talentIndex,
+          'Education'
+        )
+      )
+ 
+  };
+ 
+ 
+  /*
+   * ---------------------------------------------------------
+   * POSITION LOOKUP
+   * Ref # -> Position / Client
+   * ---------------------------------------------------------
+   */
+ 
+  const positionByRef = {};
+ 
+ 
+  for (
+    let i = 1;
+    i < positionValues.length;
+    i++
+  ) {
+ 
+    const row =
+      positionValues[i];
+ 
+ 
+    const refNo =
+      candNormalizeRefNo_(
+        getCandidateCell_(
+          row,
+          positionIndex,
+          'Ref #'
+        )
+      );
+ 
+ 
+    if (!refNo) {
+      continue;
+    }
+ 
+ 
+    positionByRef[refNo] = {
+ 
+      position:
+        getCandidateCell_(
+          row,
+          positionIndex,
+          'Position'
+        ),
+ 
+      client:
+        getCandidateCell_(
+          row,
+          positionIndex,
+          'Client'
+        ),
+ 
+      location:
+        getCandidateCell_(
+          row,
+          positionIndex,
+          'Location'
+        ),
+ 
+      status:
+        getCandidateCell_(
+          row,
+          positionIndex,
+          'Status'
+        )
+ 
+    };
+ 
+  }
+ 
+ 
+  /*
+   * ---------------------------------------------------------
+   * CANDIDATE + REF # ASSESSMENT HISTORY
+   * ---------------------------------------------------------
+   */
+ 
+  const assessments = [];
+ 
+ 
+  for (
+    let i = 1;
+    i < candidateValues.length;
+    i++
+  ) {
+ 
+    const row =
+      candidateValues[i];
+ 
+ 
+    const rowCandidateId =
+      candText_(
+        getCandidateCell_(
+          row,
+          candidateIndex,
+          'Candidate ID'
+        )
+      );
+ 
+ 
+    if (
+      rowCandidateId !==
+      candidateId
+    ) {
+      continue;
+    }
+ 
+ 
+    const refNo =
+      candNormalizeRefNo_(
+        getCandidateCell_(
+          row,
+          candidateIndex,
+          'Ref #'
+        )
+      );
+ 
+ 
+    const position =
+      positionByRef[refNo] || {};
+ 
+ 
+    assessments.push({
+ 
+      refNo:
+        refNo,
+ 
+      position:
+        position.position || '',
+ 
+      client:
+        position.client || '',
+ 
+      positionLocation:
+        position.location || '',
+ 
+      positionStatus:
+        position.status || '',
+ 
+      dateScreened:
+        getCandidateCell_(
+          row,
+          candidateIndex,
+          'Date Screened'
+        ),
+ 
+      relevantIndustryExperience:
+        getCandidateCell_(
+          row,
+          candidateIndex,
+          'Relevant Industry Experience (Yrs)'
+        ),
+ 
+      atsMatch:
+        getCandidateCell_(
+          row,
+          candidateIndex,
+          'ATS Match %'
+        ),
+ 
+      evidenceStrength:
+        getCandidateCell_(
+          row,
+          candidateIndex,
+          'Evidence Strength /10'
+        ),
+ 
+      mustHaveFit:
+        getCandidateCell_(
+          row,
+          candidateIndex,
+          'Must-Have Fit'
+        ),
+ 
+      coreRoleFit:
+        getCandidateCell_(
+          row,
+          candidateIndex,
+          'Core Role Fit /10'
+        ),
+ 
+      keyStrengths:
+        getCandidateCell_(
+          row,
+          candidateIndex,
+          'Key Strengths'
+        ),
+ 
+      keyGapRisk:
+        getCandidateCell_(
+          row,
+          candidateIndex,
+          'Key Gap / Risk'
+        ),
+ 
+      executiveAssessment:
+        getCandidateCell_(
+          row,
+          candidateIndex,
+          'Executive Assessment'
+        ),
+ 
+      decision:
+        getCandidateCell_(
+          row,
+          candidateIndex,
+          'Decision'
+        ),
+ 
+      recruitmentStage:
+        getCandidateCell_(
+          row,
+          candidateIndex,
+          'Recruitment Stage'
+        ),
+ 
+      interviewStatus:
+        getCandidateCell_(
+          row,
+          candidateIndex,
+          'Interview Status'
+        ),
+ 
+      clientStatus:
+        getCandidateCell_(
+          row,
+          candidateIndex,
+          'Client Status'
+        ),
+ 
+      expectedSalary:
+        getCandidateCell_(
+          row,
+          candidateIndex,
+          'Expected Salary'
+        ),
+ 
+      availability:
+        getCandidateCell_(
+          row,
+          candidateIndex,
+          'Availability'
+        ),
+ 
+      recruiterNotes:
+        getCandidateCell_(
+          row,
+          candidateIndex,
+          'Recruiter Notes'
+        ),
+ 
+      cvFileLink:
+        getCandidateCell_(
+          row,
+          candidateIndex,
+          'CV / File Link'
+        ),
+ 
+      lastUpdated:
+        getCandidateCell_(
+          row,
+          candidateIndex,
+          'Last Updated'
+        ),
+ 
+      criterionResults:
+        parseCandidateCriterionResults_(
+          getCandidateCell_(
+            row,
+            candidateIndex,
+            'Criterion Results JSON'
+          )
+        )
+ 
+    });
+ 
+  }
+ 
+ 
+  if (!assessments.length) {
+ 
+    return {
+ 
+      success:
+        true,
+ 
+      profile:
+        profile,
+ 
+      selectedAssessment:
+        null,
+ 
+      assessmentHistory:
+        [],
+ 
+      options:
+        getCandidateProfileOptions_()
+ 
+    };
+ 
+  }
+ 
+ 
+  /*
+   * For historical assessments created before criterion-level JSON
+   * was stored, retain the locked JD criteria so the profile still
+   * shows the actual weighted review framework. Scores/evidence are
+   * intentionally left blank rather than reconstructed.
+   */
+  const jdCriteriaByRef =
+    getCandidateProfileJdCriteriaByRef_(ss);
+ 
+  assessments.forEach(function(item) {
+    if (
+      (!Array.isArray(item.criterionResults) || !item.criterionResults.length) &&
+      jdCriteriaByRef[item.refNo]
+    ) {
+      item.criterionResults = jdCriteriaByRef[item.refNo].map(function(criterion) {
+        return Object.assign({}, criterion);
+      });
+    }
+  });
+ 
+ 
+  /*
+   * Latest assessment first.
+   */
+ 
+  assessments.sort(
+    function(a, b) {
+ 
+      const aTime =
+        new Date(
+          a.lastUpdated || 0
+        ).getTime();
+ 
+ 
+      const bTime =
+        new Date(
+          b.lastUpdated || 0
+        ).getTime();
+ 
+ 
+      return (
+        (bTime || 0) -
+        (aTime || 0)
+      );
+ 
+    }
+  );
+ 
+ 
+  /*
+   * If a Ref # was supplied by the page,
+   * open that exact Candidate + Ref # record.
+   *
+   * Otherwise open the latest assessment.
+   */
+ 
+  let selectedAssessment =
+    null;
+ 
+ 
+  if (selectedRefNo) {
+ 
+    selectedAssessment =
+      assessments.find(
+        function(item) {
+ 
+          return (
+            item.refNo ===
+            selectedRefNo
+          );
+ 
+        }
+      ) || null;
+ 
+  }
+ 
+ 
+  if (!selectedAssessment) {
+ 
+    selectedAssessment =
+      assessments[0];
+ 
+  }
+ 
+ 
+  return {
+ 
+    success:
+      true,
+ 
+    profile:
+      profile,
+ 
+    selectedAssessment:
+      selectedAssessment,
+ 
+    assessmentHistory:
+      assessments,
+ 
+    options:
+      getCandidateProfileOptions_()
+ 
+  };
+ 
+}
+ 
+ 
+ 
+function getCandidateProfileJdCriteriaByRef_(ss) {
+  const result = {};
+  const sheet = ss.getSheetByName('JD Criteria');
+  if (!sheet) return result;
+ 
+  const values = sheet.getDataRange().getDisplayValues();
+  if (values.length < 2) return result;
+ 
+  const headers = values[0];
+  const index = {};
+  headers.forEach(function(header, i) {
+    index[String(header || '').trim()] = i;
+  });
+ 
+  function cell_(row, header) {
+    const i = index[header];
+    return i === undefined ? '' : candText_(row[i]);
+  }
+ 
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const refNo = candNormalizeRefNo_(cell_(row, 'Ref #'));
+    const criterion = cell_(row, 'Criterion');
+    if (!refNo || !criterion) continue;
+ 
+    if (!result[refNo]) result[refNo] = [];
+    result[refNo].push({
+      criterion: criterion,
+      weight: cell_(row, 'Weight %'),
+      knockout: cell_(row, 'Knockout?'),
+      evidenceExpected: cell_(row, 'Evidence Expected'),
+      scoringGuidance: cell_(row, 'Scoring Guidance'),
+      notes: cell_(row, 'Notes'),
+      historicalFrameworkOnly: true
+    });
+  }
+ 
+  return result;
+}
+ 
+function parseCandidateStructuredProfileField_(value) {
+  const text = candText_(value);
+ 
+  if (!text) {
+    return '';
+  }
+ 
+  if (text.charAt(0) !== '[') {
+    return text;
+  }
+ 
+  try {
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) ? parsed : text;
+  }
+  catch (error) {
+    console.warn('Unable to parse structured candidate profile field:', error);
+    return text;
+  }
+}
+ 
+ 
+function parseCandidateCriterionResults_(value) {
+  const text = candText_(value);
+ 
+  if (!text) {
+    return [];
+  }
+ 
+  try {
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) ? parsed : [];
+  }
+  catch (error) {
+    console.warn('Unable to parse stored criterion results:', error);
+    return [];
+  }
+}
+ 
+ 
+/* =========================================================
+   PROFILE DROPDOWN OPTIONS
+   ========================================================= */
+ 
+function getCandidateProfileOptions_() {
+ 
+  const ss =
+    getSpreadsheet_();
+ 
+ 
+  const sheet =
+    ss.getSheetByName(
+      CONFIG.SHEETS.LISTS
+    );
+ 
+ 
+  if (!sheet) {
+ 
+    return {
+      recruitmentStages: [],
+      interviewStatuses: [],
+      clientStatuses: []
+    };
+ 
+  }
+ 
+ 
+  const values =
+    sheet
+      .getDataRange()
+      .getDisplayValues();
+ 
+ 
+  if (!values.length) {
+ 
+    return {
+      recruitmentStages: [],
+      interviewStatuses: [],
+      clientStatuses: []
+    };
+ 
+  }
+ 
+ 
+  const headers =
+    values[0];
+ 
+ 
+  const index =
+    createCandidateHeaderIndex_(
+      headers
+    );
+ 
+ 
+  return {
+ 
+    recruitmentStages:
+      getCandidateProfileList_(
+        values,
+        index,
+        'Recruitment Stage'
+      ),
+ 
+    interviewStatuses:
+      getCandidateProfileList_(
+        values,
+        index,
+        'Interview Status'
+      ),
+ 
+    clientStatuses:
+      getCandidateProfileList_(
+        values,
+        index,
+        'Client Status'
+      )
+ 
+  };
+ 
+}
+ 
+ 
+/* =========================================================
+   CONTROLLED LIST READER
+   ========================================================= */
+ 
+function getCandidateProfileList_(
+  values,
+  headerIndex,
+  header
+) {
+ 
+  if (
+    headerIndex[header] ===
+    undefined
+  ) {
+    return [];
+  }
+ 
+ 
+  const columnIndex =
+    headerIndex[header];
+ 
+ 
+  const output = [];
+ 
+ 
+  for (
+    let i = 1;
+    i < values.length;
+    i++
+  ) {
+ 
+    const value =
+      candText_(
+        values[i][columnIndex]
+      );
+ 
+ 
+    if (
+      value &&
+      output.indexOf(value) === -1
+    ) {
+ 
+      output.push(
+        value
+      );
+ 
+    }
+ 
+  }
+ 
+ 
+  return output;
+ 
+}

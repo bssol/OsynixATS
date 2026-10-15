@@ -1,3 +1,12 @@
 @page
 @model Osynix.Ats.Pages.Account.LoginModel
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/app.css"><title>Sign in · Osynix ATS</title></head><body class="login-body"><main class="login-card"><div class="eyebrow">OSYNIX GROUP</div><h1>Welcome back.</h1><p class="muted">Sign in to your recruitment workspace.</p><form method="post"><div asp-validation-summary="All" class="error"></div><label>Email or username<input asp-for="Email" type="text" autocomplete="username" required></label><label>Password<input asp-for="Password" type="password" autocomplete="current-password" required></label><button type="submit">Sign in →</button></form><p class="muted small">Ask your administrator for an account.</p></main></body></html>
+@{ Layout="_AuthLayout"; ViewData["Title"]="Sign In"; }
+<div class="auth-title"><span class="auth-eyebrow">OSYNIX ATS</span><h1>Welcome Back</h1><p>Sign in to your hiring workspace.</p></div>
+<form method="post" asp-page-handler="Google"><button class="google-button" type="submit"><span class="google-g">G</span>Continue With Google</button></form>
+<div class="auth-divider"><span>or sign in with email</span></div>
+<form method="post"><div asp-validation-summary="All" class="auth-error"></div><label>Email or Username<input asp-for="Email" type="text" autocomplete="username" required /></label>
+<label>Password<div class="password-field"><input asp-for="Password" type="password" autocomplete="current-password" required /><button type="button" class="password-toggle" aria-label="Show Password">Show</button></div></label>
+<div class="auth-form-options"><a href="/Account/ForgotPassword">Forgot Password?</a></div><button class="auth-primary" type="submit">Sign In <span>→</span></button></form>
+<p class="auth-switch">New to Osynix? <a href="/Account/Register">Create an Account</a></p>
+
+<p class="auth-switch">Hiring For Your Business? <a href="/Account/Register?role=Employer">Create An Employer Account</a></p>

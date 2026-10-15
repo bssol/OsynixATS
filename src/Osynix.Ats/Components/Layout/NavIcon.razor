@@ -1,0 +1,47 @@
+<svg class="nav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+@switch(Name) {
+case "archive":
+    <rect x="3" y="3" width="18" height="5" rx="1" /><path d="M5 8v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4" />
+    break;
+case "cancel":
+    <circle cx="12" cy="12" r="9" /><path d="m8 8 8 8m0-8-8 8" />
+    break;
+case "clock":
+    <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
+    break;
+case "check":
+    <circle cx="12" cy="12" r="9" /><path d="m8 12 3 3 5-6" />
+    break;
+case "flag":
+    <path d="M5 22V3m0 0c5-4 9 4 14 0v10c-5 4-9-4-14 0" />
+    break;
+case "message":
+    <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10ZM7 8h10M7 12h6" />
+    break;
+case "dashboard":
+    <rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" />
+    break;
+case "positions":
+    <rect x="3" y="7" width="18" height="14" rx="2" /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12a24 24 0 0 0 18 0M12 11v4" />
+    break;
+case "clients":
+    <path d="M4 21V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v16M17 10h3v11M2 21h20M9 21v-4h3v4M8 7h1M12 7h1M8 11h1M12 11h1" />
+    break;
+case "assessment":
+    <rect x="5" y="4" width="14" height="18" rx="2" /><rect x="9" y="2" width="6" height="4" rx="1" /><path d="m9 12 2 2 4-4M9 18h6" />
+    break;
+case "talent":
+    <circle cx="9" cy="7" r="3" /><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6M18 15a5 5 0 0 1 3 4v2" />
+    break;
+case "pipeline":
+    <rect x="3" y="4" width="5" height="16" rx="1" /><rect x="10" y="4" width="5" height="11" rx="1" /><rect x="17" y="4" width="4" height="7" rx="1" />
+    break;
+case "settings":
+    <path d="M4 7h16M4 17h16" /><circle cx="9" cy="7" r="3" fill="white" /><circle cx="15" cy="17" r="3" fill="white" />
+    break;
+case "import":
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6ZM14 2v6h6M12 18v-7m-3 3 3-3 3 3" />
+    break;
+}
+</svg>
+@code { [Parameter] public string Name {get;set;} = ""; }

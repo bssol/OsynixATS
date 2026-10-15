@@ -1,0 +1,8 @@
+@page
+@model Osynix.Ats.Pages.Account.LinkGoogleModel
+@{ Layout="_AuthLayout"; ViewData["Title"]="Connect Google"; }
+<div class="auth-title"><h1>Connect Google</h1><p>Link the Google account with the same email as your Osynix account. This adds Google sign-in and keeps your existing ATS password.</p></div><div asp-validation-summary="All" class="auth-error"></div>
+@if(Model.Complete){<div class="auth-success">Google is connected. You can now sign in with Google.</div>}
+else if(Model.Available){<form method="post"><button class="google-button" type="submit"><span class="google-g">G</span>Connect Google</button></form>}
+else{<p class="auth-note">Google connection is currently unavailable.</p>}
+<p class="auth-switch"><a href="/">Back to Workspace</a></p>

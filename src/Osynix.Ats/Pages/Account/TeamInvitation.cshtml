@@ -1,0 +1,11 @@
+@page
+@model Osynix.Ats.Pages.Account.TeamInvitationModel
+@{Layout="_AuthLayout";ViewData["Title"]="Join Recruiter Team";}
+<div class="auth-title"><h1>Join Your Recruiter Team</h1></div>
+<div asp-validation-summary="All" class="auth-error"></div>
+@if(Model.Invitation is null){<p>This Invitation Is Unavailable.</p>}
+else{<p><strong>@Model.Invitation.Company</strong> Has Invited @Model.Invitation.Name As A Recruiter.</p><p>Invited Email: @Model.Invitation.Email</p>
+@if(Model.Invitation.Status!="Pending"){<p>Invitation Status: @Model.Invitation.Status</p>}
+else if(User.Identity?.IsAuthenticated==true){<p>Signed In As @User.Identity.Name. Acceptance Requires A Verified Recruiter Account With The Invited Email Address And An Available Seat.</p><form method="post"><input asp-for="Token" type="hidden"/><button class="auth-primary" type="submit">Accept Invitation →</button></form>}
+else{<p>Sign In With The Invited Email Address Or Create A Recruiter Account.</p><a class="auth-primary auth-link" asp-page="Login" asp-route-returnUrl="@Model.ReturnUrl">Sign In To Accept →</a><p class="auth-switch"><a asp-page="Register" asp-route-role="Recruiter" asp-route-invite="@Model.Token">Create Recruiter Account</a></p>}}
+<p class="auth-switch"><a href="/Account/Login">Back To Sign In</a></p>

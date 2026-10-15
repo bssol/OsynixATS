@@ -161,6 +161,9 @@ namespace Osynix.Ats.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("CanCreateClients")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("CanCreatePositions")
                         .HasColumnType("INTEGER");
 
@@ -180,6 +183,9 @@ namespace Osynix.Ats.Data.Migrations
 
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("EmployerWorkspaceId")
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("FullName")
                         .IsRequired()
@@ -215,6 +221,9 @@ namespace Osynix.Ats.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("TalentPoolPaidUntilUtc")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("INTEGER");
 
@@ -223,6 +232,8 @@ namespace Osynix.Ats.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("EmployerWorkspaceId");
 
                     b.HasIndex("NormalizedEmail")
                         .HasDatabaseName("EmailIndex");
@@ -869,6 +880,9 @@ namespace Osynix.Ats.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("CareersPublished")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime>("CreatedUtc")
                         .HasColumnType("TEXT");
 
@@ -892,6 +906,10 @@ namespace Osynix.Ats.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("PublicJobDescription")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("Revision")
                         .IsConcurrencyToken()
                         .HasColumnType("TEXT");
@@ -907,9 +925,16 @@ namespace Osynix.Ats.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("NormalizedName")
+                        .IsUnique()
+                        .HasFilter("\"WorkspaceId\" IS NULL");
+
+                    b.HasIndex("WorkspaceId", "NormalizedName")
                         .IsUnique();
 
                     b.ToTable("Clients");
@@ -1041,6 +1066,382 @@ namespace Osynix.Ats.Data.Migrations
                     b.ToTable("DecisionRules");
                 });
 
+            modelBuilder.Entity("Osynix.Ats.Domain.EmployerAccessRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AdminResponse")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Feature")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Remarks")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("RespondedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkspaceId");
+
+                    b.ToTable("EmployerAccessRequests");
+                });
+
+            modelBuilder.Entity("Osynix.Ats.Domain.EmployerInvitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AcceptedBy")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Delivery")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ExpiresUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NormalizedEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedToken")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("WorkspaceId", "NormalizedEmail")
+                        .IsUnique();
+
+                    b.ToTable("EmployerInvitations");
+                });
+
+            modelBuilder.Entity("Osynix.Ats.Domain.EmployerWorkspace", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AboutUs")
+                        .IsRequired()
+                        .HasMaxLength(5000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("AdditionalPositionSlots")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("AdditionalRecruiterSeats")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BusinessEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CareersColorScheme")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("CareersCoverContent")
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("CareersCoverContentType")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CareersCoverMode")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("CareersPublished")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CareersStockCover")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CompanyName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContactNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Country")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("FreePositionSlots")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("FreeRecruiterSeats")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte[]>("LogoContent")
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("LogoContentType")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OperatingType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("ShowBusinessContacts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("TeamTalentPoolEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("TimeZone")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Website")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerId")
+                        .IsUnique();
+
+                    b.ToTable("EmployerWorkspaces");
+                });
+
+            modelBuilder.Entity("Osynix.Ats.Domain.HiringReviewGrant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ClientId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EmailKey")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ExpiresUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedToken")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Revoked")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId");
+
+                    b.HasIndex("EmailKey")
+                        .IsUnique();
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.ToTable("HiringReviewGrants");
+                });
+
+            modelBuilder.Entity("Osynix.Ats.Domain.HiringSubmission", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AssessmentId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("AvailabilityStartUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ContactId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Delivery")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DurationMinutes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Feedback")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("FeedbackUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("GrantId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InterviewLocation")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InterviewMode")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Remarks")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Revoked")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SharedReportJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SubmittedBy")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("SubmittedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TimeZone")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssessmentId");
+
+                    b.HasIndex("GrantId", "AssessmentId")
+                        .IsUnique();
+
+                    b.ToTable("HiringSubmissions");
+                });
+
             modelBuilder.Entity("Osynix.Ats.Domain.ImportRow", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1089,6 +1490,9 @@ namespace Osynix.Ats.Data.Migrations
                     b.Property<string>("AssignedRecruiter")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("CareersPublished")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("Client")
                         .IsRequired()
@@ -1183,6 +1587,10 @@ namespace Osynix.Ats.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("PublicJobDescription")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Reference")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -1208,6 +1616,9 @@ namespace Osynix.Ats.Data.Migrations
                     b.Property<DateTime>("UpdatedUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ClientId");
@@ -1216,6 +1627,8 @@ namespace Osynix.Ats.Data.Migrations
 
                     b.HasIndex("Reference")
                         .IsUnique();
+
+                    b.HasIndex("WorkspaceId");
 
                     b.ToTable("Positions");
                 });
@@ -1345,6 +1758,14 @@ namespace Osynix.Ats.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Osynix.Ats.Data.AtsUser", b =>
+                {
+                    b.HasOne("Osynix.Ats.Domain.EmployerWorkspace", null)
+                        .WithMany()
+                        .HasForeignKey("EmployerWorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("Osynix.Ats.Domain.Assessment", b =>
                 {
                     b.HasOne("Osynix.Ats.Domain.AssessmentBatch", null)
@@ -1442,6 +1863,14 @@ namespace Osynix.Ats.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Osynix.Ats.Domain.Client", b =>
+                {
+                    b.HasOne("Osynix.Ats.Domain.EmployerWorkspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("Osynix.Ats.Domain.ClientContact", b =>
                 {
                     b.HasOne("Osynix.Ats.Domain.Client", null)
@@ -1460,6 +1889,48 @@ namespace Osynix.Ats.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Osynix.Ats.Domain.EmployerAccessRequest", b =>
+                {
+                    b.HasOne("Osynix.Ats.Domain.EmployerWorkspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Osynix.Ats.Domain.EmployerInvitation", b =>
+                {
+                    b.HasOne("Osynix.Ats.Domain.EmployerWorkspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Osynix.Ats.Domain.EmployerWorkspace", b =>
+                {
+                    b.HasOne("Osynix.Ats.Data.AtsUser", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Osynix.Ats.Domain.HiringSubmission", b =>
+                {
+                    b.HasOne("Osynix.Ats.Domain.Assessment", null)
+                        .WithMany()
+                        .HasForeignKey("AssessmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Osynix.Ats.Domain.HiringReviewGrant", null)
+                        .WithMany()
+                        .HasForeignKey("GrantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Osynix.Ats.Domain.Position", b =>
                 {
                     b.HasOne("Osynix.Ats.Domain.Client", "ClientRecord")
@@ -1470,6 +1941,11 @@ namespace Osynix.Ats.Data.Migrations
                     b.HasOne("Osynix.Ats.Domain.StoredDocument", null)
                         .WithMany()
                         .HasForeignKey("JdDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Osynix.Ats.Domain.EmployerWorkspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("ClientRecord");

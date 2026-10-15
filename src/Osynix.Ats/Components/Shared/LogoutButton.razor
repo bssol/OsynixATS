@@ -1,0 +1,7 @@
+<form action="/Account/Logout" method="post" data-enhance="false" class="logout-form">
+ <AntiforgeryToken />
+ <button type="submit" class="@CssClass">Sign Out</button>
+</form>
+@code {
+ [Parameter] public string CssClass {get;set;}="secondary";
+}

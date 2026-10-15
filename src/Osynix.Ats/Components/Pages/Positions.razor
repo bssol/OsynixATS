@@ -1,47 +1,222 @@
 @page "/positions"
-@attribute [Authorize(Roles="Admin,Recruiter")]
+@attribute [Authorize(Roles="Admin,Recruiter,Employer")]
 @inherits PageBase
 @inject AtsService Ats
 @inject AiService Ai
 @inject WorkspaceService Workspace
 @inject IDocumentStore Documents
-<PageTitle>Manage positions · Osynix ATS</PageTitle>
-<div class="page-heading"><div><div class="eyebrow">VACANCIES AND APPROVED CRITERIA</div><h1>Manage positions</h1></div><button @onclick="New">+ Create position</button></div>
+@inject Access Access
+<PageTitle>Manage Positions · Osynix ATS</PageTitle>
+<div class="page-heading"><div><div class="eyebrow">VACANCIES AND APPROVED CRITERIA</div><h1>Manage Positions</h1></div>@if(canCreate){<button @onclick="New">+ Create Position</button>}</div>
 <Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
-<div class="kpis">@foreach(var s in Choices.PositionStatuses){<button class="kpi" @onclick="()=>status=s"><span>@s</span><strong>@positions.Count(x=>x.Status==s)</strong></button>}</div>
+@if(allowance is not null){<section class="panel section-heading"><div><h2>@allowance.Used / @allowance.Limit Shared Position Slots Used</h2><p class="muted">Active And On-Hold Positions Use Slots. Drafts Do Not. Closing Or Filling Releases A Slot.</p></div>@if(isEmployer){<a class="button secondary" href="/employer/subscriptions">Request More Slots</a>}</section>}
+<div class="kpis">@foreach(var s in Choices.PositionStatuses){<button class="kpi" @onclick="()=>status=s"><span class="@($"kpi-icon {PositionKpiTone(s)}")"><NavIcon Name="@PositionKpiIcon(s)" /></span><span>@s</span><strong>@positions.Count(x=>x.Status==s)</strong></button>}</div>
 <div class="toolbar"><input aria-label="Search positions" placeholder="Search title, client or reference…" @bind="search" @bind:event="oninput" /><select aria-label="Position status" @bind="status"><option value="">All statuses</option>@foreach(var s in Choices.PositionStatuses){<option>@s</option>}</select><select aria-label="Client filter" @bind="clientFilter"><option value="">All clients</option>@foreach(var c in clients){<option>@c.Name</option>}</select><select aria-label="Priority filter" @bind="priority"><option value="">All priorities</option>@foreach(var p in Choices.Priorities){<option>@p</option>}</select><select aria-label="Sort positions" @bind="sort"><option value="ref">Reference</option><option value="priority">Priority</option><option value="newest">Newest</option></select><button class="secondary" @onclick="Clear">Clear</button></div>
 <section class="panel"><div class="pager"><span>@Filtered.Count positions · Page @Page / @Pages</span><button class="secondary" disabled="@(Page<=1)" @onclick="()=>page=Page-1">Previous</button><button class="secondary" disabled="@(Page>=Pages)" @onclick="()=>page=Page+1">Next</button></div><div class="table-wrap"><table><thead><tr><th>Ref / position</th><th>Status / priority</th><th>Target</th><th>Screened</th><th>Shortlist</th><th>Interviews / offers</th><th>Hired</th><th>Avg match</th><th></th></tr></thead><tbody>
 @foreach(var p in Filtered.Skip((Page-1)*25).Take(25)){var records=For(p.Id);<tr><td><b>#@p.Reference — @p.Title</b><small>@p.Client · @p.Location</small></td><td>@p.Status<small>@p.Priority</small></td><td>@p.HiringTarget</td><td>@records.Count</td><td>@records.Count(x=>x.Decision.Contains("Shortlist"))</td><td>@records.Count(x=>x.Stage=="Client Interview") / @records.Count(x=>x.Stage=="Offer Sent")</td><td>@records.Count(x=>x.Stage=="Hired")</td><td>@(records.Any(x=>x.MatchPercent.HasValue)?$"{records.Where(x=>x.MatchPercent.HasValue).Average(x=>x.MatchPercent):0.#}%":"—")</td><td><button class="secondary" @onclick="()=>Edit(p)">Open</button></td></tr>}
-</tbody></table></div>@if(Filtered.Count==0){<p class="empty">No positions match these filters.</p>}</section>
-@if(edit is not null){<div class="overlay"><section class="drawer wide" role="dialog" aria-modal="true" aria-label="Position editor"><div class="drawer-head"><div><h2>@(positions.Any(p=>p.Id==edit.Id)?edit.Title:"New position")</h2><p class="muted">@(edit.CriteriaLocked?"Approved criteria are locked":"Review and approve the criteria before assessment")</p></div><button class="secondary" @onclick="()=>edit=null">Close</button></div><Feedback Error="@Error" Busy="Busy" />
-<div class="form-grid"><label>Reference<input @bind="edit.Reference" placeholder="Automatically assigned on create" readonly="@positions.Any(x=>x.Id==edit.Id)" /></label><label>Client<select @bind="edit.ClientId"><option value="">Choose client or enter a new name below</option>@foreach(var c in clients){<option value="@c.Id">@c.Name</option>}</select></label><label>New client name<input @bind="edit.Client" disabled="@(edit.ClientId is not null)" /></label><label>Position title<input @bind="edit.Title" /></label><label>Location<input @bind="edit.Location" /></label><label>Priority<select @bind="edit.Priority">@foreach(var p in Choices.Priorities){<option>@p</option>}</select></label><label>Hiring target<input type="number" min="1" @bind="edit.HiringTarget" /></label><label>Hiring manager / contact<input @bind="edit.HiringContact" /></label><label>Assigned recruiter<input @bind="edit.AssignedRecruiter" /></label><label>Salary range<input @bind="edit.SalaryRange" /></label><label>Employment type<input @bind="edit.EmploymentType" /></label></div>
-<label>Original JD file<InputFile OnChange="ChooseJd" accept=".pdf,.docx,.txt" disabled="@edit.CriteriaLocked" />@if(jdName.Length>0){<small>@jdName</small>}</label>
-@if(edit.JdDocumentId is not null){<p><a href="@($"/files/{edit.JdDocumentId}?view=true")" target="_blank">View original JD</a></p>}else if(Uri.TryCreate(edit.LegacyJdLink,UriKind.Absolute,out var jdLink)&&jdLink.Scheme=="https"){<p><a href="@jdLink" target="_blank" rel="noopener noreferrer">View original JD link</a></p>}
-<label>Job description text<textarea rows="6" @bind="edit.JobDescription" disabled="@edit.CriteriaLocked"></textarea></label><label>Client-specific assessment requirements<textarea rows="3" @bind="edit.ClientNotes" disabled="@edit.CriteriaLocked"></textarea></label><label>Position summary<textarea rows="3" @bind="edit.PositionSummary" disabled="@edit.CriteriaLocked"></textarea></label><label>Internal position notes<textarea rows="3" @bind="edit.InternalNotes"></textarea></label>
-<div class="section-heading"><h2>Assessment criteria <small>@edit.Criteria.Sum(c=>c.Weight)% / 100%</small></h2><div><button class="secondary" disabled="@(Busy||edit.CriteriaLocked)" @onclick="Analyze">Analyze JD</button> <button class="secondary" disabled="@edit.CriteriaLocked" @onclick="()=>edit.Criteria.Add(new Criterion())">+ Criterion</button></div></div>
-@foreach(var c in edit.Criteria){<details class="criterion-editor" open @key="c.Id"><summary>@(c.Name.Length>0?c.Name:"New criterion") · @c.Weight%</summary><div class="form-grid"><label>Criterion<input @bind="c.Name" disabled="@edit.CriteriaLocked" /></label><label>Weight %<input type="number" min="1" max="100" @bind="c.Weight" disabled="@edit.CriteriaLocked" /></label></div><label class="check"><input type="checkbox" @bind="c.Knockout" disabled="@edit.CriteriaLocked" /> Must-have</label><label>Evidence expected<textarea @bind="c.EvidenceExpected" disabled="@edit.CriteriaLocked"></textarea></label><label>Scoring guidance<textarea @bind="c.ScoringGuidance" disabled="@edit.CriteriaLocked"></textarea></label><label>Interpretation notes<textarea @bind="c.Notes" disabled="@edit.CriteriaLocked"></textarea></label>@if(c.Rationale.Length>0){<p class="muted">AI draft rationale: @c.Rationale</p>}<button class="secondary danger" disabled="@edit.CriteriaLocked" @onclick="()=>edit.Criteria.Remove(c)">Remove</button></details>}
-<label class="check"><input type="checkbox" @bind="lockOnSave" disabled="@edit.CriteriaLocked" /> I reviewed the criteria — lock on save</label>
-<div class="form-grid"><label>Status<select @bind="edit.Status">@foreach(var s in Choices.PositionStatuses){<option>@s</option>}</select></label><label>Closure reason<input @bind="edit.ClosureReason" /></label></div>
-@if(edit.Status=="Filled"){<div class="form-grid"><label>Filled source<select @bind="edit.FilledSource"><option value="">Select filled source</option>@foreach(var s in Choices.FilledSources){<option>@s</option>}</select></label><label>Hired candidate<select @bind="edit.HiredCandidateId"><option value="">No ATS candidate</option>@foreach(var a in For(edit.Id)){<option value="@a.CandidateId">@a.CandidateName</option>}</select></label></div>}
-@if(edit.ClosedDate is not null){<p class="muted">First closed: @edit.ClosedDate?.ToString("yyyy-MM-dd") · @edit.ClosedBy · @edit.ClosureStatus</p>}
-<h3>Applications</h3>@foreach(var a in For(edit.Id)){<p><a href="@($"/candidates?id={a.CandidateId}")">@a.CandidateName</a> · @a.Stage · @a.Decision</p>}
-<button disabled="@Busy" @onclick="Save">Save position</button></section></div>}
+</tbody></table></div>@if(Filtered.Count==0){<p class="empty">No Positions Match These Filters.</p>}</section>
+@if(edit is not null){<div class="overlay"><section class="drawer wide position-editor" role="dialog" aria-modal="true" aria-label="Position Editor"><div class="drawer-head"><div><h2>@(positions.Any(p=>p.Id==edit.Id)?edit.Title:"Create Position")</h2><p class="muted">@(edit.CriteriaLocked?"Criteria are approved and editable":"Review and approve the criteria before assessment")</p></div><button class="secondary" disabled="@Busy" @onclick="()=>edit=null">Close</button></div>
+<Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
+@if(IsNew){
+@if(allowance is not null&&allowance.Used>=allowance.Limit){<p class="notice">All Shared Slots Are In Use. You Can Save This Position As Draft From The Status Tab, Or Request More Slots Before Activating It.</p>}
+<ol class="jd-flow-steps" aria-label="Create Position Progress">
+<li class="@(DetailsReady ? "complete" : "current")"><span>1</span>Client &amp; Details</li>
+<li class="@(sourceReviewed ? "complete" : DetailsReady ? "current" : "")"><span>2</span>Upload &amp; Review JD</li>
+<li class="@(DraftIsCurrent ? "complete" : sourceReviewed ? "current" : "")"><span>3</span>Analyze JD</li>
+<li class="@(DraftIsCurrent ? "current" : "")"><span>4</span>Review &amp; Save</li>
+</ol>
+}
+<div class="position-section-nav" role="tablist" aria-label="Position Form Sections">
+@foreach(var tab in editorTabs){
+    <button type="button" role="tab" id="@($"position-tab-{tab.Key}")" aria-controls="@($"position-{tab.Key}")" aria-selected="@(editorTab==tab.Key)" class="@(editorTab==tab.Key ? "active" : "")" disabled="@Busy" @onclick="()=>editorTab=tab.Key">@tab.Label</button>
+}
+</div>
+<section class="position-form-section" id="position-basics" role="tabpanel" aria-labelledby="position-tab-basics" hidden="@(editorTab!="basics")"><div class="position-section-heading"><span class="section-number">01</span><div><h3>Position Details</h3><p>Define the vacancy, client, and hiring team.</p></div></div>
+<p class="muted small">Select a client or enter a new client name to continue. The system generates the reference; JD analysis fills the title and location.</p>
+<div class="form-grid">
+<label>Reference<input @bind="edit.Reference" placeholder="Automatically assigned on create" disabled /></label>
+<label>Client<select @bind="edit.ClientId" @bind:after="ClientChanged"><option value="">@(IsNew ? "Choose Client or Enter a New Name" : "Choose Client")</option>@foreach(var c in clients.Where(c=>c.Status=="Active"||c.Id==edit.ClientId)){<option value="@c.Id">@c.Name</option>}</select></label>
+@if(IsNew&&canClients){<label>New Client Name<input @bind="edit.Client" @bind:event="oninput" disabled="@(edit.ClientId is not null)" /></label>}
+<label>Position Title<input @bind="edit.Title" placeholder="Filled from JD Analysis" /></label><label>Location<input @bind="edit.Location" placeholder="Filled from JD if Stated" /></label>
+<label>Priority<select @bind="edit.Priority">@foreach(var p in Choices.Priorities){<option>@p</option>}</select></label>
+<label>Hiring Target<input type="number" min="1" @bind="edit.HiringTarget" /></label>
+<label>Hiring Manager / Contact<select @bind="edit.HiringContact" disabled="@(!Contacts.Any())"><option value="">@(Contacts.Any() ? "Choose Client Contact" : "")</option>
+@if(edit.HiringContact.Length>0 && !Contacts.Any(x=>x.Name==edit.HiringContact)){<option value="@edit.HiringContact" disabled>@edit.HiringContact (Saved Contact)</option>}
+@foreach(var contact in Contacts){<option value="@contact.Name">@contact.Name @(contact.Title.Length>0 ? "· "+contact.Title : "")</option>}
+</select>@if(!Contacts.Any()){<small>No contacts linked to this client.</small>}</label>
+<label>Assigned Recruiter<select @bind="edit.AssignedRecruiter" disabled="@(!canAssign)">
+<option value="">Choose Recruiter</option>
+@if(edit.AssignedRecruiter.Length>0&&!recruiters.Any(x=>x.Username==edit.AssignedRecruiter)){<option value="@edit.AssignedRecruiter" disabled>@edit.AssignedRecruiter (Saved Assignment)</option>}
+@foreach(var r in recruiters){<option value="@r.Username">@r.Username @(r.Name.Length>0 && r.Name!=r.Username ? "· "+r.Name : "")</option>}
+</select></label>
+<label>Salary Range<input @bind="edit.SalaryRange" /></label>
+<label>Employment Type<select @bind="edit.EmploymentType">
+@if(!EmploymentTypes.Contains(edit.EmploymentType)){<option value="@edit.EmploymentType">@edit.EmploymentType</option>}
+@foreach(var type in EmploymentTypes){<option>@type</option>}
+</select></label>
+</div>
+<label>Internal Position Notes<textarea rows="3" @bind="edit.InternalNotes"></textarea></label>
+@if(IsNew){<button class="secondary" disabled="@(!DetailsReady||Busy)" @onclick='()=>editorTab="jd"'>Continue to Job Description</button>}
+</section>
+<section class="position-form-section" id="position-jd" role="tabpanel" aria-labelledby="position-tab-jd" hidden="@(editorTab!="jd")"><div class="position-section-heading"><span class="section-number">02</span><div><h3>Job Description</h3><p>Upload the original document or enter the job description below.</p></div></div>
+@if(IsNew){
+<label class="jd-create-upload"><NavIcon Name="import" /><strong>@(jdBytes is null ? "Upload a Job Description" : jdName)</strong><span>@(jdBytes is null ? "Choose a file or drop it here" : $"{jdBytes.Length / 1024d:0.#} KB · Click to Replace")</span><small>PDF, DOCX, or TXT · Up to 10 MB</small><InputFile class="jd-create-input" OnChange="ChooseJd" accept=".pdf,.docx,.txt" disabled="@Busy" /></label>
+@if(jdBytes is not null){<button class="secondary" type="button" disabled="@Busy" @onclick="RemoveJd">Remove File</button>}
+<div class="jd-text-review-heading"><h3>Review JD Text</h3><span class="muted small">@(edit.JobDescription.Length.ToString("N0")) Characters</span></div>
+<p class="muted small">Read the extracted wording and correct any extraction errors. You can also paste a JD directly.</p>
+<textarea aria-label="Review Job Description Text" rows="12" @bind="edit.JobDescription" @bind:event="oninput" @bind:after="InvalidateAnalysis" disabled="@Busy"></textarea>
+@if(edit.JobDescription.Length>100000){<p class="error">JD text must be no longer than 100,000 characters.</p>}
+<label>Client-Specific Assessment Requirements<textarea rows="3" @bind="edit.ClientNotes" @bind:event="oninput" @bind:after="InvalidateAnalysis" disabled="@Busy" placeholder="Add client requirements to consider alongside the JD."></textarea></label>
+<label class="check jd-reviewed"><input type="checkbox" @bind="sourceReviewed" disabled="@(!HasJdText || Busy)" /> I have reviewed the JD text and client requirements.</label>
+@if(!DetailsReady){<p class="notice">Select a client or enter a new client name in Details before analyzing the JD.</p>}
+<div class="jd-analysis-actions"><button type="button" disabled="@(!CanAnalyze)" @onclick="Analyze">@(analyzing ? "Analyzing JD…" : analysisComplete ? "Analyze Again" : "Analyze JD")</button><small>Analysis creates suggestions. Nothing is saved yet.</small></div>
+@if(analysisComplete&&!DraftIsCurrent){<p class="error">The client, title, or JD requirements changed. Review the details and analyze again before saving.</p>}
+@if(DraftIsCurrent){<div class="jd-draft-review"><h3>Analysis Ready for Review</h3><p>@edit.Criteria.Count Suggested Criteria · @edit.Criteria.Sum(c=>c.Weight)% Total Weight</p><div class="form-grid"><div><b>Suggested Position Title</b><p>@suggestedTitle</p></div><div><b>Suggested Summary</b><p>@edit.PositionSummary</p></div></div><button class="secondary" @onclick='()=>editorTab="basics"'>Review Position Details</button> <button class="secondary" @onclick='()=>editorTab="criteria"'>Review Criteria</button></div>}}else{
+<div class="original-jd-card"><NavIcon Name="import" /><div><b>Original Job Description</b>
+@if(edit.JdDocumentId is not null){
+    @if(!string.IsNullOrEmpty(originalJdName)){<small>@originalJdName</small>}
+    <div class="jd-document-actions">
+    @if(Uri.TryCreate(edit.LegacyJdLink,UriKind.Absolute,out var linkedOriginal)&&linkedOriginal.Scheme=="https"){<a class="button secondary" href="@linkedOriginal" target="_blank" rel="noopener">View JD</a>}
+    else{<a class="button secondary" href="@($"/files/{edit.JdDocumentId}?view=true")" target="_blank" rel="noopener">View JD</a>}
+    <a class="small" href="@($"/files/{edit.JdDocumentId}")">Download Original</a>
+    </div>
+}
+else if(Uri.TryCreate(edit.LegacyJdLink,UriKind.Absolute,out var original)&&original.Scheme=="https"){<a class="button secondary" href="@original" target="_blank" rel="noopener">View JD</a>}
+else{<small>No original file linked.</small>}
+</div></div>
+@if(!string.IsNullOrEmpty(jdReadNotice)){<p class="muted small">@jdReadNotice</p>}
+<h3>Full Job Description</h3>
+@if(!string.IsNullOrWhiteSpace(originalJdText)){<div class="jd-original-text">@originalJdText</div>}
+else{<p class="muted">No readable JD text is available. Use the original document link above.</p>}
+@if(edit.ClientNotes.Length>0){<h3>Client-Specific Assessment Requirements</h3><p class="preserve">@edit.ClientNotes</p>}
+@if(edit.PositionSummary.Length>0){<h3>Position Summary</h3><p class="preserve">@edit.PositionSummary</p>}
+}
+</section>
+<section class="position-form-section" id="position-criteria" role="tabpanel" aria-labelledby="position-tab-criteria" hidden="@(editorTab!="criteria")"><div class="position-section-heading"><span class="section-number">03</span><div><h3>Assessment Criteria</h3><p>Edit the criteria and weights, then save. Existing assessment results keep their original criteria.</p></div></div>
+@if(IsNew&&DraftIsCurrent){<div class="jd-draft-review"><h3>Review AI Suggestions</h3><p>Check the position details, summary, and each criterion before saving.</p><label>Position Summary<textarea rows="3" @bind="edit.PositionSummary"></textarea></label><button class="secondary" @onclick='()=>editorTab="basics"'>Review Position Details</button></div>}
+<div class="criteria-summary"><span class="@(edit.Criteria.Sum(c=>c.Weight)==100 ? "weight-valid" : "weight-pending")">@edit.Criteria.Sum(c=>c.Weight)% of 100%</span><span>@edit.Criteria.Count Criteria</span><span>@(edit.CriteriaLocked ? "Approved" : "Draft")</span></div>
+<div class="section-heading"><h2>Scoring Weights <small>@edit.Criteria.Sum(c=>c.Weight)% / 100%</small></h2><div><button class="secondary" disabled="@Busy" @onclick="()=>edit.Criteria.Add(new Criterion())">+ Criterion</button></div></div>
+<div class="criteria-card-grid">@foreach(var c in edit.Criteria){<details class="criterion-editor" @key="c.Id"><summary><span>@(c.Name.Length>0?c.Name:"New Criterion")</span><span class="criterion-weight">@c.Weight%</span>@if(c.Knockout){<span class="badge yellow">Must-Have</span>}</summary><div class="form-grid"><label>Criterion<input @bind="c.Name" disabled="@Busy" /></label><label>Weight %<input type="number" min="1" max="100" @bind="c.Weight" disabled="@Busy" /></label></div><label class="check"><input type="checkbox" @bind="c.Knockout" disabled="@Busy" /> Must-have</label><label>Evidence Expected<textarea @bind="c.EvidenceExpected" disabled="@Busy"></textarea></label><label>Scoring Guidance<textarea @bind="c.ScoringGuidance" disabled="@Busy"></textarea></label><label>Interpretation Notes<textarea @bind="c.Notes" disabled="@Busy"></textarea></label>@if(c.Rationale.Length>0){<p class="muted">AI draft rationale: @c.Rationale</p>}<button class="secondary danger" disabled="@Busy" @onclick="()=>edit.Criteria.Remove(c)">Remove</button></details>}</div>
+@if(IsNew&&DraftIsCurrent){<label class="check jd-reviewed"><input type="checkbox" @bind="draftReviewed" /> I have reviewed the position details, summary, and criteria.</label>}
+<label class="check criteria-lock"><input type="checkbox" @bind="lockOnSave" disabled="@Busy" /> I have reviewed the criteria. Approve them for assessments.</label>
+</section>
+<section class="position-form-section" id="position-status" role="tabpanel" aria-labelledby="position-tab-status" hidden="@(editorTab!="status")"><div class="position-section-heading"><span class="section-number">04</span><div><h3>Status &amp; Closure</h3><p>Manage the position’s status and record closure details when needed.</p></div></div>
+@if(canAssign&&edit.WorkspaceId is not null||isEmployer){
+<div class="panel"><h3>Company Careers Page</h3><p class="muted">Only Active, Published Positions Appear. Review Public Text To Remove Client Names And Private Details Before Publishing.</p>
+<label>Public Job Description<textarea rows="8" @bind="edit.PublicJobDescription" placeholder="Enter the job description candidates may read publicly."></textarea></label>
+<label class="check"><input type="checkbox" @bind="edit.CareersPublished" /> Publish On Careers Page</label><small>Closing, Filling Or Putting A Position On Hold Removes It From The Public Page. Reopening Requires Publishing Again.</small></div>
+}
+<label>Position Status<select @bind="edit.Status">@foreach(var s in Choices.PositionStatuses){<option>@s</option>}</select></label>
+@if(edit.Status is "Closed" or "Cancelled" or "Filled"){
+<div class="closure-fields">
+<div class="form-grid"><label>@(edit.Status=="Filled" ? "Date Filled" : "Closure Date")<input type="date" @bind="edit.ClosedDate" @bind:format="yyyy-MM-dd" /><small>Leave blank to record the date automatically on save.</small></label>
+<label>Recorded By<input value="@(edit.ClosedBy.Length>0 ? edit.ClosedBy : currentUsername)" readonly /></label></div>
+@if(edit.Status is "Closed" or "Cancelled"){
+<label>Closure Reason<input @bind="edit.ClosureReason" list="position-close-reasons" placeholder="Choose or Enter a Reason" /></label>
+<datalist id="position-close-reasons">@foreach(var reason in ClosureReasons){<option value="@reason" />}</datalist>
+}else{
+<div class="form-grid">
+<label>Filled Source<select @bind="edit.FilledSource"><option value="">Choose Filled Source</option>@foreach(var s in Choices.FilledSources){<option>@s</option>}</select></label>
+<label>Hired Candidate<select @bind="edit.HiredCandidateId"><option value="">No ATS Candidate</option>@foreach(var a in For(edit.Id).DistinctBy(x=>x.CandidateId)){<option value="@a.CandidateId">@a.CandidateName</option>}</select></label>
+<label>Client<input value="@edit.Client" readonly /></label>
+<label>Recruiter<select @bind="edit.AssignedRecruiter" disabled="@(!canAssign)"><option value="">Choose Recruiter</option>@if(edit.AssignedRecruiter.Length>0&&!recruiters.Any(x=>x.Username==edit.AssignedRecruiter)){<option value="@edit.AssignedRecruiter" disabled>@edit.AssignedRecruiter</option>}@foreach(var r in recruiters){<option value="@r.Username">@r.Username</option>}</select></label>
+</div><label>Closure Notes<textarea rows="3" @bind="edit.ClosureReason"></textarea></label>
+}
+</div>
+}
+@if(edit.ClosedDate is not null && edit.Status is not ("Closed" or "Cancelled" or "Filled")){<p class="muted">Previous Closure: @edit.ClosedDate?.ToString("dd MMM yyyy") · @edit.ClosedBy · @edit.ClosureStatus</p>}
+</section>
+@if(!IsNew){
+<section class="position-form-section linked-applications">
+<div class="section-heading"><div><h3>Linked Applications</h3><small>@For(edit.Id).Count Applications · Latest 5</small></div><a class="small" href="@($"/pipeline?ref={Uri.EscapeDataString(edit.Reference)}")" target="_blank" rel="noopener">View All</a></div>
+@if(For(edit.Id).Count==0){<p class="empty">No saved applications linked to this position.</p>}
+else{
+<div class="table-wrap"><table><thead><tr><th>Candidate</th><th>Contact / Location</th><th>AI Match</th><th>AI Decision</th><th>Stage</th><th>Interview</th><th>Actions</th></tr></thead><tbody>
+@foreach(var a in For(edit.Id).OrderByDescending(x=>x.UpdatedUtc).Take(5)){
+<tr><td><a href="@($"/candidates?id={a.CandidateId}")" target="_blank" rel="noopener"><b>@a.CandidateName</b></a><small>@a.Candidate?.CurrentRole · @a.Candidate?.CurrentCompany</small></td><td><small>@a.Candidate?.Email<br />@a.Candidate?.Phone<br />@a.Candidate?.Location</small></td><td><b>@(a.MatchPercent.HasValue ? a.MatchPercent+"%" : "—")</b></td><td><DecisionBadge Value="@a.Decision" /></td><td>@a.Stage<small>@a.ClientStatus</small></td><td>@a.InterviewStatus</td><td><button class="secondary" @onclick="()=>applicationEdit=a">Update Status</button></td></tr>
+}
+</tbody></table></div>
+}
+@if(applicationEdit is not null){
+<div class="linked-lifecycle-editor"><div class="section-heading"><h3>Update @applicationEdit.CandidateName</h3><button class="secondary" @onclick="()=>applicationEdit=null">Close</button></div><LifecycleEditor Application="applicationEdit" OnSaved="ApplicationSaved" /></div>
+}
+</section>
+}
+<div class="position-editor-actions"><span class="muted small">@(edit.CriteriaLocked ? "Criteria Changes Apply to Future Assessments" : "Review Your Details Before Saving")</span><button class="secondary" disabled="@Busy" @onclick="()=>edit=null">Cancel</button><button disabled="@(Busy || (IsNew && (!DraftIsCurrent || !draftReviewed)))" @onclick="Save">@(Busy ? analyzing ? "Analyzing…" : "Working…" : IsNew ? "Create Position" : "Save Position")</button></div></section></div>}
 @code{
+string PositionKpiIcon(string value)=>value switch{"Active"=>"positions","On Hold"=>"clock","Closed"=>"archive","Filled"=>"check","Cancelled"=>"cancel",_=>"positions"};
+string PositionKpiTone(string value)=>value switch{"Active"=>"icon-blue","On Hold"=>"icon-amber","Closed"=>"icon-violet","Filled"=>"icon-teal","Cancelled"=>"icon-rose",_=>"icon-blue"};
+bool sourceReviewed, analysisComplete, draftReviewed, analyzing;
+string analyzedSource="", suggestedTitle="";
+bool DetailsReady=>edit is not null&&(edit.ClientId is not null||!string.IsNullOrWhiteSpace(edit.Client));
+bool HasJdText=>edit is not null&&!string.IsNullOrWhiteSpace(edit.JobDescription)&&edit.JobDescription.Length<=100000;
+string SourceSignature=>edit is null ? "" : Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new{edit.ClientId,edit.Client,edit.Title,edit.JobDescription,edit.ClientNotes}))));
+bool DraftIsCurrent=>analysisComplete&&analyzedSource==SourceSignature;
+bool CanAnalyze=>IsNew&&!Busy&&DetailsReady&&HasJdText&&sourceReviewed;
+void InvalidateAnalysis(){sourceReviewed=false;draftReviewed=false;}
+void ResetJdFlow(){sourceReviewed=analysisComplete=draftReviewed=analyzing=false;analyzedSource=suggestedTitle="";}
+void RemoveJd(){jdBytes=null;jdName="";edit!.JobDescription="";InvalidateAnalysis();Notice="File removed. Upload another JD or paste its text.";}
+string editorTab = "basics", currentUsername="", originalJdName="", originalJdText="", jdReadNotice="";
+List<RecruiterChoice> recruiters=[]; Assessment? applicationEdit;
+bool IsNew=>edit is not null&&!positions.Any(x=>x.Id==edit.Id);
+IEnumerable<ClientContact> Contacts=>clients.FirstOrDefault(x=>x.Id==edit?.ClientId || (edit?.ClientId is null&&x.Name==edit?.Client))?.Contacts.Where(x=>!string.IsNullOrWhiteSpace(x.Name)) ?? [];
+static readonly string[] EmploymentTypes=["Full-time","Part-time","Contract","Temporary","Internship","Apprenticeship","Freelance","Other"];
+static readonly string[] ClosureReasons=["Hiring Freeze","Budget Withdrawn","Role No Longer Required","Client Cancelled","Position Filled Elsewhere","Requirements Changed","Duplicate Position","No Suitable Candidate","Other"];
+async Task ClientChanged(){if(edit is null)return;edit.HiringContact="";if(edit.ClientId is not null)edit.Client=clients.Single(x=>x.Id==edit.ClientId).Name;else edit.Client="";recruiters=await Workspace.Recruiters(clients.FirstOrDefault(c=>c.Id==edit.ClientId)?.WorkspaceId);if(!recruiters.Any(r=>r.Username==edit.AssignedRecruiter))edit.AssignedRecruiter=recruiters.Count==1?recruiters[0].Username:"";}
+async Task ApplicationSaved(){applicationEdit=null;await Load();Notice="Recruitment progress updated.";}
+async Task ReadJd(){
+    originalJdName=""; originalJdText=edit?.JobDescription??""; jdReadNotice="";
+    if(edit?.JdDocumentId is not Guid id){if(!string.IsNullOrWhiteSpace(edit?.LegacyJdLink))jdReadNotice="Showing saved JD text. Open the linked original to review its formatting.";return;}
+    var doc=await Documents.Read(id);
+    if(doc is null){jdReadNotice="The original file is unavailable. Showing saved JD text.";return;}
+    originalJdName=doc.FileName;
+    if(!string.IsNullOrWhiteSpace(edit?.JobDescription))return;
+    try {
+        var text=await Task.Run(()=>JdTextExtractor.Extract(doc.FileName,doc.Content));
+        if(!string.IsNullOrWhiteSpace(text))originalJdText=text;
+        else jdReadNotice="This document has no readable text layer. Open the original JD to read it.";
+    }catch(Exception){jdReadNotice="The original document could not be extracted as text. Open the original JD; saved JD text is shown when available.";}
+}
+readonly (string Key,string Label)[] editorTabs = [("basics","Details"),("jd","Job Description"),("criteria","Criteria"),("status","Status")];
+
 [SupplyParameterFromQuery(Name="status")]public string? QueryStatus{get;set;}
 [SupplyParameterFromQuery(Name="priority")]public string? QueryPriority{get;set;}
 [SupplyParameterFromQuery(Name="unscreened")]public bool Unscreened{get;set;}
 [SupplyParameterFromQuery(Name="ref")]public string? Reference{get;set;}
+[SupplyParameterFromQuery(Name="tab")]public string? EditorTabQuery{get;set;}
 List<Position> positions=[];List<Client> clients=[];List<Assessment> assessments=[];Position? edit;string search="",status="",priority="",clientFilter="",sort="ref",jdName="",openedRef="";byte[]? jdBytes;bool lockOnSave;int page=1;
 List<Assessment> For(Guid id)=>assessments.Where(x=>x.PositionId==id&&x.State=="Saved").ToList();
 List<Position> Filtered {get{var q=positions.Where(p=>(status==""||p.Status==status)&&(!Unscreened||For(p.Id).Count==0)&&(priority==""||p.Priority==priority)&&(clientFilter==""||p.Client==clientFilter)&&$"{p.Title} {p.Client} {p.Reference}".Contains(search,StringComparison.OrdinalIgnoreCase));return (sort switch {"priority"=>q.OrderBy(p=>Array.IndexOf(Choices.Priorities,p.Priority)).ThenBy(p=>p.Reference),"newest"=>q.OrderByDescending(p=>p.OpenDate??p.CreatedUtc),_=>q.OrderBy(p=>p.Reference)}).ToList();}}
 int Pages=>Math.Max(1,(int)Math.Ceiling(Filtered.Count/25d));int Page=>Math.Min(page,Pages);
 protected override Task OnInitializedAsync()=>Run(Load);
-protected override void OnParametersSet(){status=QueryStatus??status;priority=QueryPriority??priority;if(Reference is not null&&Reference!=openedRef&&positions.FirstOrDefault(x=>x.Reference==Reference) is Position p){Edit(p);openedRef=Reference;}}
-async Task Load(){positions=await Ats.Positions();assessments=await Ats.Assessments();clients=await Workspace.Clients();if(Reference is not null&&openedRef!=Reference&&positions.FirstOrDefault(x=>x.Reference==Reference) is Position p){Edit(p);openedRef=Reference;}}
+protected override async Task OnParametersSetAsync(){status=QueryStatus??status;priority=QueryPriority??priority;if(Reference is not null&&Reference!=openedRef&&positions.FirstOrDefault(x=>x.Reference==Reference) is Position p){await Edit(p);openedRef=Reference;}}
+PositionAllowance? allowance;bool canCreate,canClients,canAssign,isEmployer;
+async Task Load(){var actor=await Access.Require();isEmployer=actor.IsInRole("Employer");allowance=await Ats.Allowance();canAssign=actor.IsInRole("Admin")||actor.IsInRole("Employer");canCreate=await Access.Can("Positions.Create");canClients=await Access.Can("Clients.Create");currentUsername=(await Access.Require()).Identity!.Name!;recruiters=await Workspace.Recruiters();positions=await Ats.Positions();assessments=await Ats.Assessments();clients=await Workspace.Clients();if(Reference is not null&&openedRef!=Reference&&positions.FirstOrDefault(x=>x.Reference==Reference) is Position p){await Edit(p);openedRef=Reference;}}
 void Clear(){search=status=priority=clientFilter="";Unscreened=false;page=1;}
-void New(){edit=new Position();lockOnSave=false;jdBytes=null;jdName="";Error="";}
-void Edit(Position p){edit=JsonSerializer.Deserialize<Position>(JsonSerializer.Serialize(p));lockOnSave=p.CriteriaLocked;jdBytes=null;jdName="";Error="";}
-Task ChooseJd(InputFileChangeEventArgs e)=>Run(async()=>{using var stream=new MemoryStream();await e.File.OpenReadStream(AiService.MaxFileSize).CopyToAsync(stream);jdBytes=stream.ToArray();jdName=e.File.Name;});
-Task Analyze()=>Run(async()=>{var draft=await Ai.AnalyzeJdDraft(edit!.JobDescription,edit.ClientNotes,jdName,jdBytes);edit.Criteria=draft.Criteria;edit.PositionSummary=draft.Summary;if(edit.Title.Length==0)edit.Title=draft.Title;Notice="Draft analysis ready for your review. The position has not been created.";});
-Task Save()=>Run(async()=>{edit!.CriteriaLocked=lockOnSave;if(edit.ClientId is not null)edit.Client=clients.Single(x=>x.Id==edit.ClientId).Name;if(jdBytes is not null){var doc=await Documents.Store(jdName,jdBytes);edit.JdDocumentId=doc.Id;edit.JdHash=doc.ContentHash;}await Ats.SavePosition(edit);edit=null;await Load();Notice="Position saved.";});
+Task New()=>Run(async()=>{recruiters=await Workspace.Recruiters();ResetJdFlow();editorTab="basics";Notice="";applicationEdit=null;edit=new Position{AssignedRecruiter=recruiters.Count==1?recruiters[0].Username:""};lockOnSave=false;jdBytes=null;jdName="";Error="";});
+async Task Edit(Position p){recruiters=await Workspace.Recruiters(p.WorkspaceId);ResetJdFlow();applicationEdit=null;editorTab=editorTabs.Any(x=>x.Key==EditorTabQuery)?EditorTabQuery!:"basics";Notice="";edit=JsonSerializer.Deserialize<Position>(JsonSerializer.Serialize(p));lockOnSave=p.CriteriaLocked;jdBytes=null;jdName="";Error="";await ReadJd();}
+Task ChooseJd(InputFileChangeEventArgs e)=>Run(async()=>{
+    jdBytes=null;jdName="";edit!.JobDescription="";InvalidateAnalysis();
+    var file=e.File;
+    if(!new[]{".pdf",".docx",".txt"}.Contains(Path.GetExtension(file.Name).ToLowerInvariant()))throw new InvalidOperationException("Choose a PDF, DOCX, or TXT file.");
+    using var stream=new MemoryStream();
+    await file.OpenReadStream(AiService.MaxFileSize).CopyToAsync(stream);
+    jdBytes=stream.ToArray();jdName=file.Name;
+    try{
+        edit.JobDescription=await Task.Run(()=>JdTextExtractor.Extract(jdName,jdBytes));
+        Notice=HasJdText?"JD text extracted. Review it before analysis.":"No readable text was found. Paste the JD text to continue.";
+    }catch(Exception){Notice="The file was selected, but readable text could not be extracted. Paste the JD text to continue.";}
+});
+Task Analyze()=>Run(async()=>{
+    if(!IsNew||!DetailsReady||!HasJdText||!sourceReviewed)throw new InvalidOperationException("Select or name the client and review the JD text before analysis.");
+    analyzing=true;draftReviewed=false;
+    try{
+
+        var draft=await Ai.AnalyzeJdDraft(edit!.JobDescription,edit.ClientNotes);
+        edit.Criteria=draft.Criteria;edit.PositionSummary=draft.Summary;suggestedTitle=draft.Title;
+        edit.Title=draft.Title;edit.Location=draft.Location;
+        analyzedSource=SourceSignature;analysisComplete=true;editorTab="criteria";
+        Notice="Review the suggested details and criteria. The position has not been saved.";
+    }finally{analyzing=false;}
+});Task Save()=>Run(async()=>{if(IsNew&&(!DraftIsCurrent||!draftReviewed))throw new InvalidOperationException("Analyze the reviewed JD and review the suggestions before creating the position.");edit!.CriteriaLocked=lockOnSave;if(edit.ClientId is not null)edit.Client=clients.Single(x=>x.Id==edit.ClientId).Name;if(jdBytes is not null){var doc=await Documents.Store(jdName,jdBytes);edit.JdDocumentId=doc.Id;edit.JdHash=doc.ContentHash;}await Ats.SavePosition(edit);edit=null;await Load();Notice="Position saved.";});
 }

@@ -1,0 +1,18 @@
+@page "/settings/employers"
+@attribute [Authorize(Roles="Admin")]
+@inherits PageBase
+@inject EmployerService EmployerService
+<PageTitle>Employer Access · Osynix ATS</PageTitle>
+<div class="page-heading"><div><div class="eyebrow">ADMINISTRATION</div><h1>Employer Workspaces &amp; Access</h1></div><a class="button secondary" href="/settings">Settings &amp; Users</a></div>
+<Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
+@if(workspaces.Count==0){<section class="panel"><p>No Employer Workspaces Yet. A Workspace Is Created When A Verified Employer First Opens Their Portal.</p></section>}
+@foreach(var item in workspaces){<section class="panel"><h2>@item.Workspace.CompanyName</h2><p class="muted">Workspace @item.Workspace.Id</p><div class="form-grid"><label>Free Recruiter Seats<input type="number" min="0" max="1000" @bind="item.Workspace.FreeRecruiterSeats" /></label><label>Additional Recruiter Seats<input type="number" min="0" max="1000" @bind="item.Workspace.AdditionalRecruiterSeats" /></label><label>Free Position Slots<input type="number" min="0" max="1000" @bind="item.Workspace.FreePositionSlots" /></label><label>Additional Position Slots<input type="number" min="0" max="1000" @bind="item.Workspace.AdditionalPositionSlots" /></label></div><label class="check"><input type="checkbox" @bind="item.Workspace.TeamTalentPoolEnabled" /> Team Talent Pool Entitlement</label><p class="muted">Access Remains Active Until Revoked. Changing These Limits Preserves Recruitment History.</p><button disabled="@Busy" @onclick="()=>SaveAccess(item.Workspace)">Save Workspace Access</button>
+@foreach(var request in item.Requests){<hr/><h3>@request.Feature · Quantity @request.Quantity · @request.CreatedUtc.ToString("dd MMM yyyy HH:mm") UTC</h3><p class="preserve">@request.Remarks</p><label>Response Status<select @bind="request.Status"><option>Submitted</option><option>Under Review</option><option>Needs Information</option><option>Granted</option><option>Rejected</option></select></label><label>Admin Response<textarea rows="2" maxlength="2000" @bind="request.AdminResponse"></textarea></label><p class="muted small">Granting Adds The Requested Capacity Once. Use Workspace Access Above To Revoke Or Adjust It.</p><button disabled="@Busy" @onclick="()=>Respond(request)">Save Response</button>}
+</section>}
+@code{
+List<EmployerOverview> workspaces=[];
+protected override Task OnInitializedAsync()=>Run(Load);
+async Task Load()=>workspaces=await EmployerService.Administration();
+Task SaveAccess(EmployerWorkspace w)=>Run(async()=>{await EmployerService.SetAccess(w);await Load();Notice="Employer Access Updated.";});
+Task Respond(EmployerAccessRequest r)=>Run(async()=>{await EmployerService.Respond(r);await Load();Notice="Response Saved And Available In The Employer Portal.";});
+}

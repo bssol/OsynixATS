@@ -1,0 +1,46 @@
+@using System.Security.Claims
+@using Microsoft.EntityFrameworkCore
+@using Osynix.Ats.Data
+@inject AuthenticationStateProvider Auth
+@inject IDbContextFactory<AtsDbContext> Factory
+<header class="ats-topbar">
+    <div class="header-brand">
+        <a class="topbar-logo" href="@home" aria-label="Osynix Group dashboard"><img src="/images/osynix-group-logo.png" alt="Osynix Group" width="175" height="30" /></a>
+    </div>
+    <form class="global-search" action="/search" method="get" role="search">
+        <svg width="23" height="23" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>
+        <input id="workspace-search" name="q" aria-label="Search candidates and jobs" placeholder="Search candidates, jobs, or keywords..." autocomplete="off" />
+        <button type="submit" class="search-submit" aria-label="Submit search">Search</button>
+    </form>
+    <AuthorizeView><Authorized>
+        <div class="topbar-actions">
+            <details class="header-menu notification-menu">
+                <summary aria-label="Notifications" title="Notifications"><svg width="23" height="23" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg></summary>
+                <div class="header-popover"><h2>Notifications</h2><p class="muted">No notifications to display.</p></div>
+            </details>
+            <details class="header-menu profile-menu">
+                <summary aria-label="Open profile menu">
+                    <img class="user-avatar" src="/images/profile-avatar.svg" alt="Profile avatar" width="40" height="40" />
+                    <span class="user-label"><strong>@name</strong><small>@role</small></span>
+                    <svg class="menu-chevron" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" /></svg>
+                </summary>
+                <div class="header-popover profile-popover"><a href="/profile">My Profile</a><LogoutButton CssClass="text-button profile-logout" /></div>
+            </details>
+        </div>
+    </Authorized><NotAuthorized><a href="/Account/Login">Sign in</a></NotAuthorized></AuthorizeView>
+</header>
+@code {
+    [Parameter] public EventCallback OnToggleSidebar {get;set;}
+    string name = "", role = "", home="/";bool employer;
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await Auth.GetAuthenticationStateAsync()).User;
+        if (user.Identity?.IsAuthenticated != true) return;
+        employer=user.IsInRole("Employer")&&!user.IsInRole("Admin");home=employer?"/employer":"/";
+        name = user.Identity.Name ?? "My account";
+        role = string.Join(", ", user.FindAll(ClaimTypes.Role).Select(x => x.Value));
+        await using var db = await Factory.CreateDbContextAsync();
+        var account = await db.Users.FindAsync(user.FindFirstValue(ClaimTypes.NameIdentifier));
+        if (!string.IsNullOrWhiteSpace(account?.FullName)) name = account.FullName;
+    }
+}

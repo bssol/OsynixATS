@@ -103,8 +103,8 @@ public static class DatabaseInitializer
         var clients=await db.Clients.ToListAsync(token);
         foreach(var p in await db.Positions.Where(x=>x.ClientId==null).ToListAsync(token)) {
             var key=Choices.MatchKey(p.Client); if(key.Length==0) continue;
-            var client=clients.FirstOrDefault(x=>x.NormalizedName==key);
-            if(client is null) {client=new Client{Name=p.Client,NormalizedName=key};clients.Add(client);db.Clients.Add(client);}
+            var client=clients.FirstOrDefault(x=>x.WorkspaceId==p.WorkspaceId&&x.NormalizedName==key);
+            if(client is null) {client=new Client{WorkspaceId=p.WorkspaceId,Name=p.Client,NormalizedName=key};clients.Add(client);db.Clients.Add(client);}
             p.ClientId=client.Id;
         }
         var versions=await db.AssessmentVersions.Select(x=>x.AssessmentId).Distinct().ToListAsync(token);

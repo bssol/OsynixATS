@@ -21,7 +21,10 @@ public static class Lifecycle
         if (application is null) return talentStatus=="Placed" ? "Hired" : "";
         if (application.ClientStatus=="Hired" || application.Stage=="Hired" || talentStatus=="Placed") return "Hired";
         if (application.ClientStatus=="Client Rejected" || application.Stage=="Rejected") return "Rejected";
-        if (application.ClientStatus is "Offer" or "Submitted" or "Under Review" or "Client Shortlisted" || application.Stage=="Offer Sent" || application.InterviewStatus=="Completed") return "Pending Decision";
+        if (application.Stage=="Awaiting Client Feedback") return "Pending Decision";
+        if (application.Stage=="Hold") return "On Hold";
+        if (application.ClientStatus=="Client Shortlisted") return "Shortlisted";
+        if (application.ClientStatus is "Offer" or "Submitted" or "Under Review" || application.Stage=="Offer Sent" || application.InterviewStatus=="Completed") return "Pending Decision";
         if (IsInterview(application.Stage) || application.ClientStatus=="Client Interview") return "In Interview";
         return application.Stage switch { "Hold"=>"On Hold", "Shortlisted"=>"Shortlisted", _=>"" };
     }

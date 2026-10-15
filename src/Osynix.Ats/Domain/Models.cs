@@ -11,6 +11,9 @@ public abstract class Record
 }
 public class Position : Record
 {
+    public bool CareersPublished { get; set; }
+    public string PublicJobDescription { get; set; } = "";
+    public Guid? WorkspaceId {get;set;}
     [Required, MaxLength(30)] public string Reference { get; set; } = "";
     [Required, MaxLength(200)] public string Title { get; set; } = "";
     [Required, MaxLength(200)] public string Client { get; set; } = "";
@@ -164,9 +167,9 @@ public record AssessmentSnapshot(Candidate Profile, double? RelevantExperience, 
 public record ScoringResult(int Match, string MustHave, double Core, double Confidence, string Decision, List<ScoredCriterion> Criteria);
 public static class Choices
 {
-    public static readonly string[] PositionStatuses = ["Active", "On Hold", "Closed", "Filled", "Cancelled"];
+    public static readonly string[] PositionStatuses = ["Draft", "Active", "On Hold", "Closed", "Filled", "Cancelled"];
     public static readonly string[] Priorities = ["High", "Medium", "Low"];
-    public static readonly string[] Stages = ["Applied", "HR Screening", "Background Check", "Consider", "Shortlisted", "Technical Interview", "Final Interview", "Client Interview", "Offer Sent", "Hired", "Hold", "Rejected"];
+    public static readonly string[] Stages = ["Applied", "HR Screening", "Background Check", "Consider", "Shortlisted", "Awaiting Client Feedback", "Technical Interview", "Final Interview", "Client Interview", "Offer Sent", "Hired", "Hold", "Rejected"];
     public static readonly string[] Decisions = ["Priority Shortlist", "Shortlist", "Consider", "Hold", "Reject", "Insufficient Evidence"];
     public static readonly string[] Interviews = ["Not Scheduled", "Scheduled", "Completed", "No Show", "Reschedule Required", "Not Required"];
     public static readonly string[] ClientStatuses = ["Not Submitted", "Submitted", "Under Review", "Client Shortlisted", "Client Rejected", "Client Interview", "Offer", "Hired"];
@@ -179,6 +182,9 @@ public static class Choices
 
 public class Client : Record
 {
+    public bool CareersPublished { get; set; }
+    public string PublicJobDescription { get; set; } = "";
+    public Guid? WorkspaceId {get;set;}
     public string Name { get; set; } = "";
     public string NormalizedName { get; set; } = "";
     public string Industry { get; set; } = "";

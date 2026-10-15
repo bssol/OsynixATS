@@ -5,3 +5,7 @@
 **/appsettings.Local.json
 .vs/
 TestResults/
+
+# Local editor configuration and recruitment source data
+**/.vscode/
+/Appscript files/Osynix_ATS_Master_Tracker.xlsx

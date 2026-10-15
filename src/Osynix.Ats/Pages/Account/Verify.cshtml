@@ -1,0 +1,10 @@
+@page
+@model Osynix.Ats.Pages.Account.VerifyModel
+@{ Layout="_AuthLayout"; ViewData["Title"]="Verify Email"; }
+<div class="auth-title"><span class="auth-eyebrow">ONE MORE STEP</span><h1>Verify Your Email</h1><p>Enter the six-digit code sent to @Model.Email.</p></div>
+@if(Model.Complete){<div class="auth-success">Email verified. Your account is ready.</div><a class="auth-primary auth-link" href="@(Model.Invite is {Length:>0}?"/Account/Login?returnUrl="+Uri.EscapeDataString("/Account/TeamInvitation?token="+Model.Invite):"/Account/Login")">Continue to Sign In →</a>}
+else{
+<form method="post"><div asp-validation-summary="All" class="auth-error"></div><input asp-for="Email" type="hidden" /><input asp-for="Invite" type="hidden"/><label>Verification Code<input asp-for="Code" class="otp-input" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required /></label><small>The code expires after 10 minutes.</small><button class="auth-primary" type="submit">Verify Email →</button></form>
+<form method="post" asp-page-handler="Resend"><input asp-for="Email" type="hidden" /><input asp-for="Invite" type="hidden"/><button class="auth-text-button" type="submit">Send a New Code</button></form>
+@if(Model.Notice.Length>0){<p class="auth-note">@Model.Notice</p>}}
+<p class="auth-switch"><a href="/Account/Login">Back to Sign In</a></p>

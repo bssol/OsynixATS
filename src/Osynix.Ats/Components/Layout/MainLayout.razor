@@ -1,6 +1,32 @@
 @inherits LayoutComponentBase
-<div class="shell">
-<aside><a class="brand" href="/">OSYNIX<span>APPLICANT TRACKING SYSTEM</span></a><div class="nav-label">WORKSPACE</div><nav><NavLink href="/" Match="NavLinkMatch.All">◫ &nbsp; Dashboard</NavLink><NavLink href="positions">▤ &nbsp; Manage positions</NavLink><NavLink href="clients">▤ &nbsp; Clients</NavLink><NavLink href="assessment">✦ &nbsp; Candidate assessment</NavLink><NavLink href="candidates">♙ &nbsp; Candidate Database</NavLink><NavLink href="talent">♙ &nbsp; Talent Pool</NavLink><NavLink href="pipeline">⇄ &nbsp; Recruitment pipeline</NavLink><AuthorizeView Roles="Admin"><NavLink href="settings">⚙ &nbsp; Settings &amp; users</NavLink><NavLink href="import">⇧ &nbsp; Import workbook</NavLink></AuthorizeView></nav><div class="side-footer">Building scalable organizations<br />through strategic people operations.</div></aside>
-<div class="workspace"><header><span>People. Potential. Progress.</span><AuthorizeView><Authorized><span>@context.User.Identity?.Name <a class="quiet" href="/Account/Logout">Sign out</a></span></Authorized></AuthorizeView></header><main><ErrorBoundary><ChildContent>@Body</ChildContent><ErrorContent><div class="error">The page could not load. <a href="/">Reload the workspace</a>.</div></ErrorContent></ErrorBoundary></main></div>
+<div class="shell @(collapsed ? "sidebar-collapsed" : "")">
+    <TopBar />
+    @if(!collapsed){<button class="sidebar-backdrop" aria-label="Close navigation" @onclick="ToggleSidebar"></button>}
+    <aside id="workspace-sidebar" class="workspace-sidebar" aria-label="Workspace navigation">
+                <div class="sidebar-heading">
+            <div class="nav-label">WORKSPACE</div>
+            <button type="button" class="sidebar-collapse-control" @onclick="ToggleSidebar" aria-label="@(collapsed ? "Expand sidebar" : "Collapse sidebar")" aria-expanded="@(!collapsed)" aria-controls="workspace-sidebar" title="@(collapsed ? "Expand sidebar" : "Collapse sidebar")">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="@(collapsed ? "m9 5 7 7-7 7" : "m15 5-7 7 7 7")" /></svg>
+            </button>
+        </div>
+        <nav class="workspace-nav"><AuthorizeView Roles="Admin,Recruiter" Context="workspaceAuth">
+            <NavLink href="/" Match="NavLinkMatch.All" title="Dashboard"><NavIcon Name="dashboard" /><span>Dashboard</span></NavLink>
+            <NavLink href="positions" title="Manage Positions"><NavIcon Name="positions" /><span>Manage Positions</span></NavLink>
+            <NavLink href="clients" title="Clients"><NavIcon Name="clients" /><span>Clients</span></NavLink>
+            <NavLink href="assessment" title="Candidate Assessment"><NavIcon Name="assessment" /><span>Candidate Assessment</span></NavLink>
+            <NavLink href="talent" title="Talent Pool"><NavIcon Name="talent" /><span>Talent Pool</span></NavLink>
+            <NavLink href="pipeline" title="Recruitment Pipeline"><NavIcon Name="pipeline" /><span>Recruitment Pipeline</span></NavLink>
+            <AuthorizeView Roles="Admin">
+                <NavLink href="settings" title="Settings and users"><NavIcon Name="settings" /><span>Settings &amp; Users</span></NavLink>
+                <NavLink href="import" title="Import Workbook"><NavIcon Name="import" /><span>Import Workbook</span></NavLink>
+            </AuthorizeView>
+        </AuthorizeView><AuthorizeView Roles="Employer"><NavLink href="/employer" Match="NavLinkMatch.All" title="Dashboard"><NavIcon Name="dashboard" /><span>Dashboard</span></NavLink><NavLink href="/positions" title="Manage Positions"><NavIcon Name="positions" /><span>Manage Positions</span></NavLink><NavLink href="/clients" title="Clients"><NavIcon Name="clients" /><span>Clients</span></NavLink><NavLink href="/pipeline" title="Recruitment Pipeline"><NavIcon Name="pipeline" /><span>Recruitment Pipeline</span></NavLink><NavLink href="/assessment" title="Candidate Assessment"><NavIcon Name="assessment" /><span>Candidate Assessment</span></NavLink><NavLink href="/talent" title="Talent Pool"><NavIcon Name="talent" /><span>Talent Pool</span></NavLink><NavLink href="/employer/team" title="My Team"><NavIcon Name="talent" /><span>My Team</span></NavLink><NavLink href="/employer/subscriptions" title="Subscriptions"><NavIcon Name="settings" /><span>Subscriptions</span></NavLink><NavLink href="/employer/company" title="Company Settings"><NavIcon Name="clients" /><span>Company Settings</span></NavLink><NavLink href="/profile" title="My Profile"><NavIcon Name="settings" /><span>My Profile</span></NavLink></AuthorizeView><AuthorizeView Roles="Candidate"><NavLink href="/Account/Portal">My Account</NavLink></AuthorizeView></nav>
+        <div class="side-footer">Building scalable organizations<br />through strategic people operations.</div>
+    </aside>
+    <div class="workspace"><main><ErrorBoundary><ChildContent>@Body</ChildContent><ErrorContent><div class="error">The page could not load. <a href="/">Reload the workspace</a>.</div></ErrorContent></ErrorBoundary></main></div>
 </div>
 <div id="blazor-error-ui">The connection was interrupted. <a href="">Reload</a></div>
+@code {
+    bool collapsed;
+    void ToggleSidebar() => collapsed = !collapsed;
+}

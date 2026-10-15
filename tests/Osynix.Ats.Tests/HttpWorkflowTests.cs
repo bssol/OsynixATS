@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Components.Authorization;
 using Osynix.Ats.Services;
@@ -30,6 +31,44 @@ public class HttpWorkflowTests
         var html=await client.GetStringAsync("/Account/Login");var token=Regex.Match(html,"name=\"__RequestVerificationToken\"[^>]*value=\"([^\"]+)\"").Groups[1].Value;
         var result=await client.PostAsync("/Account/Login",new FormUrlEncodedContent(new Dictionary<string,string>{{"Email","HttpUser"},{"Password","Test-password!123"},{"__RequestVerificationToken",token}}));Assert.Equal(HttpStatusCode.Redirect,result.StatusCode);return client;
     }
+    [Fact] public async Task CareersPageAndCoverArePublicOnlyWhileTheEmployerPublishesThem(){
+        await using var host=new Host();using var signedIn=await Login(host,"Employer");Guid id;Guid jobId;var png=Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0lcAAAAASUVORK5CYII=");
+        using(var scope=host.Services.CreateScope()){var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();var owner=await db.Users.SingleAsync(u=>u.UserName=="HttpUser");var w=new EmployerWorkspace{OwnerId=owner.Id,CompanyName="Public Company",CareersPublished=true,CareersCoverMode="Upload",CareersCoverContent=png,CareersCoverContentType="image/png",BusinessEmail="PRIVATE-CONTACT@example.test"};db.EmployerWorkspaces.Add(w);var job=new Position{WorkspaceId=w.Id,Reference="PUB-HTTP",Title="Public Operations Role",Client="PRIVATE CLIENT",HiringContact="PRIVATE MANAGER",CareersPublished=true,PublicJobDescription="Public Description",JobDescription="PRIVATE JD"};db.Positions.Add(job);await db.SaveChangesAsync();id=w.Id;jobId=job.Id;}
+        using var anonymous=host.CreateClient();var html=await anonymous.GetStringAsync($"/careers/{id}");Assert.Contains("Find Your Next Opportunity",html);Assert.Contains("Public Operations Role",html);Assert.DoesNotContain("PRIVATE",html);var detail=await anonymous.GetStringAsync($"/careers/{id}/jobs/{jobId}");Assert.Contains("Public Description",detail);Assert.DoesNotContain("PRIVATE",detail);
+        var cover=await anonymous.GetAsync($"/careers/{id}/cover");Assert.Equal(HttpStatusCode.OK,cover.StatusCode);Assert.Equal("image/png",cover.Content.Headers.ContentType!.MediaType);Assert.Equal(png,await cover.Content.ReadAsByteArrayAsync());
+        using(var scope=host.Services.CreateScope()){var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();(await db.EmployerWorkspaces.SingleAsync()).CareersPublished=false;await db.SaveChangesAsync();}
+        Assert.Equal(HttpStatusCode.NotFound,(await anonymous.GetAsync($"/careers/{id}/cover")).StatusCode);Assert.DoesNotContain("Public Operations Role",await anonymous.GetStringAsync($"/careers/{id}"));
+    }
+    [Fact] public async Task PipelineLimitsRecordsAndFiltersOnlyAssignedPositions(){
+        await using var host=new Host();using var client=await Login(host,"Recruiter");
+        using(var scope=host.Services.CreateScope()){
+            var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();
+            var p=new Position{Reference="PAGE-A",Title="Assigned First Role",AssignedRecruiter="HttpUser"};
+            var second=new Position{Reference="PAGE-B",Title="Assigned Second Role",AssignedRecruiter="HttpUser"};
+            db.Positions.AddRange(p,second,new Position{Reference="PRIVATE",Title="Unassigned Secret Role",AssignedRecruiter="someone"});
+            for(int i=0;i<13;i++){var c=new Candidate{Name="Paging Candidate "+i};db.Candidates.Add(c);db.Assessments.Add(new Assessment{State="Saved",CandidateId=c.Id,CandidateName=c.Name,PositionId=i==12?second.Id:p.Id});}
+            await db.SaveChangesAsync();
+        }
+        var all=await client.GetStringAsync("/pipeline");
+        Assert.Contains("aria-label=\"Position\"",all);Assert.Contains("Assigned Second Role",all);Assert.DoesNotContain("Unassigned Secret Role",all);
+        Assert.Equal(10,Regex.Matches(all,"aria-label=\"Select Paging Candidate").Count);Assert.Contains("Of 13 Records",all);Assert.Contains("Page 1 Of 2",all);
+        var filtered=await client.GetStringAsync("/pipeline?ref=PAGE-B");Assert.Single(Regex.Matches(filtered,"aria-label=\"Select Paging Candidate"));Assert.Contains("Paging Candidate 12",filtered);Assert.Contains("Of 1 Records",filtered);
+    }
+    [Fact]public async Task EmployerPagesDocumentsAndReportsRemainWithinTheirOwnedWorkspace(){
+        await using var host=new Host();using var client=await Login(host,"Employer");Guid ownDoc,privateDoc,ownApplication,privateApplication;
+        using(var scope=host.Services.CreateScope()){
+            var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();var owner=(await db.Users.SingleAsync(u=>u.UserName=="HttpUser")).Id;var other=new AtsUser{UserName="OtherEmployer",Email="other-owner@example.test",EmailConfirmed=true};db.Users.Add(other);db.UserRoles.Add(new IdentityUserRole<string>{UserId=other.Id,RoleId=(await db.Roles.SingleAsync(r=>r.Name=="Employer")).Id});
+            var w=new EmployerWorkspace{OwnerId=owner,CompanyName="Owned Employer Company"};var otherW=new EmployerWorkspace{OwnerId=other.Id,CompanyName="Other Employer Company"};db.EmployerWorkspaces.AddRange(w,otherW);
+            var ownClient=new Client{WorkspaceId=w.Id,Name="Owned Employer Client",NormalizedName="OWNED"};var otherClient=new Client{WorkspaceId=otherW.Id,Name="Hidden Other Client",NormalizedName="OTHER"};db.Clients.AddRange(ownClient,otherClient);
+            var doc=new StoredDocument{FileName="owned.txt",Content="Owned JD"u8.ToArray(),ContentType="text/plain"};var secret=new StoredDocument{FileName="private.txt",Content="Private JD"u8.ToArray(),ContentType="text/plain"};db.Documents.AddRange(doc,secret);ownDoc=doc.Id;privateDoc=secret.Id;
+            var p=new Position{WorkspaceId=w.Id,ClientId=ownClient.Id,Client=ownClient.Name,Title="Owned Employer Position",Reference="OWN",AssignedRecruiter="team-member",JdDocumentId=doc.Id};var otherP=new Position{WorkspaceId=otherW.Id,ClientId=otherClient.Id,Client=otherClient.Name,Title="Hidden Other Position",Reference="OTHER",AssignedRecruiter="HttpUser",JdDocumentId=secret.Id};var legacy=new Position{Title="Hidden Legacy Position",Reference="LEGACY",AssignedRecruiter="HttpUser"};db.Positions.AddRange(p,otherP,legacy);
+            var c=new Candidate{Name="Owned Employer Candidate"};var otherC=new Candidate{Name="Hidden Other Candidate"};db.Candidates.AddRange(c,otherC);var a=new Assessment{State="Saved",PositionId=p.Id,CandidateId=c.Id,CandidateName=c.Name,SnapshotJson=JsonSerializer.Serialize(new AssessmentSnapshot(c,null,[],"","","",ownClient.Name,p.Title,p.Reference))};var secretA=new Assessment{State="Saved",PositionId=otherP.Id,CandidateId=otherC.Id,CandidateName=otherC.Name};db.Assessments.AddRange(a,secretA);ownApplication=a.Id;privateApplication=secretA.Id;await db.SaveChangesAsync();
+        }
+        foreach(var route in new[]{"/employer","/clients","/positions","/pipeline","/assessment","/candidates","/search?q=Employer"}){var response=await client.GetAsync(route);Assert.Equal(HttpStatusCode.OK,response.StatusCode);var html=await response.Content.ReadAsStringAsync();Assert.DoesNotContain("Hidden Other",html);Assert.DoesNotContain("Hidden Legacy",html);Assert.DoesNotContain("The page could not load",html);}
+        Assert.Contains("Owned Employer Position",await client.GetStringAsync("/positions"));Assert.Contains("+ Create Client",WebUtility.HtmlDecode(await client.GetStringAsync("/clients")));Assert.Contains("Owned Employer Candidate",await client.GetStringAsync("/pipeline"));
+        Assert.Equal(HttpStatusCode.OK,(await client.GetAsync("/files/"+ownDoc)).StatusCode);Assert.Equal(HttpStatusCode.Forbidden,(await client.GetAsync("/files/"+privateDoc)).StatusCode);Assert.Equal(HttpStatusCode.OK,(await client.GetAsync("/reports?ids="+ownApplication)).StatusCode);Assert.Equal(HttpStatusCode.Forbidden,(await client.GetAsync("/reports?ids="+privateApplication)).StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect,(await client.GetAsync("/settings")).StatusCode);
+    }
     [Fact] public async Task AuthenticatedWorkspacesAndHistoricalReportsRenderStoredEvidence()
     {
         await using var host=new Host();using var client=await Login(host);Guid applicationId,candidateId;using(var scope=host.Services.CreateScope()){var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();var p=new Position{Reference="001",Title="Test role",Client="Test client",Criteria=[new(){Name="Experience",Weight=100}]};var c=new Candidate{LegacyId="CAND-001",Name="HTTP Candidate",Email="secret-contact@example.test",Phone="123SECRET",Summary="Profile summary"};db.Positions.Add(p);db.Candidates.Add(c);var a=new Assessment{PositionId=p.Id,CandidateId=c.Id,State="Saved",CandidateName=c.Name,Stage="Shortlisted",Decision="Shortlist",SnapshotJson=JsonSerializer.Serialize(new AssessmentSnapshot(c,null,[],"Historical summary","","",p.Client,p.Title,p.Reference))};db.Assessments.Add(a);var v=DatabaseInitializer.VersionOf(a);v.Decision="Hold";v.MatchPercent=55;db.AssessmentVersions.Add(v);await db.SaveChangesAsync();applicationId=a.Id;candidateId=c.Id;}
@@ -38,6 +77,66 @@ public class HttpWorkflowTests
         using var checkScope=host.Services.CreateScope();var check=checkScope.ServiceProvider.GetRequiredService<AtsDbContext>();Assert.Equal("Shortlist",(await check.Assessments.SingleAsync()).Decision);Assert.Contains(await check.Audit.ToListAsync(),x=>x.Action=="Report generated");
     }
     sealed class AdminState(string id):AuthenticationStateProvider {public override Task<AuthenticationState> GetAuthenticationStateAsync()=>Task.FromResult(new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity([new(ClaimTypes.Name,"HttpUser"),new(ClaimTypes.NameIdentifier,id),new(ClaimTypes.Role,"Admin")],"Test"))));}
+
+    [Fact] public async Task RecruiterPagesHideCreationAndPaidPoolProtectsProfilesAndFiles(){
+        await using var host=new Host();using var client=await Login(host,"Recruiter");
+        Guid candidateId,docId,applicationId;
+        using(var scope=host.Services.CreateScope()){
+            var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();
+            var doc=new StoredDocument{FileName="pool.txt",Content="Paid pool CV"u8.ToArray()};db.Documents.Add(doc);
+            var candidate=new Candidate{Name="Pool Only Candidate",DocumentId=doc.Id,Notes="Private Admin Note"};db.Candidates.Add(candidate);
+            var position=new Position{Reference="Other",Title="Confidential Other Role",AssignedRecruiter="someone"};
+            db.Positions.Add(position);var a=new Assessment{PositionId=position.Id,CandidateId=candidate.Id,State="Saved",CandidateName=candidate.Name,OwnerId=(await db.Users.SingleAsync(x=>x.UserName=="HttpUser")).Id};
+            db.Assessments.Add(a);await db.SaveChangesAsync();candidateId=candidate.Id;docId=doc.Id;applicationId=a.Id;
+        }
+        Assert.DoesNotContain("+ Create Position",await client.GetStringAsync("/positions"));
+        Assert.DoesNotContain("+ Create Client",await client.GetStringAsync("/clients"));
+        var locked=await client.GetStringAsync("/talent");Assert.Contains("Talent Pool Subscription",locked);Assert.DoesNotContain("Pool Only Candidate",locked);
+        Assert.DoesNotContain("Pool Only Candidate",await client.GetStringAsync("/candidates"));
+        Assert.DoesNotContain("Pool Only Candidate",await client.GetStringAsync("/search?q=Pool"));
+        Assert.Equal(HttpStatusCode.Forbidden,(await client.GetAsync($"/files/{docId}")).StatusCode);
+        using(var scope=host.Services.CreateScope()){var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();(await db.Users.SingleAsync(x=>x.UserName=="HttpUser")).TalentPoolPaidUntilUtc=DateTime.UtcNow.AddDays(1);await db.SaveChangesAsync();}
+        var paid=await client.GetStringAsync($"/talent?id={candidateId}");Assert.Contains("Pool Only Candidate",paid);Assert.DoesNotContain("Private Admin Note",paid);Assert.DoesNotContain("Confidential Other Role",paid);
+        Assert.DoesNotContain("The page could not load",paid);Assert.DoesNotContain("Edit profile",paid);
+        Assert.Equal(HttpStatusCode.OK,(await client.GetAsync($"/files/{docId}")).StatusCode);
+        var privateAssessment=await client.GetStringAsync($"/assessment/{applicationId}");Assert.Contains("Assessment not found",privateAssessment);Assert.DoesNotContain("Confidential Other Role",privateAssessment);
+        using(var scope=host.Services.CreateScope()){var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();(await db.Users.SingleAsync(x=>x.UserName=="HttpUser")).TalentPoolPaidUntilUtc=DateTime.UtcNow.AddMinutes(-1);await db.SaveChangesAsync();}
+        Assert.Equal(HttpStatusCode.Forbidden,(await client.GetAsync($"/files/{docId}")).StatusCode);
+        Assert.Contains("Talent Pool Subscription",await client.GetStringAsync("/talent"));
+    }
+
+
+    [Fact] public async Task HiringReviewLinkRequiresItsOwnCookieAndFeedbackRequiresAntiforgery(){
+        await using var host=new Host();using var recruiter=await Login(host);
+        Guid appId,contactId;string adminId;
+        using(var scope=host.Services.CreateScope()){
+            var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();adminId=(await db.Users.SingleAsync(u=>u.UserName=="HttpUser")).Id;
+            var client=new Client{Name="Review Client",NormalizedName="REVIEW CLIENT"};db.Clients.Add(client);
+            var contact=new ClientContact{ClientId=client.Id,Name="Hiring Contact",Email="manager@example.test"};db.ClientContacts.Add(contact);contactId=contact.Id;
+            var position=new Position{Reference="Review",Title="Review Role",Client=client.Name,ClientId=client.Id};db.Positions.Add(position);
+            var candidate=new Candidate{Name="Review Candidate",Email="PRIVATE-CANDIDATE@example.test",Phone="+923001112222"};db.Candidates.Add(candidate);
+            var a=new Assessment{State="Saved",PositionId=position.Id,CandidateId=candidate.Id,Stage="Shortlisted",SnapshotJson=JsonSerializer.Serialize(new AssessmentSnapshot(candidate,null,[],"PRIVATE-CANDIDATE@example.test +923001112222","","",client.Name,position.Title,position.Reference))};db.Assessments.Add(a);await db.SaveChangesAsync();appId=a.Id;
+        }
+        using var serviceScope=host.Services.CreateScope();
+        var service=new HiringReviewService(host.Services.GetRequiredService<IDbContextFactory<AtsDbContext>>(),new Access(new AdminState(adminId)),host.Services.GetRequiredService<IDataProtectionProvider>(),host.Services.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>(),serviceScope.ServiceProvider.GetRequiredService<IAccountEmail>(),host.Services.GetRequiredService<RecruitmentUpdates>());
+        var share=await service.Forward(contactId,[appId],"",false);
+        using var guest=host.CreateClient(new(){AllowAutoRedirect=false});Assert.Equal(HttpStatusCode.Unauthorized,(await guest.GetAsync("/review/data")).StatusCode);
+        var access=await guest.GetAsync(new Uri(share.Link).PathAndQuery);Assert.Equal(HttpStatusCode.Redirect,access.StatusCode);Assert.Equal("/review",access.Headers.Location!.ToString());
+        Assert.Contains(access.Headers.GetValues("Set-Cookie"),value=>value.Contains("httponly",StringComparison.OrdinalIgnoreCase));
+        var html=await guest.GetStringAsync("/review");Assert.Contains("Select Position",html);Assert.Contains("Interview Availability",html);Assert.Contains("<th>AI Decision</th>",html);Assert.DoesNotContain("<th>Client Status</th>",html);Assert.DoesNotContain("<th>Interview Status</th>",html);
+        var comparison=await guest.GetStringAsync("/review/comparison?position="+JsonDocument.Parse(await guest.GetStringAsync("/review/data")).RootElement.GetProperty("rows")[0].GetProperty("positionId").GetString());Assert.Contains("Candidate Summary",comparison);Assert.Contains("Must-Have Fit",comparison);Assert.Contains("comparison-report",comparison);
+        var payload=await guest.GetStringAsync("/review/data");Assert.Contains("Review Candidate",payload);Assert.DoesNotContain("PRIVATE-CANDIDATE",payload);Assert.DoesNotContain("923001112222",payload);
+        using var data=JsonDocument.Parse(payload);var row=data.RootElement.GetProperty("rows")[0];var id=row.GetProperty("id").GetGuid();
+        var report=await guest.GetAsync("/review/report?submission="+id);var reportHtml=await report.Content.ReadAsStringAsync();Assert.DoesNotContain("PRIVATE-CANDIDATE",reportHtml);Assert.DoesNotContain("923001112222",reportHtml);Assert.Equal("no-store",report.Headers.CacheControl!.ToString());
+        var feedback=new HiringFeedback(id,row.GetProperty("revision").GetGuid(),row.GetProperty("applicationRevision").GetGuid(),"Shortlist","Proceed",null,"","",30,"");
+        Assert.Equal(HttpStatusCode.BadRequest,(await guest.PostAsJsonAsync("/review/feedback",feedback)).StatusCode);
+        guest.DefaultRequestHeaders.Add("RequestVerificationToken",Regex.Match(html,"name=\"__RequestVerificationToken\"[^>]*value=\"([^\"]+)\"").Groups[1].Value);
+        Assert.Equal(HttpStatusCode.OK,(await guest.PostAsJsonAsync("/review/feedback",feedback)).StatusCode);
+        Assert.Contains("Client Shortlisted",await recruiter.GetStringAsync("/pipeline"));
+        Assert.Equal(HttpStatusCode.Conflict,(await guest.PostAsJsonAsync("/review/feedback",feedback)).StatusCode);
+        await service.Revoke(id);Assert.Equal(HttpStatusCode.Unauthorized,(await guest.GetAsync("/review/report?submission="+id)).StatusCode);
+    }
+
     [Fact] public async Task AdministratorCanActivateImportedAccountSetPasswordAndChangeGrants()
     {
         await using var host=new Host();using var client=await Login(host);string adminId,importedId;using(var scope=host.Services.CreateScope()){var manager=scope.ServiceProvider.GetRequiredService<UserManager<AtsUser>>();adminId=(await manager.FindByNameAsync("HttpUser"))!.Id;var imported=new AtsUser{UserName="Imported",Email="imported@example.test",Status="Pending"};Assert.True((await manager.CreateAsync(imported)).Succeeded);Assert.True((await manager.AddToRoleAsync(imported,"Recruiter")).Succeeded);importedId=imported.Id;}
@@ -47,7 +146,9 @@ public class HttpWorkflowTests
     [Fact] public async Task ReportGrantAndInactiveStatusProtectFileAndReportEndpointsImmediately()
     {
         await using var host=new Host();using var client=await Login(host,"Recruiter");Guid docId;using(var scope=host.Services.CreateScope()){var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();var u=await db.Users.SingleAsync(x=>x.UserName=="HttpUser");u.CanExportReports=false;var doc=new StoredDocument{FileName="test.txt",Content="test"u8.ToArray()};db.Documents.Add(doc);await db.SaveChangesAsync();docId=doc.Id;}
-        Assert.Equal(HttpStatusCode.Forbidden,(await client.GetAsync($"/reports?ids={Guid.NewGuid()}")).StatusCode);Assert.Equal(HttpStatusCode.OK,(await client.GetAsync($"/files/{docId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,(await client.GetAsync($"/reports?ids={Guid.NewGuid()}")).StatusCode);Assert.Equal(HttpStatusCode.Forbidden,(await client.GetAsync($"/files/{docId}")).StatusCode);
+        using(var scope=host.Services.CreateScope()){var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();db.Positions.Add(new(){Reference="Assigned",Title="Assigned Role",AssignedRecruiter="HttpUser",JdDocumentId=docId});await db.SaveChangesAsync();}
+        Assert.Equal(HttpStatusCode.OK,(await client.GetAsync($"/files/{docId}")).StatusCode);
         using(var scope=host.Services.CreateScope()){var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();(await db.Users.SingleAsync(x=>x.UserName=="HttpUser")).Status="Inactive";await db.SaveChangesAsync();}
         Assert.Equal(HttpStatusCode.Forbidden,(await client.GetAsync($"/files/{docId}")).StatusCode);Assert.Equal(HttpStatusCode.Forbidden,(await client.GetAsync($"/reports?ids={Guid.NewGuid()}")).StatusCode);
     }

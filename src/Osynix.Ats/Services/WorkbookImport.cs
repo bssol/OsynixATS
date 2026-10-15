@@ -70,7 +70,7 @@ public class WorkbookImport(IDbContextFactory<AtsDbContext> factory,Access acces
         var sheets=wb.Worksheets.ToDictionary(x=>x.Name,Rows,StringComparer.OrdinalIgnoreCase);
         foreach(var sheet in sheets.Where(x=>x.Key is not ("User Sessions" or "Trusted Devices")))
             foreach(var row in sheet.Value) db.ImportRows.Add(new ImportRow{FileHash=preview.Hash,Sheet=sheet.Key,RowNumber=row.Number,Json=JsonSerializer.Serialize(row.Values)});
-        var clients=await db.Clients.ToListAsync();var positions=new Dictionary<string,Position>();
+        var clients=await db.Clients.Where(c=>c.WorkspaceId==null).ToListAsync();var positions=new Dictionary<string,Position>();
         foreach(var (row,r) in sheets["Positions Master"]) {
             var reference=Ref(V(r,"Ref #"));if(reference.Length==0) continue;
             if(positions.ContainsKey(reference)) throw new InvalidOperationException("Duplicate position Ref # "+reference);

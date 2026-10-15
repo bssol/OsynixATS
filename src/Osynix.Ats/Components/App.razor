@@ -1,3 +1,14 @@
+@inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment Environment
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><base href="/" /><link rel="stylesheet" href="app.css" /><HeadOutlet @rendermode="InteractiveServer" /></head>
-<body><Routes @rendermode="InteractiveServer" /><script src="_framework/blazor.web.js"></script><script src="app.js"></script></body></html>
+<html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><base href="/" /><link rel="stylesheet" href="@AssetUrl("app.css")" /><link rel="stylesheet" href="@AssetUrl("careers.css")" /><HeadOutlet @rendermode="InteractiveServer" /></head>
+<body><Routes @rendermode="InteractiveServer" /><script src="_framework/blazor.web.js"></script><script src="@AssetUrl("app.js")"></script></body></html>
+@code {
+    string AssetUrl(string path)
+    {
+        var file = Environment.WebRootFileProvider.GetFileInfo(path);
+        if (!file.Exists) return path;
+        using var stream = file.CreateReadStream();
+        var version = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream));
+        return $"{path}?v={version}";
+    }
+}

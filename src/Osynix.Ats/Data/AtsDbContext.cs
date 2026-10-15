@@ -5,17 +5,25 @@ using Osynix.Ats.Domain;
 namespace Osynix.Ats.Data;
 public class AtsUser : IdentityUser
 {
+    public Guid? EmployerWorkspaceId {get;set;}
     public string FullName { get; set; } = "";
     public string Status { get; set; } = "Active";
-    public bool CanCreatePositions { get; set; } = true;
-    public bool CanViewTalentPool { get; set; } = true;
-    public bool CanExportReports { get; set; } = true;
+    public bool CanCreatePositions { get; set; }
+    public bool CanCreateClients { get; set; }
+    public DateTime? TalentPoolPaidUntilUtc { get; set; }
+    public bool CanViewTalentPool { get; set; }
+    public bool CanExportReports { get; set; }
     public string AssignedClients { get; set; } = "";
     public string AssignedReferences { get; set; } = "";
 }
 public class AtsDbContext(DbContextOptions<AtsDbContext> options) : IdentityDbContext<AtsUser>(options)
 {
+    public DbSet<EmployerInvitation> EmployerInvitations => Set<EmployerInvitation>();
     bool preserveTimestamps;
+    public DbSet<EmployerWorkspace> EmployerWorkspaces => Set<EmployerWorkspace>();
+    public DbSet<EmployerAccessRequest> EmployerAccessRequests => Set<EmployerAccessRequest>();
+    public DbSet<HiringReviewGrant> HiringReviewGrants => Set<HiringReviewGrant>();
+    public DbSet<HiringSubmission> HiringSubmissions => Set<HiringSubmission>();
     public DbSet<Position> Positions => Set<Position>();
     public DbSet<Criterion> Criteria => Set<Criterion>();
     public DbSet<Candidate> Candidates => Set<Candidate>();
@@ -36,11 +44,27 @@ public class AtsDbContext(DbContextOptions<AtsDbContext> options) : IdentityDbCo
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<AtsUser>().HasOne<EmployerWorkspace>().WithMany().HasForeignKey(u=>u.EmployerWorkspaceId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Position>().HasOne<EmployerWorkspace>().WithMany().HasForeignKey(p=>p.WorkspaceId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Client>().HasOne<EmployerWorkspace>().WithMany().HasForeignKey(c=>c.WorkspaceId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EmployerInvitation>().HasIndex(i=>new{i.WorkspaceId,i.NormalizedEmail}).IsUnique();
+        b.Entity<EmployerInvitation>().HasIndex(i=>i.TokenHash).IsUnique();
+        b.Entity<EmployerInvitation>().HasOne<EmployerWorkspace>().WithMany().HasForeignKey(i=>i.WorkspaceId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EmployerWorkspace>().HasIndex(x=>x.OwnerId).IsUnique();
+        b.Entity<EmployerWorkspace>().HasOne<AtsUser>().WithMany().HasForeignKey(x=>x.OwnerId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EmployerAccessRequest>().HasOne<EmployerWorkspace>().WithMany().HasForeignKey(x=>x.WorkspaceId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<HiringReviewGrant>().HasIndex(x=>x.ClientId);
+        b.Entity<HiringReviewGrant>().HasIndex(x=>x.EmailKey).IsUnique();
+        b.Entity<HiringReviewGrant>().HasIndex(x=>x.TokenHash).IsUnique();
+        b.Entity<HiringSubmission>().HasIndex(x=>new{x.GrantId,x.AssessmentId}).IsUnique();
+        b.Entity<HiringSubmission>().HasOne<HiringReviewGrant>().WithMany().HasForeignKey(x=>x.GrantId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<HiringSubmission>().HasOne<Assessment>().WithMany().HasForeignKey(x=>x.AssessmentId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<Position>().HasIndex(x=>x.Reference).IsUnique();
         b.Entity<Position>().HasMany(x=>x.Criteria).WithOne().HasForeignKey(x=>x.PositionId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<Position>().HasOne(x=>x.ClientRecord).WithMany().HasForeignKey(x=>x.ClientId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<Position>().HasOne<StoredDocument>().WithMany().HasForeignKey(x=>x.JdDocumentId).OnDelete(DeleteBehavior.Restrict);
-        b.Entity<Client>().HasIndex(x=>x.NormalizedName).IsUnique();
+        b.Entity<Client>().HasIndex(x=>x.NormalizedName).IsUnique().HasFilter("\"WorkspaceId\" IS NULL");
+        b.Entity<Client>().HasIndex(x=>new{x.WorkspaceId,x.NormalizedName}).IsUnique();
         b.Entity<Client>().HasMany(x=>x.Contacts).WithOne().HasForeignKey(x=>x.ClientId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<Candidate>().HasIndex(x=>x.NormalizedName);
         b.Entity<Candidate>().HasIndex(x=>x.Email);

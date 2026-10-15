@@ -47,14 +47,23 @@ public class WorkflowTests
         public int Calls;public string Request="";public bool FailFirst;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct){Calls++;Request=await request.Content!.ReadAsStringAsync(ct);if(FailFirst&&Calls==1)return new(HttpStatusCode.ServiceUnavailable);var output=new{candidate_name="Person",email_id="person@example.test",mobile_phone_number="",current_designation="Stale inferred role",current_company="Wrong company",location="Karachi",total_experience_years=6,relevant_industry_experience_years=6,talent_profile=new{primary_function="Operations",secondary_function_specialization="",industries_domains="Manufacturing",core_skills="Planning",seniority_level="Manager",systems_tools="",geographic_market_exposure="",professional_summary="Permanent facts",career_profile_summary="Career facts",employment_career_history=new[]{new{company_name="Actual Company",designation="Actual Manager",start_date="2020",end_date="Present",location="Karachi"}},education=Array.Empty<object>()},source_evidence=new[]{new{fact="Worked as manager",source="Employment history"}},criterion_results=new[]{new{criterion="Experience",score_10=8,evidence_confidence_10=10,evidence_found="Employment record",assessment_rationale="Direct evidence"}}};return new(HttpStatusCode.OK){Content=JsonContent.Create(new{status="completed",output=new[]{new{content=new[]{new{type="output_text",text=JsonSerializer.Serialize(output)}}}}})};}
     }
-    [Fact] public async Task StoredReassessmentMakesOneProviderCallAndSavePreservesMasterFacts()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StoredReassessmentMakesOneProviderCallAndSavePreservesMasterFacts(bool paidRecruiter)
     {
-        await using var f=new Fixture();await f.Init();var position=new Position{Reference="001",Client="Client",Title="Role",CriteriaLocked=true,Criteria=[new(){Name="Experience",Weight=100,Knockout=true}]};var person=new Candidate{Name="Person",Email="person@example.test",LegacyId="CAND-001",Summary="Original master summary",IntelligenceJson="[{\"fact\":\"Manager since 2020\",\"source\":\"CV\"}]"};
-        await using(var db=f.Factory.CreateDbContext()){db.Positions.Add(position);db.Candidates.Add(person);db.DecisionRules.Add(new(){MustHaveFit="Pass",MinimumMatch=60,Decision="Shortlist"});await db.SaveChangesAsync();}
-        var provider=new Provider();var access=new Access(new State());var config=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{{"OpenAI:ApiKey","test-key"},{"OpenAI:Model","test-model"}}).Build();
+        await using var f=new Fixture();await f.Init();var position=new Position{Reference="001",Client="Client",Title="Role",AssignedRecruiter=paidRecruiter?"paid":"",CriteriaLocked=true,Criteria=[new(){Name="Experience",Weight=100,Knockout=true}]};var person=new Candidate{Name="Person",Email="person@example.test",LegacyId="CAND-001",Summary="Original master summary",IntelligenceJson="[{\"fact\":\"Manager since 2020\",\"source\":\"CV\"}]"};
+        await using(var db=f.Factory.CreateDbContext()){if(paidRecruiter){db.Users.Add(new(){Id="paid",UserName="paid",TalentPoolPaidUntilUtc=DateTime.UtcNow.AddDays(1)});db.Roles.Add(new IdentityRole("Recruiter"){Id="paid-role"});db.UserRoles.Add(new(){UserId="paid",RoleId="paid-role"});}db.Positions.Add(position);db.Candidates.Add(person);db.DecisionRules.Add(new(){MustHaveFit="Pass",MinimumMatch=60,Decision="Shortlist"});await db.SaveChangesAsync();}
+        var provider=new Provider();var access=paidRecruiter?new Access(new State("paid","Recruiter"),f.Factory):new Access(new State());var config=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{{"OpenAI:ApiKey","test-key"},{"OpenAI:Model","test-model"}}).Build();
         var ai=new AiService(new HttpClient(provider),config,f.Factory,access,new DatabaseDocumentStore(f.Factory));var draft=await ai.AssessStored(person.Id,position.Id);Assert.Equal(1,provider.Calls);Assert.Contains("STORED VACANCY-INDEPENDENT",provider.Request);Assert.DoesNotContain("input_file",provider.Request);
         await using(var db=f.Factory.CreateDbContext()){var a=await db.Assessments.SingleAsync();var snap=JsonSerializer.Deserialize<AssessmentSnapshot>(a.SnapshotJson)!;Assert.Equal("Actual Manager",snap.Profile.CurrentRole);Assert.Equal("Actual Company",snap.Profile.CurrentCompany);Assert.Equal("2020",snap.Profile.EmploymentHistory.Single().StartDate);Assert.Equal(80,a.MatchPercent);}
-        var ats=new AtsService(f.Factory,access);await ats.SaveDraft(draft);await ats.Assessments();await ats.Versions(draft);Assert.Equal(1,provider.Calls);
+        var ats=new AtsService(f.Factory,access);
+        if(paidRecruiter){
+            await using(var db=f.Factory.CreateDbContext()){(await db.Users.SingleAsync()).TalentPoolPaidUntilUtc=DateTime.UtcNow.AddMinutes(-1);await db.SaveChangesAsync();}
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>ats.SaveDraft(draft));
+            await using(var db=f.Factory.CreateDbContext()){(await db.Users.SingleAsync()).TalentPoolPaidUntilUtc=DateTime.UtcNow.AddDays(1);await db.SaveChangesAsync();}
+        }
+        await ats.SaveDraft(draft);await ats.Assessments();await ats.Versions(draft);Assert.Equal(1,provider.Calls);
         await using var check=f.Factory.CreateDbContext();Assert.Equal("Original master summary",(await check.Candidates.SingleAsync()).Summary);Assert.Empty(await check.Documents.ToListAsync());Assert.Single(await check.AssessmentVersions.ToListAsync());
     }
     [Fact] public async Task NewCandidateStructuredHistoryAndExplicitRefreshFollowCorrectIdentity()
@@ -65,11 +74,53 @@ public class WorkflowTests
         c.Employment="""[{"company_name":"Updated","designation":"Director","start_date":"2025","end_date":"Present"}]""";c.EmploymentHistory=[];c.Document=null;CandidateProfile.ReadStructuredHistory(c);var next=new Assessment{PositionId=p.Id,SourceCandidateId=cid,RefreshProfile=true,SnapshotJson=JsonSerializer.Serialize(new AssessmentSnapshot(c,null,[],"","","","Client","Role","001"))};
         await using(var db=f.Factory.CreateDbContext()){db.Assessments.Add(next);await db.SaveChangesAsync();}await ats.SaveDraft(next.Id);await using var check=f.Factory.CreateDbContext();Assert.Single(await check.Candidates.ToListAsync());Assert.Equal("Updated",(await check.EmploymentHistory.SingleAsync()).CompanyName);Assert.Equal("Director",(await check.Candidates.SingleAsync()).CurrentRole);
     }
+
+    [Fact] public async Task RecruiterDefaultsAssignmentsAndPaidPoolAreEnforcedAcrossReadsAndWrites(){
+        await using var f=new Fixture();await f.Init();
+        var client=new Client{Name="Assigned Client",NormalizedName="ASSIGNED CLIENT"};var privateClient=new Client{Name="Other Client",NormalizedName="OTHER CLIENT"};
+        var owned=new Position{Reference="001",Client=client.Name,ClientId=client.Id,Title="Assigned Role",AssignedRecruiter="recruiter",Criteria=[new(){Name="Experience",Weight=100}]};
+        var other=new Position{Reference="002",Client=privateClient.Name,ClientId=privateClient.Id,Title="Other Role",CreatedBy="recruiter",AssignedRecruiter="someone"};
+        var candidate=new Candidate{Name="Assigned Candidate",Notes="Admin internal note"};var pool=new Candidate{Name="Pool Candidate",Notes="Private pool note"};
+        var application=new Assessment{PositionId=owned.Id,CandidateId=candidate.Id,OwnerId="recruiter",State="Saved"};
+        var foreign=new Assessment{PositionId=other.Id,CandidateId=pool.Id,OwnerId="recruiter",State="Saved"};
+        await using(var db=f.Factory.CreateDbContext()){
+            var u=AccountRegistration.NewUser("recruiter","Recruiter","Recruiter");u.Id="recruiter";u.Status="Active";u.CanViewTalentPool=true;
+            db.Users.Add(u);db.Roles.Add(new IdentityRole("Recruiter"){Id="r"});db.UserRoles.Add(new(){UserId=u.Id,RoleId="r"});
+            db.Clients.AddRange(client,privateClient);db.Positions.AddRange(owned,other);db.Candidates.AddRange(candidate,pool);db.Assessments.AddRange(application,foreign);await db.SaveChangesAsync();
+        }
+        var access=new Access(new State("recruiter","Recruiter"),f.Factory);var ats=new AtsService(f.Factory,access);var workspace=new WorkspaceService(f.Factory,access);
+        Assert.False(await access.Can("Positions.Create"));Assert.False(await access.Can("Clients.Create"));Assert.False(await access.Can("Talent.View"));
+        Assert.Equal(owned.Id,Assert.Single(await ats.Positions()).Id);Assert.Equal(client.Id,Assert.Single(await workspace.Clients()).Id);
+        Assert.Equal(application.Id,Assert.Single(await ats.Assessments()).Id);Assert.Empty(Assert.Single(await ats.Candidates()).Notes);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>access.RequirePosition(other.Id));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>access.RequireApplication(foreign.Id));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>workspace.SaveClient(new Client{Name="Attempt"}));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>ats.SavePosition(new Position{Client=client.Name,ClientId=client.Id,Title="Attempt",Criteria=[new(){Name="Experience",Weight=100}]}));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>ats.TalentCandidates());
+        await using(var db=f.Factory.CreateDbContext()){var u=await db.Users.SingleAsync();u.TalentPoolPaidUntilUtc=DateTime.UtcNow.AddDays(1);u.CanCreatePositions=true;await db.SaveChangesAsync();}
+        Assert.Equal(2,(await ats.TalentCandidates()).Count);await access.RequireTalentCandidate(pool.Id);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>ats.SaveCandidate(pool));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>workspace.Notes(pool.Id));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>workspace.AddNote(candidate.Id,foreign.Id,"Attempt to attach foreign application"));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>ats.SavePosition(new Position{Client="Implicit New Client",Title="Attempt",Criteria=[new(){Name="Experience",Weight=100}]}));
+        var changed=(await ats.Positions()).Single();changed.AssignedRecruiter="someone";
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>ats.SavePosition(changed));
+        changed=(await ats.Positions()).Single();changed.Title="Updated Assigned Role";await ats.SavePosition(changed);
+        await workspace.AddNote(candidate.Id,application.Id,"Operational note");Assert.Single(await workspace.Notes(candidate.Id));
+        await using(var db=f.Factory.CreateDbContext()){
+            (await db.Users.SingleAsync()).TalentPoolPaidUntilUtc=DateTime.UtcNow.AddDays(-1);
+            (await db.Positions.SingleAsync(p=>p.Id==owned.Id)).AssignedRecruiter="someone";await db.SaveChangesAsync();
+        }
+        Assert.Empty(await ats.Positions());Assert.Empty(await ats.Candidates());Assert.Empty(await ats.Assessments());Assert.Empty(await workspace.Clients());
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>access.RequireApplication(application.Id));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>ats.TalentCandidates());
+    }
+
     [Fact] public async Task RecruiterGrantsRevocationAndInactiveAccountAreEnforcedWithoutCookieRefresh()
     {
-        await using var f=new Fixture();await f.Init();await using(var db=f.Factory.CreateDbContext()){db.Users.Add(new(){Id="recruiter",UserName="recruiter",Status="Active",CanExportReports=false});var r=new IdentityRole("Recruiter"){Id="role"};db.Roles.Add(r);db.UserRoles.Add(new(){UserId="recruiter",RoleId=r.Id});await db.SaveChangesAsync();}
+        await using var f=new Fixture();await f.Init();await using(var db=f.Factory.CreateDbContext()){db.Users.Add(new(){Id="recruiter",UserName="recruiter",Status="Active",CanExportReports=false,TalentPoolPaidUntilUtc=DateTime.UtcNow.AddDays(1)});var r=new IdentityRole("Recruiter"){Id="role"};db.Roles.Add(r);db.UserRoles.Add(new(){UserId="recruiter",RoleId=r.Id});await db.SaveChangesAsync();}
         var access=new Access(new State("recruiter","Recruiter"),f.Factory);await access.RequirePermission("Talent.View");await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>access.RequirePermission("Reports.Export"));
-        await using(var db=f.Factory.CreateDbContext()){var u=await db.Users.SingleAsync();u.CanViewTalentPool=false;await db.SaveChangesAsync();}await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>access.RequirePermission("Talent.View"));
+        await using(var db=f.Factory.CreateDbContext()){var u=await db.Users.SingleAsync();u.TalentPoolPaidUntilUtc=DateTime.UtcNow.AddDays(-1);u.CanViewTalentPool=true;await db.SaveChangesAsync();}await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>access.RequirePermission("Talent.View"));
         await using(var db=f.Factory.CreateDbContext()){var u=await db.Users.SingleAsync();u.Status="Inactive";await db.SaveChangesAsync();}await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>access.Require());
     }
     [Fact] public async Task BatchOwnershipAndNoteAuthorsCannotBeBypassed()
@@ -98,4 +149,49 @@ public class WorkflowTests
     {
         await using var f=new Fixture();await f.Init();await using var db=f.Factory.CreateDbContext();var p=new Position{Reference="001",Title="Role",Client="Client"};db.Positions.Add(p);var a=new Assessment{PositionId=p.Id};db.Assessments.Add(a);db.AssessmentVersions.Add(DatabaseInitializer.VersionOf(a));await db.SaveChangesAsync();var version=await db.AssessmentVersions.SingleAsync();version.Decision="Changed";await Assert.ThrowsAsync<InvalidOperationException>(()=>db.SaveChangesAsync());
     }
-}
+
+    [Fact] public async Task RecruiterChoicesAreActiveAndRoleScoped()
+    {
+        await using var f=new Fixture();await f.Init();
+        await using(var db=f.Factory.CreateDbContext()){
+            db.Roles.Add(new IdentityRole{Id="recruiter-role",Name="Recruiter",NormalizedName="RECRUITER"});
+            db.Users.AddRange(new AtsUser{Id="one",UserName="recruiter.one",FullName="One",Status="Active"},
+                              new AtsUser{Id="two",UserName="recruiter.two",FullName="Two",Status="Inactive"},
+                              new AtsUser{Id="other",UserName="other.user",Status="Active"});
+            db.UserRoles.AddRange(new IdentityUserRole<string>{UserId="one",RoleId="recruiter-role"},new IdentityUserRole<string>{UserId="two",RoleId="recruiter-role"});
+            await db.SaveChangesAsync();
+        }
+        var choices=await new WorkspaceService(f.Factory,new Access(new State())).Recruiters();
+        Assert.Equal("recruiter.one",Assert.Single(choices).Username);
+        choices=await new WorkspaceService(f.Factory,new Access(new State("one","Recruiter"))).Recruiters();
+        Assert.Single(choices); Assert.DoesNotContain(choices,x=>x.Username=="recruiter.two");
+    }
+    [Fact] public async Task SelectedClosureDateAndClientContactPersist()
+    {
+        await using var f=new Fixture();await f.Init();
+        var access=new Access(new State());var workspace=new WorkspaceService(f.Factory,access);var ats=new AtsService(f.Factory,access);
+        var client=new Client{Name="Client",Contacts=[new(){Name="Hiring Manager"}]};await workspace.SaveClient(client);
+        var p=new Position{Title="Role",Client=client.Name,ClientId=client.Id,HiringContact="Hiring Manager",Criteria=[new(){Name="Experience",Weight=100}]};
+        await ats.SavePosition(p);
+        var saved=(await ats.Positions()).Single();saved.Status="Closed";saved.ClosureReason="Budget Withdrawn";saved.ClosedDate=new DateTime(2026,10,1);await ats.SavePosition(saved);
+        saved=(await ats.Positions()).Single();Assert.Equal(new DateTime(2026,10,1),saved.ClosedDate);Assert.Equal("Hiring Manager",saved.HiringContact);
+        saved.HiringContact="Unlinked";await Assert.ThrowsAsync<InvalidOperationException>(()=>ats.SavePosition(saved));
+    }
+    [Fact] public async Task ApprovedCriteriaCanChangeWithoutRewritingAssessmentHistory()
+    {
+        await using var f=new Fixture();await f.Init();var access=new Access(new State());var ats=new AtsService(f.Factory,access);
+        var p=new Position{Client="Client",Title="Role",CriteriaLocked=true,Criteria=[new(){Name="Original",Weight=100}]};
+        await ats.SavePosition(p);
+        await using(var db=f.Factory.CreateDbContext()){
+            db.Assessments.Add(new Assessment{PositionId=p.Id,State="Saved",Model="Actual provider",SnapshotJson="original snapshot",MatchPercent=73});
+            await db.SaveChangesAsync();
+        }
+        var edit=(await ats.Positions()).Single();edit.Criteria=[new(){Name="Revised",Weight=100,Knockout=true}];await ats.SavePosition(edit);
+        Assert.Equal("Revised",(await ats.Positions()).Single().Criteria.Single().Name);
+        await using(var db=f.Factory.CreateDbContext()){
+            var result=await db.Assessments.SingleAsync();Assert.Equal("original snapshot",result.SnapshotJson);Assert.Equal(73,result.MatchPercent);
+            Assert.True(await db.Audit.AnyAsync(x=>x.Action=="Position criteria updated"));
+        }
+        edit=(await ats.Positions()).Single();edit.Criteria.Single().Weight=80;
+        await Assert.ThrowsAsync<InvalidOperationException>(()=>ats.SavePosition(edit));
+    }}

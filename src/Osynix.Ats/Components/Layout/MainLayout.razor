@@ -1,32 +1,60 @@
+@implements IDisposable
+@inject RecruitmentUpdates Updates
+@using Microsoft.EntityFrameworkCore
+@inject Access Access
+@inject AuthenticationStateProvider Auth
+@inject IDbContextFactory<Osynix.Ats.Data.AtsDbContext> Factory
 @inherits LayoutComponentBase
 <div class="shell @(collapsed ? "sidebar-collapsed" : "")">
     <TopBar />
     @if(!collapsed){<button class="sidebar-backdrop" aria-label="Close navigation" @onclick="ToggleSidebar"></button>}
     <aside id="workspace-sidebar" class="workspace-sidebar" aria-label="Workspace navigation">
                 <div class="sidebar-heading">
-            <div class="nav-label">WORKSPACE</div>
+            @if(sidebarLogo.Length>0){<div class="sidebar-company-brand" title="@sidebarCompany"><img src="@sidebarLogo" alt="@(sidebarCompany+" Logo")" /></div>}else{<div class="nav-label">WORKSPACE</div>}
             <button type="button" class="sidebar-collapse-control" @onclick="ToggleSidebar" aria-label="@(collapsed ? "Expand sidebar" : "Collapse sidebar")" aria-expanded="@(!collapsed)" aria-controls="workspace-sidebar" title="@(collapsed ? "Expand sidebar" : "Collapse sidebar")">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="@(collapsed ? "m9 5 7 7-7 7" : "m15 5-7 7 7 7")" /></svg>
             </button>
         </div>
-        <nav class="workspace-nav"><AuthorizeView Roles="Admin,Recruiter" Context="workspaceAuth">
+        <nav class="workspace-nav"><AuthorizeView Roles="Admin,Recruiter,Employer" Context="workspaceAuth">
+            @if(employerMember){
+            <NavLink href="/workspace-dashboard" title="Dashboard"><NavIcon Name="dashboard" /><span>Dashboard</span></NavLink>
+            @if(showClients){<NavLink href="/clients"><NavIcon Name="clients" /><span>Clients</span></NavLink>}
+            <NavLink href="/assessment"><NavIcon Name="assessment" /><span>Candidate Assessment</span></NavLink>
+            <NavLink href="/talent"><NavIcon Name="talent" /><span>My Talent Pool</span></NavLink>
+            <NavLink href="/attention"><NavIcon Name="clock" /><span>@(employerAccount||isAdmin?"Team Tasks":"My Tasks")</span></NavLink>
+            <NavLink href="/pipeline"><NavIcon Name="pipeline" /><span>Recruitment Pipeline</span></NavLink>
+            <a href="/my-work" class="workspace-return-link"><NavIcon Name="dashboard" /><span>Change Workspace</span></a>
+            }else{
             <NavLink href="/" Match="NavLinkMatch.All" title="Dashboard"><NavIcon Name="dashboard" /><span>Dashboard</span></NavLink>
-            <NavLink href="positions" title="Manage Positions"><NavIcon Name="positions" /><span>Manage Positions</span></NavLink>
-            <NavLink href="clients" title="Clients"><NavIcon Name="clients" /><span>Clients</span></NavLink>
-            <NavLink href="assessment" title="Candidate Assessment"><NavIcon Name="assessment" /><span>Candidate Assessment</span></NavLink>
-            <NavLink href="talent" title="Talent Pool"><NavIcon Name="talent" /><span>Talent Pool</span></NavLink>
-            <NavLink href="pipeline" title="Recruitment Pipeline"><NavIcon Name="pipeline" /><span>Recruitment Pipeline</span></NavLink>
-            <AuthorizeView Roles="Admin">
-                <NavLink href="settings" title="Settings and users"><NavIcon Name="settings" /><span>Settings &amp; Users</span></NavLink>
-                <NavLink href="import" title="Import Workbook"><NavIcon Name="import" /><span>Import Workbook</span></NavLink>
-            </AuthorizeView>
-        </AuthorizeView><AuthorizeView Roles="Employer"><NavLink href="/employer" Match="NavLinkMatch.All" title="Dashboard"><NavIcon Name="dashboard" /><span>Dashboard</span></NavLink><NavLink href="/positions" title="Manage Positions"><NavIcon Name="positions" /><span>Manage Positions</span></NavLink><NavLink href="/clients" title="Clients"><NavIcon Name="clients" /><span>Clients</span></NavLink><NavLink href="/pipeline" title="Recruitment Pipeline"><NavIcon Name="pipeline" /><span>Recruitment Pipeline</span></NavLink><NavLink href="/assessment" title="Candidate Assessment"><NavIcon Name="assessment" /><span>Candidate Assessment</span></NavLink><NavLink href="/talent" title="Talent Pool"><NavIcon Name="talent" /><span>Talent Pool</span></NavLink><NavLink href="/employer/team" title="My Team"><NavIcon Name="talent" /><span>My Team</span></NavLink><NavLink href="/employer/subscriptions" title="Subscriptions"><NavIcon Name="settings" /><span>Subscriptions</span></NavLink><NavLink href="/employer/company" title="Company Settings"><NavIcon Name="clients" /><span>Company Settings</span></NavLink><NavLink href="/profile" title="My Profile"><NavIcon Name="settings" /><span>My Profile</span></NavLink></AuthorizeView><AuthorizeView Roles="Candidate"><NavLink href="/Account/Portal">My Account</NavLink></AuthorizeView></nav>
+            @if(!isAdmin&&!employerAccount){<NavLink href="/my-work" title="Choose Your Workspace"><NavIcon Name="dashboard" /><span>My Workspace</span></NavLink>}
+            <NavLink href="/positions" title="Manage Positions"><NavIcon Name="positions" /><span>Manage Positions</span></NavLink>
+            @if(showClients){<NavLink href="/clients" title="Clients"><NavIcon Name="clients" /><span>Clients</span></NavLink>}
+            <NavLink href="/assessment" title="Candidate Assessment"><NavIcon Name="assessment" /><span>Candidate Assessment</span></NavLink>
+            <NavLink href="/talent" title="Workspace Talent Pool"><NavIcon Name="talent" /><span>@(isAdmin?"Workspace Profiles":"My Talent Pool")</span></NavLink>
+            @if(masterGranted){<NavLink href="/master-talent" title="Osynix Master Talent Pool"><NavIcon Name="talent" /><span>Master Talent Pool</span></NavLink>}else{<span class="workspace-nav-locked" role="link" aria-disabled="true" title="Locked — Admin Has Not Granted Master Talent Pool Access"><NavIcon Name="talent" /><span>Master Talent Pool 🔒</span></span>}
+            <NavLink href="/attention"><NavIcon Name="clock" /><span>@(employerAccount||isAdmin?"Team Tasks":"My Tasks")</span></NavLink>
+            <NavLink href="/pipeline" title="Recruitment Pipeline"><NavIcon Name="pipeline" /><span>Recruitment Pipeline</span></NavLink>
+            @if(owner){
+              @if(employerAccount){<NavLink href="/employer/submissions" title="Team Profile Submissions"><NavIcon Name="assessment" /><span>Team Submissions</span></NavLink><NavLink href="/employer/team" title="My Team"><NavIcon Name="talent" /><span>My Team</span></NavLink>}
+              <NavLink href="/employer/subscriptions" title="Subscriptions"><NavIcon Name="settings" /><span>Subscriptions</span></NavLink>
+              <NavLink href="/employer/company" title="Company Settings"><NavIcon Name="clients" /><span>Business Settings</span></NavLink>
+            }
+            <AuthorizeView Roles="Admin"><NavLink href="/settings" title="Settings And Users"><NavIcon Name="settings" /><span>Settings &amp; Users</span></NavLink><NavLink href="/settings/employers"><NavIcon Name="clients" /><span>Accounts &amp; Subscriptions</span></NavLink><NavLink href="/candidate-accounts"><NavIcon Name="talent" /><span>Candidate Database</span></NavLink><NavLink href="/import"><NavIcon Name="import" /><span>Import Workbook</span></NavLink></AuthorizeView>
+            <NavLink href="/profile"><NavIcon Name="settings" /><span>My Profile</span></NavLink>
+            }
+        </AuthorizeView><AuthorizeView Roles="Candidate"><NavLink href="/Account/Portal">My Account</NavLink><NavLink href="/profile">My Profile</NavLink></AuthorizeView></nav>
         <div class="side-footer">Building scalable organizations<br />through strategic people operations.</div>
     </aside>
     <div class="workspace"><main><ErrorBoundary><ChildContent>@Body</ChildContent><ErrorContent><div class="error">The page could not load. <a href="/">Reload the workspace</a>.</div></ErrorContent></ErrorBoundary></main></div>
 </div>
 <div id="blazor-error-ui">The connection was interrupted. <a href="">Reload</a></div>
 @code {
-    bool collapsed;
+    string sidebarLogo="",sidebarCompany="";
+    bool employerMember,collapsed,owner,employerAccount,isAdmin,masterGranted,showClients;
+    protected override async Task OnInitializedAsync(){Updates.Changed+=AccessChanged;var user=(await Auth.GetAuthenticationStateAsync()).User;isAdmin=user.IsInRole("Admin");showClients=isAdmin||await Access.Can("Clients.View");masterGranted=isAdmin||await Access.Can("Talent.Master");if(!isAdmin&&user.Identity?.IsAuthenticated==true&&(user.IsInRole("Employer")||user.IsInRole("Recruiter"))){try{var active=await Access.Context();owner=active?.Owner==true;employerMember=active?.Membership is not null;if(owner){await using var db=await Factory.CreateDbContextAsync();var kind=(await db.EmployerWorkspaces.FindAsync(active!.Id))?.Kind;employerAccount=kind!=AccountTypes.Freelance;showClients=await Access.Can("Clients.View");}}catch(UnauthorizedAccessException){}}await LoadBrand();}
+
+    void AccessChanged()=>_=InvokeAsync(async()=>{masterGranted=await Access.Can("Talent.Master");showClients=await Access.Can("Clients.View");await LoadBrand();StateHasChanged();});
+    async Task LoadBrand(){sidebarLogo=sidebarCompany="";if(isAdmin)return;try{var user=(await Auth.GetAuthenticationStateAsync()).User;if(user.Identity?.IsAuthenticated!=true||!(user.IsInRole("Employer")||user.IsInRole("Recruiter")))return;var active=await Access.Context();if(active?.Id is not Guid id)return;await using var db=await Factory.CreateDbContextAsync();var company=await db.EmployerWorkspaces.AsNoTracking().SingleOrDefaultAsync(w=>w.Id==id);if(company?.LogoContent is {Length:>0}&&company.LogoContentType is "image/png" or "image/jpeg"){sidebarCompany=company.CompanyName;sidebarLogo="data:"+company.LogoContentType+";base64,"+Convert.ToBase64String(company.LogoContent);}}catch(UnauthorizedAccessException){}}
+    public void Dispose()=>Updates.Changed-=AccessChanged;
     void ToggleSidebar() => collapsed = !collapsed;
 }

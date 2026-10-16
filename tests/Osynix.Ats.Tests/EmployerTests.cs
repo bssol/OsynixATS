@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using System.Net;
+using System.Net.Http.Json;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Configuration;
@@ -16,6 +18,7 @@ public class EmployerTests
     sealed class State(string id,string role):AuthenticationStateProvider
     {public override Task<AuthenticationState> GetAuthenticationStateAsync()=>Task.FromResult(new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity([new(ClaimTypes.NameIdentifier,id),new(ClaimTypes.Name,id),new(ClaimTypes.Role,role)],"Test"))));}
     sealed class Factory(DbContextOptions<AtsDbContext> options):IDbContextFactory<AtsDbContext>{public AtsDbContext CreateDbContext()=>new(options);}
+    sealed class CvQueueSpy:ICvProfileExtractionQueue{public List<Guid> CandidateIds=[];public void Queue(Guid candidateId)=>CandidateIds.Add(candidateId);}
     sealed class Mail:IAccountEmail{public bool Configured=>true;public List<string> Messages=[];public Task Send(string email,string subject,string body){Messages.Add(body);return Task.CompletedTask;}}
     static string Token(ForwardResult invite)=>QueryHelpers.ParseQuery(new Uri(invite.Link).Query)["token"].ToString();
     static async Task<ClaimsPrincipal> Recruiter(string id="recruiter")=>(await new State(id,"Recruiter").GetAuthenticationStateAsync()).User;
@@ -49,6 +52,19 @@ public class EmployerTests
         Assert.Empty(await owner.PublicJobs(w.Id));w.CareersPublished=true;await owner.SaveCompany(w);var job=Assert.Single(await owner.PublicJobs(w.Id));Assert.Equal("Public Role",job.Title);Assert.Equal("Reviewed Description",job.Description);
         var ats=new AtsService(f.Factory,new Access(new State("first","Employer"),f.Factory));var position=(await ats.Positions()).Single(p=>p.Reference=="PUB");position.Criteria=[new(){Name="Experience",Weight=100}];position.Status="Closed";position.ClosureReason="Completed";await ats.SavePosition(position);Assert.Empty(await owner.PublicJobs(w.Id));Assert.False((await ats.Positions()).Single(p=>p.Reference=="PUB").CareersPublished);
         w=(await owner.Overview()).Workspace;w.CareersPublished=false;await owner.SaveCompany(w);Assert.Null(await owner.PublicCompany(w.Id));
+    }
+    [Fact]public async Task PublicApplicationCreatesPrivateCvAndAppliedPipelineRecordWithoutAnAccount(){
+        await using var f=new Fixture();await f.Init();var owner=f.Service("first");var w=(await owner.Overview()).Workspace;w.CareersPublished=true;await owner.SaveCompany(w);var position=new Position{WorkspaceId=w.Id,Reference="APPLY-01",Title="Public Role",Client="Company",CareersPublished=true,PublicJobDescription="Reviewed JD"};await using(var db=f.Factory.CreateDbContext()){db.Positions.Add(position);await db.SaveChangesAsync();}
+        var pdf="%PDF-1.7\nCV"u8.ToArray();var application=await owner.ApplyPublic(w.Id,position.Id,"Candidate Name","CANDIDATE@example.test","+92 300 1234567","Lahore","candidate.pdf",pdf);
+        await using(var db=f.Factory.CreateDbContext()){var assessment=await db.Assessments.Include(x=>x.Candidate).SingleAsync();Assert.Equal(application.Id,assessment.Id);Assert.Equal("Applied",assessment.Stage);Assert.Equal("Saved",assessment.State);Assert.Null(assessment.MatchPercent);Assert.Equal("Not Assessed",assessment.Decision);Assert.Equal(w.Id,assessment.Candidate!.WorkspaceId);Assert.NotNull(assessment.Candidate.PersonId);Assert.Equal("candidate@example.test",assessment.Candidate.Email);Assert.Equal("Lahore",assessment.Candidate.City);Assert.Equal(assessment.DocumentId,assessment.Candidate.DocumentId);Assert.Equal(pdf,(await db.Documents.SingleAsync()).Content);Assert.Empty(await db.Users.Where(u=>u.Email=="candidate@example.test").ToListAsync());}
+        var duplicate=await Assert.ThrowsAsync<InvalidOperationException>(()=>owner.ApplyPublic(w.Id,position.Id,"Candidate Name","candidate@example.test","+92 300 1234567","Lahore","candidate.pdf",pdf));Assert.Contains("already been submitted",duplicate.Message,StringComparison.OrdinalIgnoreCase);
+        await using(var db=f.Factory.CreateDbContext()){var job=await db.Positions.SingleAsync();job.CareersPublished=false;await db.SaveChangesAsync();}
+        await Assert.ThrowsAsync<InvalidOperationException>(()=>owner.ApplyPublic(w.Id,position.Id,"Another Candidate","another@example.test","+92 300 9999999","Karachi","candidate.pdf",pdf));
+    }
+    [Fact]public async Task PublicApplicationQueuesProfileExtractionWithoutWaitingForAssessment(){
+        await using var f=new Fixture();await f.Init();var owner=f.Service("first");var w=(await owner.Overview()).Workspace;w.CareersPublished=true;await owner.SaveCompany(w);var position=new Position{WorkspaceId=w.Id,Reference="APPLY-02",Title="Public Role",Client="Company",CareersPublished=true,PublicJobDescription="Reviewed JD"};await using(var db=f.Factory.CreateDbContext()){db.Positions.Add(position);await db.SaveChangesAsync();}
+        var state=new State("first","Employer");var queue=new CvQueueSpy();var intake=new EmployerService(state,new Access(state,f.Factory),f.Factory,null,queue);var result=await intake.ApplyPublic(w.Id,position.Id,"Form Name","form@example.test","+92 300 1234567","Karachi","candidate.pdf","%PDF-1.7\nCV"u8.ToArray());Assert.True(result.ProfilePending);
+        await using var verify=f.Factory.CreateDbContext();var candidate=await verify.Candidates.SingleAsync();var application=await verify.Assessments.SingleAsync();Assert.Equal([candidate.Id],queue.CandidateIds);Assert.Equal("Form Name",candidate.Name);Assert.Equal("form@example.test",candidate.Email);Assert.Equal("Karachi",candidate.City);Assert.Equal("Pending",candidate.CvProfileStatus);Assert.Null(application.MatchPercent);Assert.Equal("Not Assessed",application.Decision);Assert.Equal("Applied",application.Stage);
     }
     [Fact]public async Task TeamAcceptanceUsesSeatsWhileInvitationsDoNotAndDeactivationPreservesHistory(){
         await using var f=new Fixture();await f.Init();var team=f.Teams();var first=await team.Invite("Recruiter","recruiter@example.test");var second=await team.Invite("Second","recruiter2@example.test");Assert.Empty((await team.Team()).Members);Assert.Equal(2,(await team.Team()).Invitations.Count);Assert.Empty(f.Mail.Messages);

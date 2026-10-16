@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Osynix.Ats.Data;
 using Osynix.Ats.Domain;
 using Osynix.Ats.Services;
@@ -23,6 +25,12 @@ public class WorkflowTests
         public SqliteConnection Connection=new("Data Source=:memory:");public Factory Factory=null!;
         public async Task Init(){await Connection.OpenAsync();Factory=new(new DbContextOptionsBuilder<AtsDbContext>().UseSqlite(Connection).Options);await using var db=Factory.CreateDbContext();await DatabaseInitializer.InitializeAsync(db);}
         public ValueTask DisposeAsync()=>Connection.DisposeAsync();
+    }
+    [Fact] public async Task PositionNotesRemainScopedAfterOneOfTheCandidatesPositionsIsReassigned(){
+        await using var f=new Fixture();await f.Init();var candidate=new Candidate{Name="Shared Candidate"};var first=new Position{Reference="N01",Title="First Role",AssignedRecruiter="recruiter"};var second=new Position{Reference="N02",Title="Second Role",AssignedRecruiter="recruiter"};var firstApplication=new Assessment{CandidateId=candidate.Id,PositionId=first.Id,State="Saved"};var secondApplication=new Assessment{CandidateId=candidate.Id,PositionId=second.Id,State="Saved"};
+        await using(var db=f.Factory.CreateDbContext()){db.Users.Add(new(){Id="recruiter",UserName="recruiter",AccountType=AccountTypes.Legacy});db.Roles.Add(new IdentityRole("Recruiter"){Id="note-role"});db.UserRoles.Add(new(){UserId="recruiter",RoleId="note-role"});db.AddRange(candidate,first,second,firstApplication,secondApplication);await db.SaveChangesAsync();}
+        var workspace=new WorkspaceService(f.Factory,new Access(new State("recruiter","Recruiter"),f.Factory));await workspace.AddNote(candidate.Id,firstApplication.Id,"First position only");var original=Assert.Single(await workspace.Notes(candidate.Id));await using(var db=f.Factory.CreateDbContext()){(await db.Positions.SingleAsync(p=>p.Id==first.Id)).AssignedRecruiter="someone-else";await db.SaveChangesAsync();}
+        Assert.Empty(await workspace.Notes(candidate.Id));await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>workspace.EditNote(original.Id,"Attempted edit after reassignment"));await workspace.AddNote(candidate.Id,secondApplication.Id,"Second position only");Assert.Equal(secondApplication.Id,Assert.Single(await workspace.Notes(candidate.Id)).AssessmentId);await using var verify=f.Factory.CreateDbContext();Assert.Equal("First position only",(await verify.CandidateNotes.SingleAsync(n=>n.Id==original.Id)).Text);
     }
     [Fact] public async Task ImportRetainsDistinctPeopleEvidenceDatesNullMetricsAndUtcAudit()
     {
@@ -46,6 +54,22 @@ public class WorkflowTests
     sealed class Provider:HttpMessageHandler {
         public int Calls;public string Request="";public bool FailFirst;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct){Calls++;Request=await request.Content!.ReadAsStringAsync(ct);if(FailFirst&&Calls==1)return new(HttpStatusCode.ServiceUnavailable);var output=new{candidate_name="Person",email_id="person@example.test",mobile_phone_number="",current_designation="Stale inferred role",current_company="Wrong company",location="Karachi",total_experience_years=6,relevant_industry_experience_years=6,talent_profile=new{primary_function="Operations",secondary_function_specialization="",industries_domains="Manufacturing",core_skills="Planning",seniority_level="Manager",systems_tools="",geographic_market_exposure="",professional_summary="Permanent facts",career_profile_summary="Career facts",employment_career_history=new[]{new{company_name="Actual Company",designation="Actual Manager",start_date="2020",end_date="Present",location="Karachi"}},education=Array.Empty<object>()},source_evidence=new[]{new{fact="Worked as manager",source="Employment history"}},criterion_results=new[]{new{criterion="Experience",score_10=8,evidence_confidence_10=10,evidence_found="Employment record",assessment_rationale="Direct evidence"}}};return new(HttpStatusCode.OK){Content=JsonContent.Create(new{status="completed",output=new[]{new{content=new[]{new{type="output_text",text=JsonSerializer.Serialize(output)}}}}})};}
+    }
+    sealed class ProfileProvider:HttpMessageHandler {
+        public int Calls;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct){Calls++;var output=new{current_designation="Senior Recruiter",current_company="Osynix Group",total_experience_years=7,talent_profile=new{primary_function="Talent Acquisition",secondary_function_specialization="Technology Hiring",industries_domains="Software",core_skills="Sourcing, Interviewing",seniority_level="Senior",systems_tools="ATS",geographic_market_exposure="Lahore",career_profile_summary="Seven years of recruitment experience.",professional_summary="Senior recruiter specializing in technology roles."},employment_career_history=new[]{new{company_name="Osynix Group",designation="Senior Recruiter",start_date="2021",end_date="Present",location="Lahore"}},education=new[]{new{qualification="MBA",institution="City University",start_date="2018",end_date="2020",location="Lahore"}},source_evidence=new[]{new{fact="Senior recruiter since 2021",source="Employment History"}}};return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=JsonContent.Create(new{status="completed",output=new[]{new{content=new[]{new{type="output_text",text=JsonSerializer.Serialize(output)}}}}})});}
+    }
+    [Fact] public async Task PublicCvProfileIsExtractedBeforeAssessmentAndKeepsApplicationIdentityAuthoritative(){
+        await using var f=new Fixture();await f.Init();var person=new Candidate{Name="Applicant Supplied Name",Email="applicant@example.test",Phone="+92 300 1234567",City="Karachi",Location="Karachi",CvProfileStatus="Pending"};await using(var db=f.Factory.CreateDbContext()){db.Candidates.Add(person);await db.SaveChangesAsync();}
+        var provider=new ProfileProvider();var config=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{{"OpenAI:ApiKey","test-key"},{"OpenAI:Model","test-model"}}).Build();var ai=new AiService(new HttpClient(provider),config,f.Factory,new Access(new State()),new DatabaseDocumentStore(f.Factory));
+        await ai.ExtractPublicCvProfile(person.Id,"applicant.txt","Synthetic professional CV"u8.ToArray());
+        await using var check=f.Factory.CreateDbContext();var saved=await check.Candidates.Include(x=>x.EmploymentHistory).Include(x=>x.EducationHistory).SingleAsync();Assert.Equal(1,provider.Calls);Assert.Equal("Applicant Supplied Name",saved.Name);Assert.Equal("applicant@example.test",saved.Email);Assert.Equal("+92 300 1234567",saved.Phone);Assert.Equal("Karachi",saved.City);Assert.Equal("Senior Recruiter",saved.CurrentRole);Assert.Equal("Osynix Group",saved.CurrentCompany);Assert.Equal("Senior recruiter specializing in technology roles.",saved.Summary);Assert.Equal("Ready",saved.CvProfileStatus);Assert.Equal("Lahore",saved.EmploymentHistory.Single().Location);Assert.Equal("MBA",saved.EducationHistory.Single().Qualification);Assert.Contains("source",saved.IntelligenceJson);
+    }
+    [Fact] public async Task CvProfileWorkerExtractsQueuedProfilesInBackground(){
+        await using var f=new Fixture();await f.Init();var document=new StoredDocument{FileName="applicant.txt",Content="Synthetic professional CV"u8.ToArray(),ContentType="text/plain"};var person=new Candidate{Name="Applicant Name",Email="applicant@example.test",Phone="+92 300 1234567",City="Karachi",Location="Karachi",DocumentId=document.Id,CvProfileStatus="Pending"};await using(var db=f.Factory.CreateDbContext()){db.Documents.Add(document);db.Candidates.Add(person);await db.SaveChangesAsync();}
+        var api=new ProfileProvider();var config=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{{"OpenAI:ApiKey","test-key"},{"OpenAI:Model","test-model"}}).Build();var services=new ServiceCollection();services.AddLogging();services.AddSingleton<IDbContextFactory<AtsDbContext>>(f.Factory);services.AddScoped<IDocumentStore>(_=>new DatabaseDocumentStore(f.Factory));services.AddScoped(_=>new AiService(new HttpClient(api),config,f.Factory,new Access(new State()),new DatabaseDocumentStore(f.Factory)));using var root=services.BuildServiceProvider();var updates=new RecruitmentUpdates();using var worker=new CvProfileExtractionQueue(root.GetRequiredService<IServiceScopeFactory>(),f.Factory,updates,NullLogger<CvProfileExtractionQueue>.Instance);await worker.StartAsync(CancellationToken.None);
+        var deadline=DateTime.UtcNow.AddSeconds(10);Candidate? extracted=null;while(DateTime.UtcNow<deadline){await using var db=f.Factory.CreateDbContext();extracted=await db.Candidates.AsNoTracking().SingleAsync(c=>c.Id==person.Id);if(extracted.CvProfileStatus!="Pending")break;await Task.Delay(50);}await worker.StopAsync(CancellationToken.None);
+        Assert.Equal(1,api.Calls);Assert.Equal("Ready",extracted!.CvProfileStatus);Assert.Equal("Senior Recruiter",extracted.CurrentRole);
     }
     [Theory]
     [InlineData(false)]
@@ -75,7 +99,7 @@ public class WorkflowTests
         await using(var db=f.Factory.CreateDbContext()){db.Assessments.Add(next);await db.SaveChangesAsync();}await ats.SaveDraft(next.Id);await using var check=f.Factory.CreateDbContext();Assert.Single(await check.Candidates.ToListAsync());Assert.Equal("Updated",(await check.EmploymentHistory.SingleAsync()).CompanyName);Assert.Equal("Director",(await check.Candidates.SingleAsync()).CurrentRole);
     }
 
-    [Fact] public async Task RecruiterDefaultsAssignmentsAndPaidPoolAreEnforcedAcrossReadsAndWrites(){
+    [Fact] public async Task LegacyRecruiterDefaultsAssignmentsAndPaidPoolAreEnforcedAcrossReadsAndWrites(){
         await using var f=new Fixture();await f.Init();
         var client=new Client{Name="Assigned Client",NormalizedName="ASSIGNED CLIENT"};var privateClient=new Client{Name="Other Client",NormalizedName="OTHER CLIENT"};
         var owned=new Position{Reference="001",Client=client.Name,ClientId=client.Id,Title="Assigned Role",AssignedRecruiter="recruiter",Criteria=[new(){Name="Experience",Weight=100}]};
@@ -84,7 +108,7 @@ public class WorkflowTests
         var application=new Assessment{PositionId=owned.Id,CandidateId=candidate.Id,OwnerId="recruiter",State="Saved"};
         var foreign=new Assessment{PositionId=other.Id,CandidateId=pool.Id,OwnerId="recruiter",State="Saved"};
         await using(var db=f.Factory.CreateDbContext()){
-            var u=AccountRegistration.NewUser("recruiter","Recruiter","Recruiter");u.Id="recruiter";u.Status="Active";u.CanViewTalentPool=true;
+            var u=AccountRegistration.NewUser("recruiter","Recruiter","Recruiter");u.Id="recruiter";u.AccountType=AccountTypes.Legacy;u.Status="Active";u.CanViewTalentPool=true;
             db.Users.Add(u);db.Roles.Add(new IdentityRole("Recruiter"){Id="r"});db.UserRoles.Add(new(){UserId=u.Id,RoleId="r"});
             db.Clients.AddRange(client,privateClient);db.Positions.AddRange(owned,other);db.Candidates.AddRange(candidate,pool);db.Assessments.AddRange(application,foreign);await db.SaveChangesAsync();
         }

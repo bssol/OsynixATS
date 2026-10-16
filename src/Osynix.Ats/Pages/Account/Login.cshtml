@@ -1,7 +1,7 @@
 @page
 @model Osynix.Ats.Pages.Account.LoginModel
 @{ Layout="_AuthLayout"; ViewData["Title"]="Sign In"; }
-<div class="auth-title"><span class="auth-eyebrow">OSYNIX ATS</span><h1>Welcome Back</h1><p>Sign in to your hiring workspace.</p></div>
+<div class="auth-title"><span class="auth-eyebrow">OSYNIX ATS</span><h1>Welcome Back</h1><p>Freelance Recruiters, Employers And Team Members Sign In Here.</p></div>
 <form method="post" asp-page-handler="Google"><button class="google-button" type="submit"><span class="google-g">G</span>Continue With Google</button></form>
 <div class="auth-divider"><span>or sign in with email</span></div>
 <form method="post"><div asp-validation-summary="All" class="auth-error"></div><label>Email or Username<input asp-for="Email" type="text" autocomplete="username" required /></label>
@@ -10,3 +10,5 @@
 <p class="auth-switch">New to Osynix? <a href="/Account/Register">Create an Account</a></p>
 
 <p class="auth-switch">Hiring For Your Business? <a href="/Account/Register?role=Employer">Create An Employer Account</a></p>
+
+<p class="auth-switch">Working Independently? <a href="/Account/Register?role=Recruiter">Start As A Freelance Recruiter</a></p>

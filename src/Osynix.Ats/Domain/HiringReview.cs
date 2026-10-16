@@ -15,6 +15,8 @@ public class HiringSubmission : Record {
  public Guid ContactId{get;set;}
  public string SubmittedBy{get;set;}="";
  public string SharedReportJson{get;set;}="";
+ public string RecruiterResponse{get;set;}="";
+ public DateTime? RecruiterResponseUtc{get;set;}
  public string Feedback{get;set;}="Awaiting Feedback";
  public string Remarks{get;set;}="";
  public DateTime SubmittedUtc{get;set;}=DateTime.UtcNow;

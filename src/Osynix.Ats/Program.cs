@@ -13,6 +13,10 @@ using Osynix.Ats.Services;
 if(args.Contains("--install-browser")) return Microsoft.Playwright.Program.Main(["install","--with-deps","chromium"]);
 var builder=WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("appsettings.Local.json",optional:true,reloadOnChange:true).AddEnvironmentVariables();
+var openAiKey=Environment.GetEnvironmentVariable("OpenAI__ApiKey")??Environment.GetEnvironmentVariable("OpenAI_APIKey");
+if(string.IsNullOrWhiteSpace(openAiKey)&&OperatingSystem.IsWindows())openAiKey=Environment.GetEnvironmentVariable("OpenAI__ApiKey",EnvironmentVariableTarget.User)??Environment.GetEnvironmentVariable("OpenAI_APIKey",EnvironmentVariableTarget.User);
+if(!string.IsNullOrWhiteSpace(openAiKey))builder.Configuration["OpenAI:ApiKey"]=openAiKey.Trim();
+builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command",LogLevel.Warning);
 if(args.Contains("--verify-smtp")){
  try{await new AccountEmail(builder.Configuration).CheckConnection();Console.WriteLine("SMTP_AUTH_OK");return 0;}
  catch(Exception e){Console.WriteLine("SMTP_AUTH_FAILED: "+e.GetType().Name);return 1;}
@@ -26,7 +30,7 @@ builder.Services.AddIdentity<AtsUser,IdentityRole>(o=>{
     o.Password.RequiredLength=6; o.User.RequireUniqueEmail=true;
     o.Lockout.MaxFailedAccessAttempts=5; o.Lockout.DefaultLockoutTimeSpan=TimeSpan.FromMinutes(15);
 }).AddEntityFrameworkStores<AtsDbContext>().AddDefaultTokenProviders();
-builder.Services.Configure<SecurityStampValidatorOptions>(o=>o.ValidationInterval=TimeSpan.Zero);
+builder.Services.Configure<SecurityStampValidatorOptions>(o=>{o.ValidationInterval=TimeSpan.Zero;o.OnRefreshingPrincipal=context=>{var selected=context.CurrentPrincipal?.FindFirst(WorkspaceContext.Claim);if(context.NewPrincipal?.Identity is System.Security.Claims.ClaimsIdentity identity){if(selected is not null)identity.AddClaim(selected);var mode=context.CurrentPrincipal?.FindFirst(ProfileModes.Claim);if(mode is not null)identity.AddClaim(mode);}return Task.CompletedTask;};});
 builder.Services.ConfigureApplicationCookie(o=>{o.LoginPath="/Account/Login";o.AccessDeniedPath="/denied";o.Cookie.HttpOnly=true;o.Cookie.SameSite=SameSiteMode.Lax;o.ExpireTimeSpan=TimeSpan.FromHours(8);o.SlidingExpiration=true;});
 builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics",LogLevel.Warning);
 builder.Services.Configure<DataProtectionTokenProviderOptions>(o=>o.TokenLifespan=TimeSpan.FromHours(1));
@@ -53,10 +57,20 @@ builder.Services.AddScoped<AuthenticationStateProvider,RevalidatingIdentityState
 builder.Services.AddScoped<AdminService>(); builder.Services.AddScoped<Access>(); builder.Services.AddScoped<AtsService>(); builder.Services.AddScoped<WorkbookImport>(); builder.Services.AddScoped<ReportService>();
 builder.Services.AddScoped<WorkspaceService>();
 builder.Services.AddScoped<EmployerService>();
+builder.Services.AddScoped<RecruiterWorkService>();
+builder.Services.AddScoped<EmployerSubmissionService>();
+builder.Services.AddScoped<TalentAdministration>();
 builder.Services.AddScoped<EmployerTeamService>();
+builder.Services.AddScoped<FreelancerDirectory>();
+builder.Services.AddScoped<SelfProfileService>();
+builder.Services.AddScoped<RecruiterActionService>();
+builder.Services.AddScoped<InterviewService>();
 builder.Services.AddScoped<HiringReviewService>();builder.Services.AddSingleton<RecruitmentUpdates>();
 builder.Services.AddScoped<IDocumentStore,DatabaseDocumentStore>();
 builder.Services.AddHttpClient<AiService>(c=>c.Timeout=TimeSpan.FromMinutes(4));
+builder.Services.AddSingleton<CvProfileExtractionQueue>();
+builder.Services.AddSingleton<ICvProfileExtractionQueue>(sp=>sp.GetRequiredService<CvProfileExtractionQueue>());
+builder.Services.AddHostedService(sp=>sp.GetRequiredService<CvProfileExtractionQueue>());
 var app=builder.Build();
 using(var scope=app.Services.CreateScope()) {
     var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();
@@ -64,6 +78,9 @@ using(var scope=app.Services.CreateScope()) {
     await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;");
     var roles=scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     foreach(var role in new[]{"Admin","Recruiter","Employer","Candidate"}) if(!await roles.RoleExistsAsync(role)) await roles.CreateAsync(new(role));
+    await WorkspaceUpgrade.Apply(db);
+    await CandidateCityUpgrade.Apply(db);
+    await RecruiterActionService.Backfill(db);
     var users=scope.ServiceProvider.GetRequiredService<UserManager<AtsUser>>();
     var email=builder.Configuration["Bootstrap:Email"]; var password=builder.Configuration["Bootstrap:Password"];
     if(!await users.Users.AnyAsync()&&!string.IsNullOrWhiteSpace(email)&&!string.IsNullOrWhiteSpace(password)) {
@@ -74,7 +91,7 @@ using(var scope=app.Services.CreateScope()) {
 }
 if(!app.Environment.IsDevelopment()) {app.UseExceptionHandler("/error");app.UseHsts();app.UseHttpsRedirection();}
 app.UseStaticFiles();app.UseRouting();app.UseAuthentication();app.UseAuthorization();app.UseRateLimiter();app.UseAntiforgery();
-app.MapRazorPages();app.MapHiringReview();
+app.MapRazorPages();app.MapHiringReview();app.MapInterviews();
 app.MapGet("/careers/{id:guid}/cover",async Task<IResult>(Guid id,EmployerService employers,HttpContext context)=>{
     var company=await employers.PublicCompany(id);
     if(company is null||company.CareersCoverMode!="Upload"||company.CareersCoverContent is not {Length:>0})return Results.NotFound();
@@ -87,9 +104,14 @@ app.MapGet("/files/{id:guid}",async Task<IResult>(Guid id,bool? view,IDbContextF
     if(!await EndpointAccess.Allowed(db,context.User)) return Results.StatusCode(StatusCodes.Status403Forbidden);
         if(Access.Scoped(context.User)){
         var uid=context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value;var name=context.User.Identity!.Name;var workspaceId=await EndpointAccess.WorkspaceId(db,context.User);
-        var ownJd=await db.Positions.AnyAsync(p=>p.JdDocumentId==id&&((context.User.IsInRole("Employer")||p.AssignedRecruiter==name)&&p.WorkspaceId==workspaceId));
-        var ownCv=await db.Assessments.AnyAsync(a=>(a.DocumentId==id||a.Candidate!.DocumentId==id)&&((context.User.IsInRole("Employer")||a.Position!.AssignedRecruiter==name)&&a.Position!.WorkspaceId==workspaceId));
-        var poolCv=await EndpointAccess.Allowed(db,context.User,"Talent.View")&&await EndpointAccess.PoolCandidates(db,workspaceId).AnyAsync(c=>c.DocumentId==id);
+        var owner=(await WorkspaceContext.Resolve(db,context.User)).Owner;
+        var profileMode=await ProfileModes.Selected(db,context.User,await WorkspaceContext.Resolve(db,context.User));
+        var ownJd=await db.Positions.AnyAsync(p=>p.JdDocumentId==id&&(profileMode==null||p.IsAgencyPosition==profileMode)&&((owner||(p.AssignedRecruiter==name||db.PositionRecruiterAssignments.Any(pa=>pa.PositionId==p.Id&&db.Users.Any(au=>au.Id==pa.UserId&&au.UserName==name))))&&p.WorkspaceId==workspaceId));
+        var ownCv=await db.Assessments.AnyAsync(a=>(a.DocumentId==id||a.Candidate!.DocumentId==id)&&(profileMode==null||a.Position!.IsAgencyPosition==profileMode)&&((owner||(a.Position!.AssignedRecruiter==name||db.PositionRecruiterAssignments.Any(pa=>pa.PositionId==a.PositionId&&db.Users.Any(au=>au.Id==pa.UserId&&au.UserName==name))))&&a.Position!.WorkspaceId==workspaceId));
+        var active=await WorkspaceContext.Resolve(db,context.User);
+        var ownPool=active.Legacy?EndpointAccess.PoolCandidates(db,workspaceId):db.Candidates.Where(c=>c.WorkspaceId==workspaceId);
+        var poolCv=await EndpointAccess.Allowed(db,context.User,"Talent.View")&&await ownPool.AnyAsync(c=>c.DocumentId==id);
+        poolCv=poolCv||(await EndpointAccess.Allowed(db,context.User,"Talent.Master")&&await TalentIdentity.MasterCandidates(db).AnyAsync(c=>c.DocumentId==id));
         if(!ownJd&&!ownCv&&!poolCv)return Results.StatusCode(403);
     }
     var doc=await storage.Read(id);
@@ -105,7 +127,7 @@ app.MapGet("/reports",async Task<IResult>(string ids,string? format,int? version
     var uid=context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value;
     var records=await db.Assessments.Where(x=>selected.Contains(x.Id)).AsNoTracking().ToListAsync();
     if(records.Count!=selected.Count) return Results.NotFound();
-    if(Access.Scoped(context.User)){var name=context.User.Identity!.Name;var workspaceId=await EndpointAccess.WorkspaceId(db,context.User);var own=await db.Assessments.CountAsync(a=>selected.Contains(a.Id)&&((context.User.IsInRole("Employer")||a.Position!.AssignedRecruiter==name)&&a.Position!.WorkspaceId==workspaceId));if(own!=records.Count)return Results.StatusCode(403);}
+    if(Access.Scoped(context.User)){var owner=(await WorkspaceContext.Resolve(db,context.User)).Owner;var name=context.User.Identity!.Name;var workspaceId=await EndpointAccess.WorkspaceId(db,context.User);var profileMode=await ProfileModes.Selected(db,context.User,await WorkspaceContext.Resolve(db,context.User));var own=await db.Assessments.CountAsync(a=>selected.Contains(a.Id)&&(profileMode==null||a.Position!.IsAgencyPosition==profileMode)&&((owner||(a.Position!.AssignedRecruiter==name||db.PositionRecruiterAssignments.Any(pa=>pa.PositionId==a.PositionId&&db.Users.Any(au=>au.Id==pa.UserId&&au.UserName==name))))&&a.Position!.WorkspaceId==workspaceId));if(own!=records.Count)return Results.StatusCode(403);}
     if(records.Any(x=>x.State!="Saved"&&x.OwnerId!=uid&&!context.User.IsInRole("Admin"))) return Results.StatusCode(StatusCodes.Status403Forbidden);
     if(version is not null) {
         if(records.Count!=1) return Results.BadRequest("Select one application for an assessment-version report.");

@@ -167,7 +167,7 @@ public class WorkbookImport(IDbContextFactory<AtsDbContext> factory,Access acces
             }
         }
         AtsService.Audit(db,user.Identity!.Name!,"Workbook imported",preview.Hash,$"{positions.Count} positions; {people.Count} people; {pairs.Count} applications; {evidenceRecords} detailed evidence records");
-        await db.SaveImportedChangesAsync();await tx.CommitAsync();
+        await db.SaveImportedChangesAsync();await tx.CommitAsync();await WorkspaceUpgrade.Apply(db);
         return $"Imported {positions.Count} positions, {people.Count} candidates, {pairs.Count} applications and {evidenceRecords} detailed evidence records. Review criteria and settings before screening.";
     }
     static Candidate Profile(Dictionary<string,string> r)

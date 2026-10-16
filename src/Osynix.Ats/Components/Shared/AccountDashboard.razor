@@ -1,0 +1,12 @@
+@implements IDisposable
+@inject RecruitmentUpdates Updates
+@using System.Security.Claims
+@using Microsoft.EntityFrameworkCore
+@using Osynix.Ats.Data
+@inject AuthenticationStateProvider Auth
+@inject IDbContextFactory<AtsDbContext> Factory
+@if(freelance){<RecruiterDashboard />}else if(agency){<AgencyDashboard />}else if(loaded){<HiringDashboard />}
+@code{bool freelance,agency,loaded;protected override async Task OnInitializedAsync(){Updates.Changed+=Changed;await Load();}
+void Changed()=>_=InvokeAsync(async()=>{await Load();StateHasChanged();});
+public void Dispose()=>Updates.Changed-=Changed;
+async Task Load(){var user=(await Auth.GetAuthenticationStateAsync()).User;await using var db=await Factory.CreateDbContextAsync();var account=await db.Users.FindAsync(user.FindFirstValue(ClaimTypes.NameIdentifier));freelance=account?.AccountType==AccountTypes.Freelance;agency=await ProfileModes.Selected(db,user,await WorkspaceContext.Resolve(db,user))==true;loaded=true;}}

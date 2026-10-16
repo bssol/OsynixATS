@@ -4,7 +4,7 @@
 <div class="auth-title"><h1>Continue With Google</h1><p>Use your Google account to securely access Osynix.</p></div>
 <div asp-validation-summary="All" class="auth-error"></div>
 @if(Model.Registering){
-<form method="post" asp-page-handler="Complete"><input asp-for="ReturnUrl" type="hidden"/><label>Full Name<input asp-for="FullName" required /></label><label>I Am a<select asp-for="Role"><option>Recruiter</option><option>Employer</option><option>Candidate</option></select></label><button class="auth-primary" type="submit">Create Account →</button></form>
+<form method="post" asp-page-handler="Complete"><input asp-for="ReturnUrl" type="hidden"/><label>Full Name<input asp-for="FullName" required /></label><label>I Am a<select asp-for="Role"><option value="Recruiter">Freelance Recruiter</option><option>Employer</option><option>Candidate</option></select></label><button class="auth-primary" type="submit">Create Account →</button></form>
 }else if(Model.Available){<form method="post" asp-page-handler="Start"><input asp-for="ReturnUrl" type="hidden"/><button class="google-button" type="submit"><span class="google-g">G</span>Continue With Google</button></form>}
 else{<p class="auth-note">Google sign-in is currently unavailable. You can register or sign in with email.</p>}
 <p class="auth-switch"><a href="/Account/Login">Sign In With Email</a> · <a href="/Account/Register">Register With Email</a></p>

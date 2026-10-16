@@ -1,0 +1,72 @@
+@inherits PageBase
+@inject HiringReviewService Review
+@inject Access Access
+@inject RecruitmentUpdates Updates
+@inject IJSRuntime JS
+@implements IDisposable
+
+@if(info is not null)
+{
+    <section class="@(Compact?"review-link-compact":"client-review-link panel")">
+        <div class="section-heading">
+            <div>
+                <h3>Hiring Manager Review Link</h3>
+                <small>@info.Status · @info.Profiles Shared Profiles</small>
+            </div>
+            @if(info.Link is not null)
+            {
+                <div class="pipeline-submit-actions">
+                    <a class="button secondary" href="@info.Link" target="_blank" rel="noopener noreferrer">View Review Page</a>
+                    <button class="secondary" disabled="@Busy" @onclick="Copy">Copy Link</button>
+                </div>
+            }
+        </div>
+        @if(info.Status=="Not Created")
+        {
+            <p class="muted small">Create The Reusable Link Now. No Hiring Manager Contact Or Submitted Profile Is Required.</p>
+            @if(owner){<button class="secondary" disabled="@Busy" @onclick="()=>Manage(true)">Generate Hiring Manager Link</button>}
+        }
+        else if(info.Status is "Expired" or "Revoked")
+        {
+            <p class="muted">This Link Is Not Active. The Workspace Owner Can Generate A Replacement.</p>
+        }
+        else
+        {
+            <p class="muted small">This Client Link Can Be Reused As You Share More Profiles. The Hiring Manager Contact Can Be Added Later.</p>
+        }
+        @if(owner&&info.Status!="Not Created")
+        {
+            <details>
+                <summary>Manage Review Link</summary>
+                <p class="muted">Replacing Or Revoking The Link Invalidates Previously Shared Access. Assessment And Feedback History Is Preserved.</p>
+                <button class="secondary" disabled="@Busy" @onclick="()=>confirm=true">Generate Replacement Link</button>
+                <button class="secondary danger" disabled="@Busy" @onclick="()=>confirmRevoke=true">Revoke Link</button>
+                @if(confirm||confirmRevoke)
+                {
+                    <p>@(confirm?"Replace This Link And Invalidate The Previous Link?":"Revoke This Link And End Client Review Access?")</p>
+                    <button class="secondary danger" disabled="@Busy" @onclick="()=>Manage(confirm)">Confirm</button>
+                    <button class="secondary" @onclick="Cancel">Cancel</button>
+                }
+            </details>
+        }
+        <Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
+    </section>
+}
+
+@code {
+    [Parameter] public Guid ClientId { get; set; }
+    [Parameter] public Guid? PositionId { get; set; }
+    [Parameter] public Guid? ContactId { get; set; }
+    [Parameter] public bool Compact { get; set; }
+    ClientReviewLink? info;
+    bool owner,confirm,confirmRevoke;
+
+    protected override void OnInitialized()=>Updates.Changed+=Changed;
+    protected override Task OnParametersSetAsync()=>Run(Load);
+    async Task Load(){info=await Review.ClientLink(ClientId,PositionId,ContactId);owner=(await Access.Context())?.Owner==true||(await Access.Require()).IsInRole("Admin");}
+    void Cancel(){confirm=confirmRevoke=false;}
+    Task Manage(bool replace)=>Run(async()=>{await Review.ManageClientLink(ClientId,replace);Cancel();await Load();Notice=replace?"Hiring Manager Link Ready. Copy And Share It When You Need.":"Client Review Access Revoked.";});
+    Task Copy()=>Run(async()=>{var copied=await JS.InvokeAsync<bool>("osynixCopyReviewLink",info!.Link);Notice=copied?"Review Link Copied.":"Use View Review Page To Open And Copy The Link From Your Browser.";});
+    void Changed()=>_=InvokeAsync(async()=>{try{await Load();}catch(UnauthorizedAccessException){info=null;}StateHasChanged();});
+    public void Dispose()=>Updates.Changed-=Changed;
+}

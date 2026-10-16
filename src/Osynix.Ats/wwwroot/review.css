@@ -3,3 +3,7 @@
 
 .review-main [hidden]{display:none!important}
 #comparison-detail{scroll-margin-top:95px}
+
+.review-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:20px}.review-kpis .kpi{padding:16px}.review-interview button{margin:6px 8px 6px 0}.review-interview input{max-width:360px;display:block;margin:6px 0}.review-interview a{display:block;margin:8px 0}@media(max-width:500px){.review-kpis{grid-template-columns:1fr}}
+
+#feedback [hidden]{display:none!important}.evaluation-interview{padding:14px;border:1px solid var(--border);border-radius:10px;background:#f4f7ff;margin-bottom:16px}.evaluation-interview p{margin:10px 0;overflow-wrap:anywhere}.evaluation-interview .button{display:inline-block}.review-meeting-link{display:block;margin-top:8px}.review-main #profiles td small{display:block;margin-top:5px}#completion-confirmation{align-items:flex-start;margin:14px 0;padding:12px;background:#edf3ff;border-radius:8px}#evaluation-link{word-break:break-all}

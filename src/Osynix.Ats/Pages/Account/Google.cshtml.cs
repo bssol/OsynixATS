@@ -9,7 +9,7 @@ using Osynix.Ats.Data;
 using Osynix.Ats.Services;
 namespace Osynix.Ats.Pages.Account;
 [AllowAnonymous,EnableRateLimiting("auth")]
-public class GoogleModel(SignInManager<AtsUser> signIn,UserManager<AtsUser> users,IAuthenticationSchemeProvider schemes):PageModel {
+public class GoogleModel(SignInManager<AtsUser> signIn,UserManager<AtsUser> users,IAuthenticationSchemeProvider schemes,EmployerTeamService teams):PageModel {
  [BindProperty(SupportsGet=true)]public string? ReturnUrl{get;set;}
  [BindProperty]public string FullName{get;set;}="";
  [BindProperty]public string Role{get;set;}="Recruiter";
@@ -38,7 +38,8 @@ public class GoogleModel(SignInManager<AtsUser> signIn,UserManager<AtsUser> user
   var email=info?.Principal.FindFirstValue(ClaimTypes.Email);
   if(info is null||!Verified(info)||string.IsNullOrWhiteSpace(email)||string.IsNullOrWhiteSpace(FullName)||FullName.Length>100||!AccountRegistration.Roles.Contains(Role)){ModelState.AddModelError("","Choose a role and enter your name. Start Google sign-in again if the session expired.");return Page();}
   if(await users.FindByEmailAsync(email) is not null){ModelState.AddModelError("","Sign in with your password first, then connect Google from My Profile.");return Page();}
-  var account=AccountRegistration.NewUser(email,FullName,Role);account.EmailConfirmed=true;account.Status="Active";
+  var account=AccountRegistration.NewUser(email,FullName,Role);
+  if(Role=="Recruiter"&&ReturnUrl?.StartsWith("/Account/TeamInvitation?",StringComparison.Ordinal)==true){var query=Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri("https://local"+ReturnUrl).Query);var invitation=await teams.Read(query["token"]);if(invitation?.Status=="Pending"&&string.Equals(invitation.Email,email,StringComparison.OrdinalIgnoreCase))account.AccountType=Osynix.Ats.Domain.AccountTypes.Employee;}account.EmailConfirmed=true;account.Status="Active";
   var created=await users.CreateAsync(account);
   if(!created.Succeeded){ModelState.AddModelError("","Unable to create this account.");return Page();}
   var assigned=await users.AddToRoleAsync(account,Role);var linked=await users.AddLoginAsync(account,info);

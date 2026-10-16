@@ -39,6 +39,33 @@ public class HiringReviewTests {
   public async Task<string> Cookie(ForwardResult result){var token=QueryHelpers.ParseQuery(new Uri(result.Link).Query)["token"].ToString();var exchange=await Review.Exchange(token);Assert.NotNull(exchange);return exchange.Value.Cookie;}
   public ValueTask DisposeAsync()=>Db.DisposeAsync();
  }
+ [Fact]public async Task InformationFeedbackCreatesOneTaskAndAClientSafeResponseReturnsItForReview(){
+  await using var f=new Fixture();await f.Init(1);var forwarded=await f.Review.Forward(f.Contact.Id,f.Ids,"",false);var cookie=await f.Cookie(forwarded);var row=Assert.Single((await f.Review.Read(cookie)).Rows);
+  await f.Review.Reply(cookie,new(row.Id,row.Revision,row.ApplicationRevision,"More Information Required","Confirm availability",null,"","",30,""));
+  var actions=new RecruiterActionService(f.Factory,new Access(new State("Recruiter"),f.Factory),f.Updates);var task=Assert.Single(await actions.Inbox());Assert.Equal("Respond To Client",task.Action.Type);Assert.Equal("recruiter",task.Action.RecipientId);
+  await Assert.ThrowsAsync<InvalidOperationException>(()=>actions.Acknowledge(task.Action.Id,task.Action.Revision));
+  await f.Review.RespondToInformation(task.Action.Id,task.Action.Revision,"Available next week. candidate0@private.test +923001234567");
+  Assert.Empty(await actions.Inbox());row=Assert.Single((await f.Review.Read(cookie)).Rows);Assert.Equal("Awaiting Feedback",row.Feedback);Assert.Equal("Awaiting Client Feedback",row.Stage);Assert.Contains("Available next week",row.RecruiterResponse);Assert.DoesNotContain("@private.test",row.RecruiterResponse);Assert.DoesNotContain("923001234567",row.RecruiterResponse);
+  await f.Review.Reply(cookie,new(row.Id,row.Revision,row.ApplicationRevision,"Shortlist","Suitable",null,"","",30,""));Assert.Empty(await actions.Inbox());task=Assert.Single(await actions.Notifications(false));Assert.Equal("Review Feedback",task.Action.Type);await actions.Acknowledge(task.Action.Id,task.Action.Revision);Assert.Empty(await actions.Inbox());
+  row=Assert.Single((await f.Review.Read(cookie)).Rows);await f.Review.Reply(cookie,new(row.Id,row.Revision,row.ApplicationRevision,"Shortlist","Suitable",null,"","",30,""));Assert.Empty(await actions.Inbox());
+  await using var db=f.Factory.CreateDbContext();Assert.Equal(1,await db.RecruiterActions.CountAsync());Assert.Equal(1,await db.HiringSubmissions.CountAsync());Assert.Equal("Shortlisted",(await db.Assessments.SingleAsync()).Stage);
+ }
+ [Fact]public async Task ReusableLinkCanBeFoundByClientContactAndPositionAndReplacementPreservesHistory(){
+  await using var f=new Fixture();await f.Init(1);var forwarded=await f.Review.Forward(f.Contact.Id,f.Ids,"",false);var cookie=await f.Cookie(forwarded);
+  Assert.Equal(forwarded.Link,(await f.Review.ClientLink(f.Client.Id)).Link);Assert.Equal(forwarded.Link,(await f.Review.ClientLink(f.Client.Id,null,f.Contact.Id)).Link);Assert.Contains("position="+f.Position.Id,(await f.Review.ClientLink(f.Client.Id,f.Position.Id)).Link);
+  var admin=new HiringReviewService(f.Factory,new Access(new State()),new EphemeralDataProtectionProvider(),new ConfigurationBuilder().Build(),f.Mail,f.Updates);
+  await admin.ManageClientLink(f.Client.Id,true);Assert.Null(await f.Review.Exchange(QueryHelpers.ParseQuery(new Uri(forwarded.Link).Query)["token"].ToString()));await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>f.Review.Read(cookie));
+  await using var db=f.Factory.CreateDbContext();Assert.Equal(1,await db.HiringSubmissions.CountAsync());await admin.ManageClientLink(f.Client.Id,false);Assert.Equal("Revoked",(await f.Review.ClientLink(f.Client.Id)).Status);await Assert.ThrowsAsync<InvalidOperationException>(()=>f.Review.Forward(f.Contact.Id,f.Ids,"",false));
+ }
+ [Fact]public async Task BackfillIsIdempotentAndDoesNotCountAvailabilityAsAnInterview(){
+  await using var f=new Fixture();await f.Init(1);var forwarded=await f.Review.Forward(f.Contact.Id,f.Ids,"",false);
+  await using(var db=f.Factory.CreateDbContext()){var sub=await db.HiringSubmissions.SingleAsync();sub.Feedback="Request Interview";sub.FeedbackUtc=DateTime.UtcNow;var app=await db.Assessments.SingleAsync();app.Stage="Client Interview";app.InterviewStatus="Not Scheduled";await db.SaveChangesAsync();await RecruiterActionService.Backfill(db);await RecruiterActionService.Backfill(db);Assert.Equal(1,await db.RecruiterActions.CountAsync());Assert.Equal("Interview Requested",app.Stage);Assert.Equal("Action Required",Lifecycle.Classify(app));var scheduled=Lifecycle.Synchronize(app.Stage,"Scheduled",app.ClientStatus);Assert.Equal("Client Interview",scheduled.Stage);}
+  var access=new Access(new State("Recruiter"),f.Factory);var confirmedApp=Assert.Single(await new AtsService(f.Factory,access).Assessments());confirmedApp.InterviewStatus="Scheduled";await new AtsService(f.Factory,access).SaveLifecycle(confirmedApp);Assert.Empty(await new RecruiterActionService(f.Factory,access,f.Updates).Inbox());
+ }
+ [Theory][InlineData("Shortlist")][InlineData("Hold")][InlineData("Reject")]
+ public async Task RoutineClientFeedbackIsAnUnreadNotificationRatherThanAnActionableTask(string status){
+  await using var f=new Fixture();await f.Init(1);var link=await f.Review.Forward(f.Contact.Id,f.Ids,"",false);var cookie=await f.Cookie(link);var row=Assert.Single((await f.Review.Read(cookie)).Rows);await f.Review.Reply(cookie,new(row.Id,row.Revision,row.ApplicationRevision,status,"Client decision",null,"","",30,""));var actions=new RecruiterActionService(f.Factory,new Access(new State("Recruiter"),f.Factory),f.Updates);Assert.Empty(await actions.Inbox());var update=Assert.Single(await actions.Notifications(false));Assert.Equal(status,update.Action.Feedback);await actions.Acknowledge(update.Action.Id,update.Action.Revision);Assert.Empty(await actions.Notifications(false));if(status=="Reject")Assert.Empty((await f.Review.Read(cookie)).Rows);else Assert.Equal(status,Assert.Single((await f.Review.Read(cookie)).Rows).Feedback);
+ }
  [Fact]public async Task LocalReviewLinkClearlyReportsEmailWasNotSent(){
   await using var f=new Fixture();await f.Init(1);
   f.Review=new(f.Factory,new Access(new State("Recruiter"),f.Factory),new EphemeralDataProtectionProvider(),new ConfigurationBuilder().Build(),f.Mail,f.Updates);
@@ -64,7 +91,7 @@ public class HiringReviewTests {
   var first=(await f.Review.Read(cookie)).Rows.First(r=>r.PositionId==f.Position.Id);
   var response=new HiringFeedback(first.Id,first.Revision,first.ApplicationRevision,"Request Interview","Available online",DateTime.UtcNow.AddDays(2).ToString("yyyy-MM-ddTHH:mm"),"UTC","Online",30,"");
   await f.Review.Reply(cookie,response);
-  await using(var db=f.Factory.CreateDbContext()){var shared=await db.HiringSubmissions.SingleAsync(s=>s.Id==first.Id);var a=await db.Assessments.SingleAsync(a=>a.Id==shared.AssessmentId);Assert.Equal("Client Interview",a.Stage);Assert.Equal("Not Scheduled",a.InterviewStatus);Assert.Equal("In Interview",Lifecycle.Classify(a));}
+  await using(var db=f.Factory.CreateDbContext()){var shared=await db.HiringSubmissions.SingleAsync(s=>s.Id==first.Id);var a=await db.Assessments.SingleAsync(a=>a.Id==shared.AssessmentId);Assert.Equal("Interview Requested",a.Stage);Assert.Equal("Not Scheduled",a.InterviewStatus);Assert.Equal("Action Required",Lifecycle.Classify(a));}
   Assert.Contains(await f.Review.Inbox(),r=>r.Feedback=="Request Interview"&&r.AvailabilityStartUtc is not null&&r.Mode=="Online");
   await Assert.ThrowsAsync<DbUpdateConcurrencyException>(()=>f.Review.Reply(cookie,response));Assert.True(changes>=3);
   await f.Review.Revoke(first.Id);await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>f.Review.Reports(cookie,first.Id,null));

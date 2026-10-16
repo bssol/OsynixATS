@@ -1,5 +1,5 @@
 @page "/profile"
-@attribute [Authorize(Roles="Admin,Recruiter,Employer")]
+@attribute [Authorize(Roles="Admin,Recruiter,Employer,Candidate")]
 @using Microsoft.EntityFrameworkCore
 @using Osynix.Ats.Data
 @inject IDbContextFactory<AtsDbContext> Factory
@@ -9,16 +9,19 @@
 <PageTitle>My Profile · Osynix ATS</PageTitle>
 <div class="page-heading"><div><div class="eyebrow">MY ACCOUNT</div><h1>My Profile</h1><p class="muted">Your workspace account details.</p></div></div>
 @if(account is not null) {
-<section class="panel account-profile"><img class="profile-avatar-large" src="/images/profile-avatar.svg" alt="Profile avatar" /><h2>@(string.IsNullOrWhiteSpace(account.FullName) ? account.UserName : account.FullName)</h2><dl><dt>Email</dt><dd>@account.Email</dd><dt>Role</dt><dd>@role</dd><dt>Account status</dt><dd>@account.Status</dd></dl>@if(role=="Recruiter"){<div class="profile-signin"><h3>Recruiter Access</h3><p>Assigned Positions And Applications</p><p>Client Creation: @(account.CanCreateClients?(teamWorkspace is null?"Enabled By Admin":"Enabled By Employer"):"Not Enabled")</p><p>Position Creation: @(account.CanCreatePositions?(teamWorkspace is null?"Enabled By Admin":"Enabled By Employer"):"Not Enabled")</p><p>Talent Pool: @(teamWorkspace is not null?(canTalent?"Team Subscription Enabled":"Team Access Not Enabled"):account.TalentPoolPaidUntilUtc>DateTime.UtcNow?$"Paid Access Until {account.TalentPoolPaidUntilUtc:dd MMM yyyy HH:mm} UTC":"Subscription Required")</p></div>}<div class="profile-signin"><h3>Sign-In Options</h3><p class="muted">Your ATS password is separate from your Google password.</p><p>@(hasPassword ? "Email And Password: Enabled" : "Email And Password: Set An ATS Password To Enable")</p><a class="button secondary" href="/Account/Password" data-enhance-nav="false">@(hasPassword ? "Change Password" : "Set Password")</a><p>@(googleLinked ? "Google: Connected" : "Google: Not Connected")</p>@if(!googleLinked){<a class="button secondary" href="/Account/LinkGoogle" data-enhance-nav="false">Connect Google</a><p class="muted">Link your Google account to sign in without entering your ATS password.</p>}</div> <LogoutButton /></section>
+<section class="panel account-profile"><ProfileIdentity /><dl><dt>Email</dt><dd>@account.Email</dd><dt>Account Type</dt><dd>@role</dd><dt>Account status</dt><dd>@account.Status</dd></dl>@if(role=="Recruiter"){<div class="profile-signin"><h3>Workspace Access</h3><p>Assigned Positions And Applications</p><p>Client Creation: @(account.CanCreateClients?(teamWorkspace is null?"Enabled By Admin":"Enabled By Employer"):"Not Enabled")</p><p>Position Creation: @(account.CanCreatePositions?(teamWorkspace is null?"Enabled By Admin":"Enabled By Employer"):"Not Enabled")</p><p>Talent Pool: @(teamWorkspace is not null?(canTalent?"Team Subscription Enabled":"Team Access Not Enabled"):account.TalentPoolPaidUntilUtc>DateTime.UtcNow?$"Paid Access Until {account.TalentPoolPaidUntilUtc:dd MMM yyyy HH:mm} UTC":"Subscription Required")</p></div>}@if(role!="Candidate"){<p><a class="button secondary" href="/Account/Workspaces" data-enhance-nav="false">Choose Workspace</a></p>}<div class="profile-signin"><h3>Sign-In Options</h3><p class="muted">Your ATS password is separate from your Google password.</p><p>@(hasPassword ? "Email And Password: Enabled" : "Email And Password: Set An ATS Password To Enable")</p><a class="button secondary" href="/Account/Password" data-enhance-nav="false">@(hasPassword ? "Change Password" : "Set Password")</a><p>@(googleLinked ? "Google: Connected" : "Google: Not Connected")</p>@if(!googleLinked){<a class="button secondary" href="/Account/LinkGoogle" data-enhance-nav="false">Connect Google</a><p class="muted">Link your Google account to sign in without entering your ATS password.</p>}</div> <LogoutButton /></section>
 }
+@if(account?.AccountType==AccountTypes.Freelance){<FreelancerDirectoryProfile />}
 @code {
     EmployerWorkspace? teamWorkspace;bool canTalent;AtsUser? account; string role = ""; bool hasPassword, googleLinked;
     protected override async Task OnInitializedAsync() {
         var user = (await Auth.GetAuthenticationStateAsync()).User;
-        if(user.IsInRole("Employer")&&!user.IsInRole("Admin"))await EmployerService.RequireAccount();else await Access.Require();
+
         role = string.Join(", ", user.FindAll(System.Security.Claims.ClaimTypes.Role).Select(x=>x.Value));
         await using var db = await Factory.CreateDbContextAsync();
         account = await db.Users.FindAsync(user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
+        if(account?.Status!="Active")throw new UnauthorizedAccessException("Account Inactive.");
+        if(account.AccountType!=AccountTypes.Legacy)role=account.AccountType;
         if(account?.EmployerWorkspaceId is Guid team){teamWorkspace=await db.EmployerWorkspaces.AsNoTracking().SingleAsync(w=>w.Id==team);canTalent=await Access.Can("Talent.View");}
         if(account is not null){hasPassword=!string.IsNullOrEmpty(account.PasswordHash);googleLinked=await db.UserLogins.AnyAsync(x=>x.UserId==account.Id&&x.LoginProvider=="Google");}
     }

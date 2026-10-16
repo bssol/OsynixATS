@@ -15,7 +15,7 @@ public class TeamInvitationModel(EmployerTeamService teams,Microsoft.EntityFrame
     public async Task OnGetAsync()=>Invitation=await teams.Read(Token);
     public async Task<IActionResult> OnPostAsync(){
         Invitation=await teams.Read(Token);
-        try{await teams.Accept(Token,User);await using var db=await factory.CreateDbContextAsync();var account=await db.Users.FindAsync(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);if(account is not null)await signIn.RefreshSignInAsync(account);return LocalRedirect("/");}
+        try{var workspaceId=await teams.Accept(Token,User);await using var db=await factory.CreateDbContextAsync();var account=await db.Users.FindAsync(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);if(account is not null)await signIn.SignInWithClaimsAsync(account,false,[new System.Security.Claims.Claim(WorkspaceContext.Claim,workspaceId.ToString())]);return LocalRedirect("/");}
         catch(Exception e)when(e is InvalidOperationException or UnauthorizedAccessException){ModelState.AddModelError("",e.Message);return Page();}
     }
 }

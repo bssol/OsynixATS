@@ -91,7 +91,7 @@ public static class DatabaseInitializer
     static async Task Backfill(AtsDbContext db,CancellationToken token)
     {
         // Each backfill is idempotent and preserves real historical timestamps.
-        var people=await db.Candidates.Include(x=>x.EmploymentHistory).Include(x=>x.EducationHistory).ToListAsync(token);
+        var people=await db.Candidates.Include(x=>x.EmploymentHistory).Include(x=>x.EducationHistory).AsSplitQuery().ToListAsync(token);
         var usedIds=people.Select(x=>x.LegacyId).ToList();
         foreach(var c in people) {
             if(c.LegacyId.Length==0) {c.LegacyId=CandidateIdentity.NextDisplayId(usedIds);usedIds.Add(c.LegacyId);}

@@ -6,13 +6,14 @@ using System.Collections.Concurrent;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Osynix.Ats.Data;
+using Osynix.Ats.Domain;
 namespace Osynix.Ats.Services;
 public class AccountRegistration(UserManager<AtsUser> users,IAccountEmail mail,IDataProtectionProvider protection){
  public static readonly string[] Roles=["Recruiter","Employer","Candidate"];
  static readonly ConcurrentDictionary<string,SemaphoreSlim> gates=new();
  readonly IDataProtector protector=protection.CreateProtector("Osynix.EmailOtp.v1");
- public static AtsUser NewUser(string email,string name,string role)=>new(){UserName=email,Email=email,FullName=name.Trim(),Status="Pending",EmailConfirmed=false,CanCreatePositions=false,CanViewTalentPool=false,CanExportReports=false};
- public async Task Register(string email,string name,string password,string role){
+ public static AtsUser NewUser(string email,string name,string role)=>new(){UserName=email,Email=email,AccountType=role=="Recruiter"?AccountTypes.Freelance:role,FullName=name.Trim(),Status="Pending",EmailConfirmed=false,CanCreatePositions=false,CanViewTalentPool=false,CanExportReports=false};
+ public async Task Register(string email,string name,string password,string role,bool teamOnly=false){
   if(!Roles.Contains(role))throw new InvalidOperationException("Choose Recruiter, Employer or Candidate.");
   if(!mail.Configured)throw new InvalidOperationException("Email verification is currently unavailable. Please try again later.");
   var existing=await users.FindByEmailAsync(email);
@@ -20,7 +21,7 @@ public class AccountRegistration(UserManager<AtsUser> users,IAccountEmail mail,I
    if(!existing.EmailConfirmed&&await users.CheckPasswordAsync(existing,password)){await SendCode(existing);return;}
    throw new InvalidOperationException("Unable to register this address. If you already have an account, sign in or reset your password.");
   }
-  var account=NewUser(email,name,role);var created=await users.CreateAsync(account,password);
+  var account=NewUser(email,name,role);if(teamOnly&&role=="Recruiter")account.AccountType=AccountTypes.Employee;var created=await users.CreateAsync(account,password);
   if(!created.Succeeded)throw new InvalidOperationException(string.Join(" ",created.Errors.Select(x=>x.Description)));
   var assigned=await users.AddToRoleAsync(account,role);if(!assigned.Succeeded){await users.DeleteAsync(account);throw new InvalidOperationException("Unable to create this account.");}
   if(role=="Recruiter")await users.AddClaimAsync(account,new Claim("WorkspaceScope","Assigned"));

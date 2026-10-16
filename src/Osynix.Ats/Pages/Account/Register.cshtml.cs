@@ -17,7 +17,7 @@ public class RegisterModel(AccountRegistration registration,EmployerTeamService 
  public async Task<IActionResult> OnPostAsync(){
   if(!ModelState.IsValid)return Page();
   if(Invite is {Length:>0}){var invitation=await teams.Read(Invite);if(invitation?.Status!="Pending"||Role!="Recruiter"||!string.Equals(Email.Trim(),invitation.Email,StringComparison.OrdinalIgnoreCase)){ModelState.AddModelError("","Use The Invited Email Address And Recruiter Role.");return Page();}}
-  try{await registration.Register(Email.Trim(),FullName,Password,Role);return RedirectToPage("Verify",new{email=Email.Trim(),invite=Invite});}
+  try{await registration.Register(Email.Trim(),FullName,Password,Role,teamOnly:Invite is {Length:64});return RedirectToPage("Verify",new{email=Email.Trim(),invite=Invite});}
   catch(InvalidOperationException e){ModelState.AddModelError("",e.Message);return Page();}
  }
  public IActionResult OnPostGoogle()=>RedirectToPage("Google",new{returnUrl=Invite is {Length:64}?"/Account/TeamInvitation?token="+Uri.EscapeDataString(Invite):null});

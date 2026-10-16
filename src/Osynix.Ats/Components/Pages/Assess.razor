@@ -7,8 +7,8 @@
 @inject Access Access
 <PageTitle>Candidate Assessment · Osynix ATS</PageTitle>
 <div class="page-heading"><div><div class="eyebrow">EVIDENCE BASED SCREENING</div><h1>Candidate Assessment</h1><p class="muted">Assess one CV or a batch of up to five against approved criteria.</p></div></div><Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
-<section class="panel"><div class="form-grid"><label>Client<select @bind="client" @bind:after="ClientChanged"><option value="">All clients</option>@foreach(var name in positions.Select(x=>x.Client).Distinct().Order()){<option>@name</option>}</select></label><label>Position<select @bind="positionId"><option value="">Select active position</option>@foreach(var p in AvailablePositions){<option value="@p.Id">#@p.Reference — @p.Title · @p.Client @(p.CriteriaLocked?"":"(criteria need review)")</option>}</select></label></div>
-@if(client.Length>0&&AvailablePositions.Count==0){<p class="muted">This client has no active positions.</p>}
+<section class="panel"><div class="form-grid">@if(showClient){<label>Client<select @bind="clientId" @bind:after="ClientChanged"><option value="">All clients</option>@foreach(var item in AvailableClients){<option value="@item.Id">@item.Name</option>}</select></label>}<label>Position<select @bind="positionId"><option value="">Select active position</option>@foreach(var p in AvailablePositions){<option value="@p.Id">#@p.Reference — @p.Title @(showClient?"· "+p.Client:"") @(p.CriteriaLocked?"":"(criteria need review)")</option>}</select></label></div>
+@if(clientId is not null&&AvailablePositions.Count==0){<p class="muted">This client has no active positions.</p>}
 @if(SelectedPosition is Position selected){<details class="criterion-editor"><summary>@(selected.CriteriaLocked?"Approved":"Awaiting review") assessment framework · @selected.Criteria.Count criteria</summary>@foreach(var c in selected.Criteria){<p><b>@c.Name</b> · @c.Weight% @(c.Knockout?"· Must-have":"")<small>@c.EvidenceExpected</small></p>}</details>@if(!selected.CriteriaLocked){<p class="muted">Review and lock this position's criteria in Manage positions before running an assessment.</p>}}
 @if(CandidateId is not null){<p>Updated CV for <b>@people.FirstOrDefault(x=>x.Id==CandidateId)?.Name</b></p><label class="check"><input type="checkbox" @bind="refreshProfile" /> Explicitly refresh this person's permanent profile and master CV when saved</label>}
 <label class="upload-zone assessment-upload-zone"><strong>Choose files or drag them here</strong><small>PDF or Word (.docx) · up to @(CandidateId is null?"5 files":"1 file") · 10 MB each</small><InputFile @key="uploadRevision" class="assessment-upload-input" OnChange="Choose" multiple="@(CandidateId is null)" accept=".pdf,.docx" disabled="@Busy" /></label>
@@ -20,16 +20,17 @@
 </tbody></table></div><p class="muted small">Retry a failed item by selecting its original file below. Saved items are never repeated; retry uses the original position and profile-refresh mode.</p></section>
 @code{
 [SupplyParameterFromQuery(Name="candidate")]public Guid? CandidateId{get;set;}
-List<Position> positions=[];List<Candidate> people=[];List<Assessment> results=[];List<AssessmentBatch> batches=[];IReadOnlyList<IBrowserFile> files=[];Guid? positionId,selectedBatch;int uploadRevision;bool refreshProfile;string client="";
-List<Position> AvailablePositions=>positions.Where(x=>x.Status=="Active"&&(client.Length==0||x.Client==client)).OrderBy(x=>x.Reference).ToList();
+List<Position> positions=[];List<Client> clients=[];List<Candidate> people=[];List<Assessment> results=[];List<AssessmentBatch> batches=[];IReadOnlyList<IBrowserFile> files=[];Guid? positionId,selectedBatch,clientId;int uploadRevision;bool refreshProfile;
+IEnumerable<Client> AvailableClients=>clients.Where(c=>c.Status=="Active"&&positions.Any(p=>p.ClientId==c.Id&&p.Status=="Active")).OrderBy(c=>c.Name);
+List<Position> AvailablePositions=>positions.Where(x=>x.Status=="Active"&&(clientId is null||x.ClientId==clientId)).OrderBy(x=>x.Reference).ToList();
 Position? SelectedPosition=>AvailablePositions.FirstOrDefault(x=>x.Id==positionId);
 void ClientChanged(){positionId=AvailablePositions.Count==1?AvailablePositions[0].Id:null;}
 List<BatchItem> CurrentItems=>batches.FirstOrDefault(x=>x.Id==selectedBatch)?.Items??[];
 List<Assessment> CurrentResults=>selectedBatch is null?results.Where(x=>x.BatchId is null&&x.State=="Draft").ToList():results.Where(x=>CurrentItems.Any(i=>i.AssessmentId==x.Id)).DistinctBy(x=>x.Id).ToList();
 bool SaveDisabled=>Busy||(selectedBatch is null?CurrentResults.Count==0:CurrentItems.All(x=>x.State!="Draft"));
 string ReportUrl=>"/reports?format=pdf&ids="+string.Join(',',CurrentResults.Select(a=>a.Id));
-bool canExport;
-protected override Task OnInitializedAsync()=>Run(async()=>{canExport=await Access.Can("Reports.Export");positions=await Ats.Positions();people=await Ats.Candidates();await Reload();selectedBatch=batches.FirstOrDefault(x=>x.State=="Open")?.Id;});
+bool canExport,showClient=true;
+protected override Task OnInitializedAsync()=>Run(async()=>{canExport=await Access.Can("Reports.Export");showClient=await Access.Can("Clients.View");positions=await Ats.Positions();if((await Access.Context())?.Membership is not null)positions=positions.Where(p=>p.Status=="Active").ToList();clients=showClient?await Workspace.Clients():[];people=await Ats.Candidates();await Reload();selectedBatch=batches.FirstOrDefault(x=>x.State=="Open")?.Id;});
 async Task Reload(){results=await Ats.Assessments();batches=await Workspace.Batches();}
 void Choose(InputFileChangeEventArgs e)
 {

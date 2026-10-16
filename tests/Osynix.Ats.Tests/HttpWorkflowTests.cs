@@ -39,6 +39,7 @@ public class HttpWorkflowTests
         using(var scope=host.Services.CreateScope()){var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();(await db.EmployerWorkspaces.SingleAsync()).CareersPublished=false;await db.SaveChangesAsync();}
         Assert.Equal(HttpStatusCode.NotFound,(await anonymous.GetAsync($"/careers/{id}/cover")).StatusCode);Assert.DoesNotContain("Public Operations Role",await anonymous.GetStringAsync($"/careers/{id}"));
     }
+    [Fact]public async Task MasterPoolIsDisabledAndEmptyUntilAnExplicitWorkspaceGrant(){await using var host=new Host();using var client=await Login(host,"Recruiter");Guid workspaceId;using(var scope=host.Services.CreateScope()){var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();var user=await db.Users.SingleAsync(u=>u.UserName=="HttpUser");user.AccountType=AccountTypes.Freelance;await db.SaveChangesAsync();var w=await EmployerService.EnsureWorkspace(db,user);workspaceId=w.Id;var person=new Candidate{Name="SECRET MASTER PROFILE",Email="master-person@example.test"};db.Candidates.Add(person);await TalentIdentity.Attach(db,person);await db.SaveChangesAsync();}var locked=await client.GetStringAsync("/master-talent");Assert.Contains("No Results",locked);Assert.Contains("aria-disabled=\"true\"",locked);Assert.DoesNotContain("SECRET MASTER PROFILE",locked);Assert.DoesNotContain("href=\"/master-talent\"",locked);using(var scope=host.Services.CreateScope()){var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();(await db.EmployerWorkspaces.SingleAsync(w=>w.Id==workspaceId)).MasterTalentPoolEnabled=true;await db.SaveChangesAsync();}Assert.Contains("SECRET MASTER PROFILE",await client.GetStringAsync("/master-talent"));using(var scope=host.Services.CreateScope()){var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();(await db.EmployerWorkspaces.SingleAsync(w=>w.Id==workspaceId)).MasterTalentPoolEnabled=false;await db.SaveChangesAsync();}Assert.DoesNotContain("SECRET MASTER PROFILE",await client.GetStringAsync("/master-talent"));}
     [Fact] public async Task PipelineLimitsRecordsAndFiltersOnlyAssignedPositions(){
         await using var host=new Host();using var client=await Login(host,"Recruiter");
         using(var scope=host.Services.CreateScope()){
@@ -91,7 +92,7 @@ public class HttpWorkflowTests
         }
         Assert.DoesNotContain("+ Create Position",await client.GetStringAsync("/positions"));
         Assert.DoesNotContain("+ Create Client",await client.GetStringAsync("/clients"));
-        var locked=await client.GetStringAsync("/talent");Assert.Contains("Talent Pool Subscription",locked);Assert.DoesNotContain("Pool Only Candidate",locked);
+        var locked=await client.GetStringAsync("/talent");Assert.Contains("Workspace Talent Pool Access Is Disabled",locked);Assert.DoesNotContain("Pool Only Candidate",locked);
         Assert.DoesNotContain("Pool Only Candidate",await client.GetStringAsync("/candidates"));
         Assert.DoesNotContain("Pool Only Candidate",await client.GetStringAsync("/search?q=Pool"));
         Assert.Equal(HttpStatusCode.Forbidden,(await client.GetAsync($"/files/{docId}")).StatusCode);
@@ -102,7 +103,7 @@ public class HttpWorkflowTests
         var privateAssessment=await client.GetStringAsync($"/assessment/{applicationId}");Assert.Contains("Assessment not found",privateAssessment);Assert.DoesNotContain("Confidential Other Role",privateAssessment);
         using(var scope=host.Services.CreateScope()){var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();(await db.Users.SingleAsync(x=>x.UserName=="HttpUser")).TalentPoolPaidUntilUtc=DateTime.UtcNow.AddMinutes(-1);await db.SaveChangesAsync();}
         Assert.Equal(HttpStatusCode.Forbidden,(await client.GetAsync($"/files/{docId}")).StatusCode);
-        Assert.Contains("Talent Pool Subscription",await client.GetStringAsync("/talent"));
+        Assert.Contains("Workspace Talent Pool Access Is Disabled",await client.GetStringAsync("/talent"));
     }
 
 
@@ -123,7 +124,7 @@ public class HttpWorkflowTests
         using var guest=host.CreateClient(new(){AllowAutoRedirect=false});Assert.Equal(HttpStatusCode.Unauthorized,(await guest.GetAsync("/review/data")).StatusCode);
         var access=await guest.GetAsync(new Uri(share.Link).PathAndQuery);Assert.Equal(HttpStatusCode.Redirect,access.StatusCode);Assert.Equal("/review",access.Headers.Location!.ToString());
         Assert.Contains(access.Headers.GetValues("Set-Cookie"),value=>value.Contains("httponly",StringComparison.OrdinalIgnoreCase));
-        var html=await guest.GetStringAsync("/review");Assert.Contains("Select Position",html);Assert.Contains("Interview Availability",html);Assert.Contains("<th>AI Decision</th>",html);Assert.DoesNotContain("<th>Client Status</th>",html);Assert.DoesNotContain("<th>Interview Status</th>",html);
+        var html=await guest.GetStringAsync("/review");Assert.Contains("Select Position",html);Assert.Contains("Interview Preferences",html);Assert.Contains("<th>AI Decision</th>",html);Assert.DoesNotContain("<th>Client Status</th>",html);Assert.DoesNotContain("<th>Interview Status</th>",html);
         var comparison=await guest.GetStringAsync("/review/comparison?position="+JsonDocument.Parse(await guest.GetStringAsync("/review/data")).RootElement.GetProperty("rows")[0].GetProperty("positionId").GetString());Assert.Contains("Candidate Summary",comparison);Assert.Contains("Must-Have Fit",comparison);Assert.Contains("comparison-report",comparison);
         var payload=await guest.GetStringAsync("/review/data");Assert.Contains("Review Candidate",payload);Assert.DoesNotContain("PRIVATE-CANDIDATE",payload);Assert.DoesNotContain("923001112222",payload);
         using var data=JsonDocument.Parse(payload);var row=data.RootElement.GetProperty("rows")[0];var id=row.GetProperty("id").GetGuid();
@@ -132,9 +133,19 @@ public class HttpWorkflowTests
         Assert.Equal(HttpStatusCode.BadRequest,(await guest.PostAsJsonAsync("/review/feedback",feedback)).StatusCode);
         guest.DefaultRequestHeaders.Add("RequestVerificationToken",Regex.Match(html,"name=\"__RequestVerificationToken\"[^>]*value=\"([^\"]+)\"").Groups[1].Value);
         Assert.Equal(HttpStatusCode.OK,(await guest.PostAsJsonAsync("/review/feedback",feedback)).StatusCode);
-        Assert.Contains("Client Shortlisted",await recruiter.GetStringAsync("/pipeline"));
+        Assert.Contains("In Review",await recruiter.GetStringAsync("/pipeline"));
         Assert.Equal(HttpStatusCode.Conflict,(await guest.PostAsJsonAsync("/review/feedback",feedback)).StatusCode);
-        await service.Revoke(id);Assert.Equal(HttpStatusCode.Unauthorized,(await guest.GetAsync("/review/report?submission="+id)).StatusCode);
+        var interviews=new InterviewService(host.Services.GetRequiredService<IDbContextFactory<AtsDbContext>>(),new Access(new AdminState(adminId)),host.Services.GetRequiredService<IDataProtectionProvider>(),host.Services.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>(),serviceScope.ServiceProvider.GetRequiredService<IAccountEmail>(),host.Services.GetRequiredService<RecruitmentUpdates>());
+        Guid appRevision;using(var scope=host.Services.CreateScope())appRevision=(await scope.ServiceProvider.GetRequiredService<AtsDbContext>().Assessments.SingleAsync(a=>a.Id==appId)).Revision;
+        var invitation=await interviews.Invite(new(appId,appRevision,null,null,"candidate@example.test","",DateTime.UtcNow.AddDays(2).ToString("yyyy-MM-ddTHH:mm"),"UTC",30,"Online","Manual Link","https://meet.example.test/room","","Interview Invitation"));
+        using var candidateClient=host.CreateClient(new(){AllowAutoRedirect=false});Assert.Equal(HttpStatusCode.Unauthorized,(await candidateClient.GetAsync("/interview/data")).StatusCode);
+        var invitationAccess=await candidateClient.GetAsync(new Uri(invitation.Link).PathAndQuery);Assert.Equal(HttpStatusCode.Redirect,invitationAccess.StatusCode);Assert.Contains(invitationAccess.Headers.GetValues("Set-Cookie"),c=>c.Contains("httponly",StringComparison.OrdinalIgnoreCase));
+        var candidatePage=await candidateClient.GetStringAsync("/interview");var candidateData=await candidateClient.GetStringAsync("/interview/data");Assert.DoesNotContain("candidate@example.test",candidateData);using var candidateJson=JsonDocument.Parse(candidateData);var interview=candidateJson.RootElement.GetProperty("interview");var response=new InterviewResponse(interview.GetProperty("id").GetGuid(),interview.GetProperty("revision").GetGuid(),"Accepted","",null,"UTC");
+        Assert.Equal(HttpStatusCode.BadRequest,(await candidateClient.PostAsJsonAsync("/interview/respond",response)).StatusCode);
+        candidateClient.DefaultRequestHeaders.Add("RequestVerificationToken",Regex.Match(candidatePage,"name=\"__RequestVerificationToken\"[^>]*value=\"([^\"]+)\"").Groups[1].Value);
+        Assert.Equal(HttpStatusCode.Unauthorized,(await candidateClient.PostAsJsonAsync("/interview/respond",response with{InterviewId=Guid.NewGuid()})).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,(await candidateClient.PostAsJsonAsync("/interview/respond",response)).StatusCode);Assert.Contains("Confirmed",await guest.GetStringAsync("/review/data"));
+        await service.Revoke(id);Assert.Equal(HttpStatusCode.Unauthorized,(await candidateClient.GetAsync("/interview/data")).StatusCode);Assert.Equal(HttpStatusCode.Unauthorized,(await guest.GetAsync("/review/report?submission="+id)).StatusCode);
     }
 
     [Fact] public async Task AdministratorCanActivateImportedAccountSetPasswordAndChangeGrants()

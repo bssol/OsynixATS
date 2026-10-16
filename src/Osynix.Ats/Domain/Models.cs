@@ -11,6 +11,7 @@ public abstract class Record
 }
 public class Position : Record
 {
+    public bool IsAgencyPosition{get;set;}
     public bool CareersPublished { get; set; }
     public string PublicJobDescription { get; set; } = "";
     public Guid? WorkspaceId {get;set;}
@@ -37,6 +38,15 @@ public class Position : Record
     public string InternalNotes { get; set; } = "";
     public string Location { get; set; } = "";
     public string SalaryRange { get; set; } = "";
+    public string Department{get;set;}="";
+    public string WorkArrangement{get;set;}="On-Site";
+    public decimal? SalaryMinimum{get;set;}
+    public decimal? SalaryMaximum{get;set;}
+    public string SalaryCurrency{get;set;}="PKR";
+    public string SalaryPeriod{get;set;}="Monthly";
+    public bool ShowSalaryPublicly{get;set;}
+    public string HiringManagerEmail{get;set;}="";
+    public string HiringManagerPhone{get;set;}="";
     public string EmploymentType { get; set; } = "Full-time";
     public string Status { get; set; } = "Active";
     public string JobDescription { get; set; } = "";
@@ -59,6 +69,8 @@ public class Criterion : Record
 }
 public class Candidate : Record
 {
+    public Guid? WorkspaceId {get;set;}
+    public Guid? PersonId {get;set;}
     public string LegacyId { get; set; } = "";
     [Required] public string Name { get; set; } = "";
     public string NormalizedName { get; set; } = "";
@@ -66,6 +78,7 @@ public class Candidate : Record
     public string Phone { get; set; } = "";
     public string NormalizedPhone { get; set; } = "";
     public string Location { get; set; } = "";
+    public string City { get; set; } = "";
     public string CurrentRole { get; set; } = "";
     public string CurrentCompany { get; set; } = "";
     public double? TotalExperience { get; set; }
@@ -86,6 +99,8 @@ public class Candidate : Record
     public List<CandidateEmployment> EmploymentHistory { get; set; } = [];
     public List<CandidateEducation> EducationHistory { get; set; } = [];
     public string TalentStatus { get; set; } = "Active";
+    public string CvProfileStatus { get; set; } = "Not Requested";
+    public string CvProfileError { get; set; } = "";
     public string Notes { get; set; } = "";
     public string LegacyCvLink { get; set; } = "";
     public Guid? DocumentId { get; set; }
@@ -169,10 +184,10 @@ public static class Choices
 {
     public static readonly string[] PositionStatuses = ["Draft", "Active", "On Hold", "Closed", "Filled", "Cancelled"];
     public static readonly string[] Priorities = ["High", "Medium", "Low"];
-    public static readonly string[] Stages = ["Applied", "HR Screening", "Background Check", "Consider", "Shortlisted", "Awaiting Client Feedback", "Technical Interview", "Final Interview", "Client Interview", "Offer Sent", "Hired", "Hold", "Rejected"];
+    public static readonly string[] Stages = ["Applied", "HR Screening", "Background Check", "Consider", "Shortlisted", "Awaiting Client Feedback", "Awaiting Employer Review", "Information Requested", "Interview Requested", "Technical Interview", "Final Interview", "Client Interview", "Offer Requested", "Offer Sent", "Hired", "Hold", "Rejected"];
     public static readonly string[] Decisions = ["Priority Shortlist", "Shortlist", "Consider", "Hold", "Reject", "Insufficient Evidence"];
     public static readonly string[] Interviews = ["Not Scheduled", "Scheduled", "Completed", "No Show", "Reschedule Required", "Not Required"];
-    public static readonly string[] ClientStatuses = ["Not Submitted", "Submitted", "Under Review", "Client Shortlisted", "Client Rejected", "Client Interview", "Offer", "Hired"];
+    public static readonly string[] ClientStatuses = ["Not Submitted", "Submitted", "Under Review", "Client Shortlisted", "Client Rejected", "Information Requested", "Interview Requested", "Client Interview", "Offer Requested", "Offer", "Hired"];
     public static readonly string[] TalentStatuses = ["Active", "Priority Talent", "Passive", "Placed", "Archived", "Do Not Contact"];
     public static readonly string[] FilledSources = ["Osynix Recruiter", "Client Direct Hire", "Other"];
     public static string Tone(string decision) => decision.Contains("Shortlist", StringComparison.OrdinalIgnoreCase) || decision is "Hired" or "Placed" ? "green" : decision is "Consider" or "Partial" or "Hold" or "Pending Decision" or "In Interview" ? "yellow" : "red";

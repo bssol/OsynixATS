@@ -18,9 +18,10 @@
 
 <DashboardWelcome />
 
+
 <Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
 
-<div class="kpis"><a class="kpi" href="positions?status=Active"><span class="kpi-icon icon-violet"><NavIcon Name="positions" /></span><span>Active Positions</span><strong>@active.Count</strong></a><div class="kpi"><span class="kpi-icon icon-blue"><NavIcon Name="talent" /></span><span>Active-Position Applications</span><strong>@saved.Count</strong></div>@foreach(var q in new[]{"Shortlisted","In Interview","Pending Decision","Hired"}){<a class="kpi" href="@($"/pipeline?active=true&queue={Uri.EscapeDataString(q)}")"><span class="@($"kpi-icon {KpiTone(q)}")"><NavIcon Name="@KpiIcon(q)" /></span><span>@q</span><strong>@saved.Count(x=>Lifecycle.Classify(x)==q)</strong></a>}</div>
+<div class="kpis"><a class="kpi" href="positions?status=Active"><span class="kpi-icon icon-violet"><NavIcon Name="positions" /></span><span>Active Positions</span><strong>@active.Count</strong></a><div class="kpi"><span class="kpi-icon icon-blue"><NavIcon Name="talent" /></span><span>Active-Position Applications</span><strong>@saved.Count</strong></div>@foreach(var q in new[]{"Shortlisted","In Interview","Pending Decision","Hired"}){<a class="kpi" href="@($"/pipeline?active=true&queue={Uri.EscapeDataString(q)}{(q=="Pending Decision"?"&decisionOnly=true":"")}")"><span class="@($"kpi-icon {KpiTone(q)}")"><NavIcon Name="@KpiIcon(q)" /></span><span>@q</span><strong>@saved.Count(x=>Lifecycle.Classify(x)==q&&(q!="Pending Decision"||x.Stage!="Awaiting Client Feedback"))</strong></a>}</div>
 
 <div class="dashboard-charts">
 
@@ -106,23 +107,7 @@
 
 </div>
 
-<section class="pending-section">
 
-    <div class="section-heading"><div><div class="eyebrow">YOUR NEXT STEPS</div><h2>Pending Actions</h2></div><span class="muted small">Action queues can overlap</span></div>
-
-    <div class="kpis pending-kpis">
-
-        <a class="kpi action-card action-amber" href="/pipeline?active=true&queue=Pending%20Decision"><span class="kpi-icon"><NavIcon Name="assessment" /></span><span>Pending Decisions</span><strong>@saved.Count(x=>Lifecycle.Classify(x)=="Pending Decision")</strong><small>Review candidate outcomes <span aria-hidden="true">→</span></small></a>
-
-        <a class="kpi action-card action-violet" href="/pipeline?active=true&queue=On%20Hold"><span class="kpi-icon"><NavIcon Name="clock" /></span><span>On Hold</span><strong>@saved.Count(x=>Lifecycle.Classify(x)=="On Hold")</strong><small>Revisit paused applications <span aria-hidden="true">→</span></small></a>
-
-        <a class="kpi action-card action-teal" href="/positions?status=Active&unscreened=true"><span class="kpi-icon"><NavIcon Name="positions" /></span><span>Positions Without Screening</span><strong>@active.Count(x=>!saved.Any(a=>a.PositionId==x.Id))</strong><small>Start screening candidates <span aria-hidden="true">→</span></small></a>
-
-        <a class="kpi action-card action-rose" href="/positions?status=Active&priority=High"><span class="kpi-icon"><NavIcon Name="flag" /></span><span>High Priority</span><strong>@active.Count(x=>x.Priority=="High")</strong><small>Focus on urgent positions <span aria-hidden="true">→</span></small></a>
-
-    </div>
-
-</section>
 
 <section class="panel table-wrap"><h2>Hiring Activity By Client</h2><table><thead><tr><th>Client</th><th>Active Positions</th><th>Applications</th><th>Shortlisted</th><th>Interviews</th><th>Offers</th><th>Hired</th></tr></thead><tbody>@foreach(var g in active.GroupBy(x=>x.Client)){var ids=g.Select(x=>x.Id).ToHashSet();var applications=saved.Where(x=>ids.Contains(x.PositionId)).ToList();<tr><td>@g.Key</td><td>@g.Count()</td><td>@applications.Count</td><td>@applications.Count(x=>Lifecycle.Classify(x)=="Shortlisted")</td><td>@applications.Count(x=>Lifecycle.Classify(x)=="In Interview")</td><td>@applications.Count(x=>x.Stage=="Offer Sent")</td><td>@applications.Count(x=>Lifecycle.Classify(x)=="Hired")</td></tr>}</tbody></table></section>
 

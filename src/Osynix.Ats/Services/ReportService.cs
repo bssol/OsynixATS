@@ -20,6 +20,7 @@ public class ReportService(IConfiguration config,IWebHostEnvironment env)
 
     static string H(string? s)=>WebUtility.HtmlEncode(Redact(s??"")).Replace("\n","<br>");
 
+    public static string ClientSafeText(string text)=>Redact(text);
     static string Redact(string text){
 
         text=Regex.Replace(text,@"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}","[Contact Removed]",RegexOptions.CultureInvariant);

@@ -6,11 +6,11 @@ public static class HiringReviewEndpoints {
   c.Response.Headers.CacheControl="no-store";c.Response.Headers["Referrer-Policy"]="no-referrer";c.Response.Headers["X-Content-Type-Options"]="nosniff";c.Response.Headers["X-Robots-Tag"]="noindex, nofollow";c.Response.Headers["Content-Security-Policy"]="frame-ancestors 'self'";
  }
  public static void MapHiringReview(this WebApplication app){
-  app.MapGet("/review/access",async Task<IResult>(string? token,HiringReviewService review,HttpContext c)=>{
+  app.MapGet("/review/access",async Task<IResult>(string? token,Guid? position,HiringReviewService review,HttpContext c)=>{
    Private(c);var exchange=await review.Exchange(token??"");
    if(exchange is null)return Results.Redirect("/review?expired=true");
    c.Response.Cookies.Append(HiringReviewService.CookieName,exchange.Value.Cookie,new(){HttpOnly=true,Secure=c.Request.IsHttps,SameSite=SameSiteMode.Strict,Path="/review",Expires=new DateTimeOffset(exchange.Value.Expires,TimeSpan.Zero)});
-   return Results.Redirect("/review");
+   return Results.Redirect(position is Guid pid?"/review?position="+pid:"/review");
   }).AllowAnonymous().RequireRateLimiting("review");
   app.MapGet("/review/data",async Task<IResult>(HiringReviewService review,HttpContext c)=>{
    Private(c);try{var data=await review.Read(c.Request.Cookies[HiringReviewService.CookieName]);return Results.Json(new{name=data.Name,rows=data.Rows});}catch(UnauthorizedAccessException){return Results.Unauthorized();}

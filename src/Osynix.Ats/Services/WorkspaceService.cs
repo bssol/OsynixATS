@@ -17,33 +17,33 @@ public class WorkspaceService(IDbContextFactory<AtsDbContext> factory,Access acc
         var query = from account in db.Users.AsNoTracking()
                     join membership in db.UserRoles on account.Id equals membership.UserId
                     join role in db.Roles on membership.RoleId equals role.Id
-                    where account.Status == "Active" && role.Name == "Recruiter"
+                    where account.Status == "Active" && (role.Name == "Recruiter" || role.Name == "Employer")
                     select account;
-        if(user.IsInRole("Employer")&&!user.IsInRole("Admin")){var workspaceId=await access.WorkspaceId();var account=await db.Users.FindAsync(uid);var team=await query.Where(u=>u.EmployerWorkspaceId==workspaceId).OrderBy(u=>u.FullName).Select(u=>new RecruiterChoice(u.UserName!,u.FullName)).ToListAsync();team.Insert(0,new(user.Identity!.Name!,account!.FullName+" (You)"));return team;}
+        if(user.IsInRole("Employer")&&!user.IsInRole("Admin")){var workspaceId=await access.WorkspaceId();var account=await db.Users.FindAsync(uid);var team=await query.Where(u=>u.EmployerWorkspaceId==workspaceId||db.WorkspaceMemberships.Any(m=>m.WorkspaceId==workspaceId&&m.UserId==u.Id&&m.Status=="Active")).OrderBy(u=>u.FullName).Select(u=>new RecruiterChoice(u.UserName!,u.FullName)).ToListAsync();team.Insert(0,new(user.Identity!.Name!,account!.FullName+" (You)"));return team;}
         if (!user.IsInRole("Admin"))
         {
             var account = await db.Users.FindAsync(uid);
             return [new(user.Identity!.Name!, account?.FullName ?? user.Identity.Name!)];
         }
-        if(workspaceFilter is Guid teamId){var members=await query.Where(u=>u.EmployerWorkspaceId==teamId).OrderBy(u=>u.UserName).Select(u=>new RecruiterChoice(u.UserName!,u.FullName)).ToListAsync();var owner=await (from w in db.EmployerWorkspaces join u in db.Users on w.OwnerId equals u.Id where w.Id==teamId&&u.Status=="Active" select u).SingleOrDefaultAsync();if(owner is not null)members.Insert(0,new(owner.UserName!,owner.FullName+" (Employer)"));return members;}
-        return await query.Where(u=>u.EmployerWorkspaceId==null).OrderBy(x=>x.UserName).Select(x=>new RecruiterChoice(x.UserName!, x.FullName)).ToListAsync();
+        if(workspaceFilter is Guid teamId){var members=await query.Where(u=>u.EmployerWorkspaceId==teamId||db.WorkspaceMemberships.Any(m=>m.WorkspaceId==teamId&&m.UserId==u.Id&&m.Status=="Active")).OrderBy(u=>u.UserName).Select(u=>new RecruiterChoice(u.UserName!,u.FullName)).ToListAsync();var owner=await (from w in db.EmployerWorkspaces join u in db.Users on w.OwnerId equals u.Id where w.Id==teamId&&u.Status=="Active" select u).SingleOrDefaultAsync();if(owner is not null)members.Insert(0,new(owner.UserName!,owner.FullName+" (Employer)"));return members;}
+        return await query.Where(u=>u.EmployerWorkspaceId==null&&db.UserRoles.Any(ur=>ur.UserId==u.Id&&db.Roles.Any(r=>r.Id==ur.RoleId&&r.Name=="Recruiter"))).OrderBy(x=>x.UserName).Select(x=>new RecruiterChoice(x.UserName!, x.FullName)).ToListAsync();
     }
     public async Task<List<CandidateActivity>> RecentActivity(int page = 0, int size = 5)
     {
         var user = await access.Require();
         var uid = await access.UserId();var workspaceId=await access.WorkspaceId();
-        await using var db = await factory.CreateDbContextAsync();
+        await using var db = await factory.CreateDbContextAsync();var mode=await access.PositionMode(db);
         return await (from entry in db.Audit.AsNoTracking()
                       join candidate in db.Candidates.AsNoTracking() on entry.CandidateId equals (Guid?)candidate.Id
-                      where user.IsInRole("Admin") || db.Assessments.Any(a=>a.Id==entry.AssessmentId&&(user.IsInRole("Employer")||a.Position!.AssignedRecruiter==user.Identity!.Name)&&a.Position!.WorkspaceId==workspaceId) || (entry.AssessmentId==null&&(entry.UserId==uid||(user.IsInRole("Employer")&&db.Users.Any(u=>u.Id==entry.UserId&&u.EmployerWorkspaceId==workspaceId)))&&db.Assessments.Any(a=>a.CandidateId==candidate.Id&&(user.IsInRole("Employer")||a.Position!.AssignedRecruiter==user.Identity!.Name)&&a.Position!.WorkspaceId==workspaceId))
+                      where user.IsInRole("Admin") || db.Assessments.Any(a=>a.Id==entry.AssessmentId&&(user.IsInRole("Employer")||(a.Position!.AssignedRecruiter==user.Identity!.Name||db.PositionRecruiterAssignments.Any(pa=>pa.PositionId==a.PositionId&&db.Users.Any(au=>au.Id==pa.UserId&&au.UserName==user.Identity!.Name))))&&a.Position!.WorkspaceId==workspaceId&&(mode==null||a.Position.IsAgencyPosition==mode)) || (entry.AssessmentId==null&&(entry.UserId==uid||(user.IsInRole("Employer")&&db.Users.Any(u=>u.Id==entry.UserId&&(u.EmployerWorkspaceId==workspaceId||db.WorkspaceMemberships.Any(m=>m.UserId==u.Id&&m.WorkspaceId==workspaceId)))))&&db.Assessments.Any(a=>a.CandidateId==candidate.Id&&(user.IsInRole("Employer")||(a.Position!.AssignedRecruiter==user.Identity!.Name||db.PositionRecruiterAssignments.Any(pa=>pa.PositionId==a.PositionId&&db.Users.Any(au=>au.Id==pa.UserId&&au.UserName==user.Identity!.Name))))&&a.Position!.WorkspaceId==workspaceId&&(mode==null||a.Position.IsAgencyPosition==mode)))
                       orderby entry.CreatedUtc descending, entry.Id descending
                       select new CandidateActivity(entry, candidate.Name, candidate.CurrentRole))
             .Skip(Math.Max(0, page) * Math.Clamp(size, 1, 101)).Take(Math.Clamp(size, 1, 101)).ToListAsync();
     }
     public async Task<List<Client>> Clients()
     {
-        var user=await access.Require();var scoped=Access.Scoped(user);var workspaceId=await access.WorkspaceId();var name=user.Identity!.Name;var uid=await access.UserId();await using var db=await factory.CreateDbContextAsync();
-        return await db.Clients.Include(x=>x.Contacts).AsNoTracking().Where(c=>!scoped||c.WorkspaceId==workspaceId&&(workspaceId!=null||db.Positions.Any(p=>p.ClientId==c.Id&&((user.IsInRole("Employer")||p.AssignedRecruiter==name)&&p.WorkspaceId==workspaceId))||db.Audit.Any(a=>a.EntityId==c.Id.ToString()&&a.UserId==uid&&a.Action=="Client saved"))).OrderBy(x=>x.Name).ToListAsync();
+        var user=await access.Require();var scoped=Access.Scoped(user);var workspaceId=await access.WorkspaceId();var name=user.Identity!.Name;var uid=await access.UserId();await using var db=await factory.CreateDbContextAsync();var mode=await access.PositionMode(db);var companyName=workspaceId is Guid wid?(await db.EmployerWorkspaces.FindAsync(wid))?.CompanyName??"":"";var companyKey=Choices.MatchKey(companyName);
+        return await db.Clients.Include(x=>x.Contacts).AsNoTracking().Where(c=>!scoped||c.WorkspaceId==workspaceId&&(workspaceId!=null||db.Positions.Any(p=>p.ClientId==c.Id&&((user.IsInRole("Employer")||(p.AssignedRecruiter==name||db.PositionRecruiterAssignments.Any(pa=>pa.PositionId==p.Id&&db.Users.Any(au=>au.Id==pa.UserId&&au.UserName==name))))&&p.WorkspaceId==workspaceId))||db.Audit.Any(a=>a.EntityId==c.Id.ToString()&&a.UserId==uid&&a.Action=="Client saved"))).Where(c=>mode!=true||c.NormalizedName!=companyKey||db.Positions.Any(p=>p.ClientId==c.Id&&p.IsAgencyPosition)).OrderBy(x=>x.Name).ToListAsync();
     }
     public async Task SaveClient(Client input)
     {
@@ -78,7 +78,7 @@ public class WorkspaceService(IDbContextFactory<AtsDbContext> factory,Access acc
     public async Task<List<CandidateNote>> Notes(Guid candidateId)
     {
         await access.Require();await using var db=await factory.CreateDbContextAsync();
-        await access.RequireCandidate(candidateId);var user=await access.Require();var scoped=Access.Scoped(user);var workspaceId=await access.WorkspaceId();var name=user.Identity!.Name;var uid=await access.UserId();return await db.CandidateNotes.AsNoTracking().Where(x=>x.CandidateId==candidateId&&(!scoped||(x.AssessmentId==null&&(x.AuthorId==uid||(user.IsInRole("Employer")&&db.Users.Any(u=>u.Id==x.AuthorId&&u.EmployerWorkspaceId==workspaceId))))||db.Assessments.Any(a=>a.Id==x.AssessmentId&&(user.IsInRole("Employer")||a.Position!.AssignedRecruiter==name)&&a.Position!.WorkspaceId==workspaceId))).OrderByDescending(x=>x.CreatedUtc).ToListAsync();
+        await access.RequireCandidate(candidateId);var user=await access.Require();var scoped=Access.Scoped(user);var workspaceId=await access.WorkspaceId();var name=user.Identity!.Name;var uid=await access.UserId();return await db.CandidateNotes.AsNoTracking().Where(x=>x.CandidateId==candidateId&&(!scoped||(x.AssessmentId==null&&(x.AuthorId==uid||(user.IsInRole("Employer")&&db.Users.Any(u=>u.Id==x.AuthorId&&(u.EmployerWorkspaceId==workspaceId||db.WorkspaceMemberships.Any(m=>m.WorkspaceId==workspaceId&&m.UserId==u.Id))))))||db.Assessments.Any(a=>a.Id==x.AssessmentId&&(user.IsInRole("Employer")||(a.Position!.AssignedRecruiter==name||db.PositionRecruiterAssignments.Any(pa=>pa.PositionId==a.PositionId&&db.Users.Any(au=>au.Id==pa.UserId&&au.UserName==name))))&&a.Position!.WorkspaceId==workspaceId))).OrderByDescending(x=>x.CreatedUtc).ToListAsync();
     }
     public async Task AddNote(Guid candidateId,Guid? applicationId,string text)
     {
@@ -93,7 +93,7 @@ public class WorkspaceService(IDbContextFactory<AtsDbContext> factory,Access acc
     public async Task<List<AuditEntry>> Activity(Guid candidateId)
     {
         await access.Require();await using var db=await factory.CreateDbContextAsync();
-        await access.RequireCandidate(candidateId);var user=await access.Require();var scoped=Access.Scoped(user);var workspaceId=await access.WorkspaceId();var name=user.Identity!.Name;var uid=await access.UserId();var events=await db.Audit.AsNoTracking().Where(x=>x.CandidateId==candidateId&&(!scoped||(x.AssessmentId==null&&(x.UserId==uid||(user.IsInRole("Employer")&&db.Users.Any(u=>u.Id==x.UserId&&u.EmployerWorkspaceId==workspaceId))))||db.Assessments.Any(a=>a.Id==x.AssessmentId&&(user.IsInRole("Employer")||a.Position!.AssignedRecruiter==name)&&a.Position!.WorkspaceId==workspaceId))).OrderByDescending(x=>x.CreatedUtc).Take(100).ToListAsync();
+        await access.RequireCandidate(candidateId);var user=await access.Require();var scoped=Access.Scoped(user);var workspaceId=await access.WorkspaceId();var name=user.Identity!.Name;var uid=await access.UserId();var events=await db.Audit.AsNoTracking().Where(x=>x.CandidateId==candidateId&&(!scoped||(x.AssessmentId==null&&(x.UserId==uid||(user.IsInRole("Employer")&&db.Users.Any(u=>u.Id==x.UserId&&(u.EmployerWorkspaceId==workspaceId||db.WorkspaceMemberships.Any(m=>m.WorkspaceId==workspaceId&&m.UserId==u.Id))))))||db.Assessments.Any(a=>a.Id==x.AssessmentId&&(user.IsInRole("Employer")||(a.Position!.AssignedRecruiter==name||db.PositionRecruiterAssignments.Any(pa=>pa.PositionId==a.PositionId&&db.Users.Any(au=>au.Id==pa.UserId&&au.UserName==name))))&&a.Position!.WorkspaceId==workspaceId))).OrderByDescending(x=>x.CreatedUtc).Take(100).ToListAsync();
         var users=await db.Users.AsNoTracking().ToDictionaryAsync(x=>x.Id);
         foreach(var e in events) if(e.ActorName.Length==0&&users.TryGetValue(e.UserId,out var actor)) e.ActorName=actor.FullName.Length>0?actor.FullName:actor.UserName??e.UserId;
         return events;
@@ -102,7 +102,7 @@ public class WorkspaceService(IDbContextFactory<AtsDbContext> factory,Access acc
     {
         var user=await access.Require();var uid=await access.UserId();await using var db=await factory.CreateDbContextAsync();
         if(string.IsNullOrWhiteSpace(text)||text.Length>10000) throw new InvalidOperationException("Write a note of up to 10,000 characters.");
-        var note=await db.CandidateNotes.SingleAsync(x=>x.Id==id);await access.RequireCandidate(note.CandidateId);
+        var note=await db.CandidateNotes.SingleAsync(x=>x.Id==id);await access.RequireCandidate(note.CandidateId);if(note.AssessmentId is Guid linked)await access.RequireApplication(linked);
         if(note.AuthorId!=uid&&!user.IsInRole("Admin")) throw new UnauthorizedAccessException("Only the author or an administrator can edit this note.");
         var old=note.Text;note.Text=text.Trim();
         AtsService.Audit(db,uid,"Note edited",note.Id.ToString(),note.Text,note.CandidateId,note.AssessmentId,JsonSerializer.Serialize(new{Text=old}),JsonSerializer.Serialize(new{note.Text}));await db.SaveChangesAsync();
@@ -110,7 +110,7 @@ public class WorkspaceService(IDbContextFactory<AtsDbContext> factory,Access acc
     public async Task<List<AssessmentBatch>> Batches()
     {
         var uid=await access.UserId();var user=await access.Require();var scoped=Access.Scoped(user);var workspaceId=await access.WorkspaceId();var name=user.Identity!.Name;await using var db=await factory.CreateDbContextAsync();
-        return await db.AssessmentBatches.Include(x=>x.Items).AsNoTracking().Where(x=>x.OwnerId==uid&&(!scoped||db.Positions.Any(p=>p.Id==x.PositionId&&(user.IsInRole("Employer")||p.AssignedRecruiter==name)&&p.WorkspaceId==workspaceId))).OrderByDescending(x=>x.CreatedUtc).Take(25).ToListAsync();
+        return await db.AssessmentBatches.Include(x=>x.Items).AsNoTracking().Where(x=>x.OwnerId==uid&&(!scoped||db.Positions.Any(p=>p.Id==x.PositionId&&(user.IsInRole("Employer")||(p.AssignedRecruiter==name||db.PositionRecruiterAssignments.Any(pa=>pa.PositionId==p.Id&&db.Users.Any(au=>au.Id==pa.UserId&&au.UserName==name))))&&p.WorkspaceId==workspaceId))).OrderByDescending(x=>x.CreatedUtc).Take(25).ToListAsync();
     }
     public async Task<Guid> CreateBatch(Guid positionId,string[] fileNames,Guid? sourceCandidateId=null,bool refreshProfile=false)
     {

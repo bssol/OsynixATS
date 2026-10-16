@@ -1,0 +1,15 @@
+@page "/attention"
+@attribute [Authorize(Roles="Admin,Recruiter,Employer")]
+@inject Access Access
+@inject AuthenticationStateProvider Auth
+<PageTitle>@Title · Osynix ATS</PageTitle>
+<div class="page-heading"><div><div class="eyebrow">RECRUITMENT TASKS</div><h1>@Title</h1><p class="muted">@(teamView?"Track Outstanding Actions And The Team Member Responsible.":"Work That Requires Your Response Or Interview Arrangements.")</p></div></div>
+@if(loaded){<NeedsAttentionPanel Expanded="true" TeamView="teamView" AllWork="AllWork" TaskId="TaskId" InitialType="@TaskType" ClientFilter="@(Client??"")" />}
+@code{
+ bool teamView,loaded;string Title=>teamView?"Team Tasks":"My Tasks";
+ protected override async Task OnInitializedAsync(){await Access.Require();var user=(await Auth.GetAuthenticationStateAsync()).User;var active=await Access.Context();teamView=user.IsInRole("Admin")||(user.IsInRole("Employer")&&active?.Owner==true);loaded=true;}
+ [SupplyParameterFromQuery(Name="allWork")]public bool AllWork{get;set;}
+ [SupplyParameterFromQuery(Name="type")]public string? TaskType{get;set;}
+ [SupplyParameterFromQuery(Name="client")]public string? Client{get;set;}
+ [SupplyParameterFromQuery(Name="task")]public Guid? TaskId{get;set;}
+}

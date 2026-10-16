@@ -4,4 +4,5 @@
 <div class="auth-title"><span class="auth-eyebrow">@Model.Role.ToUpperInvariant()</span><h1>Welcome, @Model.Name</h1><p>Your @Model.Role.ToLowerInvariant() account is active.</p></div>
 <div class="auth-success">Your email is verified. This is your dedicated account area. Hiring workspace access is reserved for Recruiters and Administrators.</div>
 <p class="auth-note">Your role’s features will appear here as they become available.</p>
+<a class="auth-primary auth-link" href="/profile">My Profile</a>
 <a class="auth-primary auth-link" href="/Account/Password">Set Or Change ATS Password</a><a class="auth-primary auth-link" href="/Account/LinkGoogle">Connect Google</a><form method="post" asp-page="/Account/Logout" class="auth-switch"><button type="submit" class="auth-primary">Sign Out</button></form>

@@ -5,8 +5,11 @@ using Osynix.Ats.Domain;
 namespace Osynix.Ats.Data;
 public class AtsUser : IdentityUser
 {
+    public string AccountType {get;set;} = "Legacy";
     public Guid? EmployerWorkspaceId {get;set;}
     public string FullName { get; set; } = "";
+    public byte[]? ProfileImage{get;set;}
+    public string ProfileImageType{get;set;}="";
     public string Status { get; set; } = "Active";
     public bool CanCreatePositions { get; set; }
     public bool CanCreateClients { get; set; }
@@ -18,6 +21,14 @@ public class AtsUser : IdentityUser
 }
 public class AtsDbContext(DbContextOptions<AtsDbContext> options) : IdentityDbContext<AtsUser>(options)
 {
+    public DbSet<InterviewBooking> InterviewBookings=>Set<InterviewBooking>();
+    public DbSet<InterviewDelivery> InterviewDeliveries=>Set<InterviewDelivery>();
+    public DbSet<RecruiterAction> RecruiterActions=>Set<RecruiterAction>();
+    public DbSet<FreelancerProfile> FreelancerProfiles=>Set<FreelancerProfile>();
+    public DbSet<PositionRecruiterAssignment> PositionRecruiterAssignments=>Set<PositionRecruiterAssignment>();
+    public DbSet<EmployerProfileSubmission> EmployerProfileSubmissions=>Set<EmployerProfileSubmission>();
+    public DbSet<WorkspaceMembership> WorkspaceMemberships => Set<WorkspaceMembership>();
+    public DbSet<TalentPerson> TalentPeople => Set<TalentPerson>();
     public DbSet<EmployerInvitation> EmployerInvitations => Set<EmployerInvitation>();
     bool preserveTimestamps;
     public DbSet<EmployerWorkspace> EmployerWorkspaces => Set<EmployerWorkspace>();
@@ -44,6 +55,29 @@ public class AtsDbContext(DbContextOptions<AtsDbContext> options) : IdentityDbCo
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<InterviewBooking>().HasIndex(i=>i.TokenHash).IsUnique();
+        b.Entity<InterviewBooking>().HasOne<Assessment>().WithMany().HasForeignKey(i=>i.AssessmentId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<InterviewBooking>().HasOne<HiringSubmission>().WithMany().HasForeignKey(i=>i.SubmissionId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<InterviewDelivery>().HasOne<InterviewBooking>().WithMany().HasForeignKey(i=>i.InterviewId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<RecruiterAction>().HasIndex(t=>t.AssessmentId).IsUnique();
+        b.Entity<RecruiterAction>().HasOne<Assessment>().WithMany().HasForeignKey(t=>t.AssessmentId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<RecruiterAction>().HasOne<HiringSubmission>().WithMany().HasForeignKey(t=>t.SubmissionId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<RecruiterAction>().HasOne<AtsUser>().WithMany().HasForeignKey(t=>t.RecipientId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EmployerProfileSubmission>().HasIndex(s=>new{s.WorkspaceId,s.AssessmentId}).IsUnique();
+        b.Entity<EmployerProfileSubmission>().HasOne<EmployerWorkspace>().WithMany().HasForeignKey(s=>s.WorkspaceId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EmployerProfileSubmission>().HasOne<Assessment>().WithMany().HasForeignKey(s=>s.AssessmentId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EmployerProfileSubmission>().HasOne<AtsUser>().WithMany().HasForeignKey(s=>s.SubmittedBy).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<FreelancerProfile>().HasIndex(p=>p.UserId).IsUnique();
+        b.Entity<FreelancerProfile>().HasOne<AtsUser>().WithMany().HasForeignKey(p=>p.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<PositionRecruiterAssignment>().HasIndex(p=>new{p.PositionId,p.UserId}).IsUnique();
+        b.Entity<PositionRecruiterAssignment>().HasOne<Position>().WithMany().HasForeignKey(p=>p.PositionId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<PositionRecruiterAssignment>().HasOne<AtsUser>().WithMany().HasForeignKey(p=>p.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WorkspaceMembership>().HasIndex(m=>new{m.WorkspaceId,m.UserId}).IsUnique();
+        b.Entity<WorkspaceMembership>().HasOne<EmployerWorkspace>().WithMany().HasForeignKey(m=>m.WorkspaceId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WorkspaceMembership>().HasOne<AtsUser>().WithMany().HasForeignKey(m=>m.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Candidate>().HasOne<EmployerWorkspace>().WithMany().HasForeignKey(c=>c.WorkspaceId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Candidate>().HasOne<TalentPerson>().WithMany().HasForeignKey(c=>c.PersonId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<TalentPerson>().HasIndex(p=>p.EmailKey);b.Entity<TalentPerson>().HasIndex(p=>p.PhoneKey);
         b.Entity<AtsUser>().HasOne<EmployerWorkspace>().WithMany().HasForeignKey(u=>u.EmployerWorkspaceId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<Position>().HasOne<EmployerWorkspace>().WithMany().HasForeignKey(p=>p.WorkspaceId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<Client>().HasOne<EmployerWorkspace>().WithMany().HasForeignKey(c=>c.WorkspaceId).OnDelete(DeleteBehavior.Restrict);

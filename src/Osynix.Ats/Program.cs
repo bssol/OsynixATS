@@ -58,7 +58,7 @@ builder.Services.AddScoped<AdminService>(); builder.Services.AddScoped<Access>()
 builder.Services.AddScoped<WorkspaceService>();
 builder.Services.AddScoped<EmployerService>();
 builder.Services.AddScoped<RecruiterWorkService>();
-builder.Services.AddScoped<EmployerSubmissionService>();
+builder.Services.AddScoped<RecruitmentAttributionService>();
 builder.Services.AddScoped<TalentAdministration>();
 builder.Services.AddScoped<EmployerTeamService>();
 builder.Services.AddScoped<FreelancerDirectory>();

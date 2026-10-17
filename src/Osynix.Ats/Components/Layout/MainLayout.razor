@@ -35,7 +35,7 @@
             <NavLink href="/attention"><NavIcon Name="clock" /><span>@(employerAccount||isAdmin?"Team Tasks":"My Tasks")</span></NavLink>
             <NavLink href="/pipeline" title="Recruitment Pipeline"><NavIcon Name="pipeline" /><span>Recruitment Pipeline</span></NavLink>
             @if(owner){
-              @if(employerAccount){<NavLink href="/employer/submissions" title="Team Profile Submissions"><NavIcon Name="assessment" /><span>Team Submissions</span></NavLink><NavLink href="/employer/team" title="My Team"><NavIcon Name="talent" /><span>My Team</span></NavLink>}
+              @if(employerAccount){<NavLink href="/employer/team" title="My Team"><NavIcon Name="talent" /><span>My Team</span></NavLink>}
               <NavLink href="/employer/subscriptions" title="Subscriptions"><NavIcon Name="settings" /><span>Subscriptions</span></NavLink>
               <NavLink href="/employer/company" title="Company Settings"><NavIcon Name="clients" /><span>Business Settings</span></NavLink>
             }

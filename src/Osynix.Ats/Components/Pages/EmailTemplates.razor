@@ -1,0 +1,56 @@
+@page "/settings/email-templates"
+@attribute [Authorize(Roles="Admin,SubAdmin,Employer,Recruiter")]
+@inherits PageBase
+@inject EmailTemplateService Templates
+@inject Access Access
+@inject AuthenticationStateProvider Auth
+<PageTitle>Email Templates · Osynix ATS</PageTitle>
+<div class="templates-page">
+    <p class="template-breadcrumb"><a href="/settings">Settings</a><span>›</span>Email Templates</p>
+    <div class="page-heading"><div><div class="eyebrow">COMMUNICATION SETTINGS</div><h1>Templates <span class="premium-label">PREMIUM FEATURE</span></h1><p class="muted">Choose A Template To Review, Edit Its Wording, Or Create One For Your Team.</p></div></div>
+    <Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
+    @if(locked){<section class="panel template-locked"><h2>Email Templates Access Required</h2><p>Ask Admin To Enable Email Templates For This Workspace From Workspaces &amp; Subscriptions.</p><a class="button secondary" href="/employer/subscriptions">View Subscriptions</a></section>}
+    else if(loaded){
+        @if(platform){<p class="template-scope">Platform Defaults · Changes Are Available To Workspaces With Email Templates Access. Workspace Overrides Take Priority.</p>}
+        <div class="template-toolbar"><label>Select Template<select @bind="selectedKey">@foreach(var item in items){<option value="@item.Key">@item.Name</option>}</select></label><div class="template-actions"><button class="secondary" disabled="@(Busy||items.Count==0)" @onclick="EditSelected">✎ Edit Template</button><button disabled="@(Busy||!canEdit)" @onclick="Create">+ Create Template</button></div></div>
+        <div class="template-table"><table><thead><tr><th>Template Name</th><th>Recipient</th><th>Category</th><th>Availability</th><th>Action</th></tr></thead><tbody>
+        @foreach(var item in items){<tr @key="item.Key"><td><b>@item.Name</b><small>@item.Subject</small></td><td>@item.Recipient</td><td>@Category(item)</td><td><span class="template-tag">@(item.Custom?"Custom":item.Recipient=="System"?"Security / System":"Built In")</span></td><td><button class="secondary" disabled="@Busy" @onclick="()=>Edit(item)">@(canEdit?"Edit":"View")</button></td></tr>}
+        </tbody></table></div>
+        <p class="template-footnote">@items.Count Templates · Saving Changes Updates The Workspace Library. Security Messages Remain Available Independently Of Subscriptions.</p>
+    }
+    @if(draft is not null){
+        <div class="template-overlay" @onkeydown="HandleKey">
+            <section class="template-dialog" role="dialog" aria-modal="true" aria-labelledby="template-dialog-title">
+                <header><div><h2 id="template-dialog-title">@(creating?"Create Template":canEdit?"Edit Template":"View Template")</h2><p class="muted">@(creating?"Create A Reusable Message For Your Account.":"Update The Default Wording For Your Account.")</p></div><button class="template-close secondary" aria-label="Close Editor" disabled="@Busy" @onclick="Close">×</button></header>
+                <div class="template-dialog-body">
+                    <Feedback Error="@Error" Notice="" Busy="Busy" />
+                    <div class="template-fields"><label>Template Name<input @bind="draft.Name" @bind:event="oninput" maxlength="160" disabled="@(!canEdit)" /></label><label>Recipient<select @bind="draft.Recipient" disabled="@(!canEdit||!creating)"><option>Candidate</option><option>Client / Hiring Manager</option><option>Employer Team</option>@if(platform){<option>System</option>}</select></label><label class="template-wide">Email Subject<input @bind="draft.Subject" @bind:event="oninput" maxlength="500" disabled="@(!canEdit)" /></label></div>
+                    <label>Message</label>
+                    @if(canEdit){<RichTextEditor @key="editorKey" @ref="editor" Value="@draft.BodyHtml" Fields="@MergeFields" />}else{<div class="template-preview">@((MarkupString)draft.BodyHtml)</div>}
+                    @if(showPreview){<section class="template-preview"><h3>Email Preview</h3><b>@draft.Subject</b><div>@((MarkupString)previewHtml)</div></section>}
+                    <p class="template-footnote">Fields In Double Braces Are Filled From The Related Record When Sending. Required Response And Review Links Must Be Kept.</p>
+                </div>
+                <footer><div class="template-actions">@if(canEdit){<button class="secondary" disabled="@Busy" @onclick="Preview">Preview</button>@if(!creating&&draft.Id!=Guid.Empty){<button class="secondary" disabled="@Busy" @onclick="Reset">@(draft.Custom?"Delete Custom Template":"Reset To Default")</button>}}</div><div class="template-actions"><button class="secondary" disabled="@Busy" @onclick="Close">Cancel</button>@if(canEdit){<button disabled="@Busy" @onclick="Save">Save Template</button>}</div></footer>
+            </section>
+        </div>
+    }
+</div>
+@code{
+    List<EmailTemplate> items=[];EmailTemplate? draft;RichTextEditor? editor;string selectedKey="",previewHtml="";Guid editorKey;bool loaded,locked,platform,canEdit,creating,showPreview;
+    string[] MergeFields=>platform?EmailTemplateCatalog.Fields:EmailTemplateCatalog.Fields.Except(new[]{"VerificationCode","PasswordResetLink"}).ToArray();
+    static string Category(EmailTemplate t)=>t.Custom?"Custom":t.Recipient=="System"?"Security":t.Key.Contains("interview")||t.Key=="availability-request"?"Interview":t.Key.StartsWith("application")||t.Key=="information-request"?"Application":t.Key.Contains("offer")?"Offer":t.Recipient=="Employer Team"?"Workspace":"Client Review";
+    protected override async Task OnInitializedAsync()=>await Run(async()=>{
+        var principal=(await Auth.GetAuthenticationStateAsync()).User;platform=principal.IsInRole("Admin")||principal.IsInRole("SubAdmin");canEdit=platform?await Access.CanAdmin("admin.subscriptions.manage"):await Access.Can("EmailTemplates.Manage");
+        locked=!platform&&!canEdit;if(!locked)await Load();loaded=true;
+    });
+    async Task Load(){items=await Templates.List();if(!items.Any(t=>t.Key==selectedKey))selectedKey=items.FirstOrDefault()?.Key??"";}
+    void EditSelected(){var item=items.SingleOrDefault(t=>t.Key==selectedKey);if(item is not null)Edit(item);}
+    void Edit(EmailTemplate item){draft=JsonSerializer.Deserialize<EmailTemplate>(JsonSerializer.Serialize(item));creating=false;Open();}
+    void Create(){draft=new(){Key="",Name="",Subject="",BodyHtml="",Custom=true};creating=true;Open();}
+    void Open(){Error=Notice="";showPreview=false;editorKey=Guid.NewGuid();}
+    void Close(){draft=null;showPreview=false;Error="";}
+    void HandleKey(KeyboardEventArgs e){if(e.Key=="Escape"&&!Busy)Close();}
+    Task Save()=>Run(async()=>{if(draft is null)return;if(editor is not null)draft.BodyHtml=await editor.GetHtml();await Templates.Save(draft);await Load();draft=null;Notice="Email Template Saved.";});
+    Task Preview()=>Run(async()=>{previewHtml=TemplateHtml.Clean(editor is null?draft!.BodyHtml:await editor.GetHtml());showPreview=true;});
+    Task Reset()=>Run(async()=>{await Templates.Reset(draft!.Key,draft.Revision);await Load();draft=null;Notice="Template Library Updated.";});
+}

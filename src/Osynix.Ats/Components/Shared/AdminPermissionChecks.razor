@@ -1,0 +1,15 @@
+<div class="admin-permission-list">
+    @foreach(var item in Permissions){
+        var isChange=item.Key.EndsWith(".manage",StringComparison.Ordinal)||item.Key is "admin.requests.review" or "admin.subscriptions.manage";
+        <label class="check"><input type="checkbox" checked="@Selected.Contains(item.Key)" disabled="@(Level=="View Only"&&isChange)" @onchange="()=>OnToggle.InvokeAsync(item.Key)" /> <span><b>@Title(item.Key)</b><small>@item.Value</small></span></label>
+    }
+
+    <div class="admin-permission-future"><b>Handle Invoice Queries</b><small>Invoice handling has not been added yet.</small></div>
+</div>
+@code{
+    [Parameter,EditorRequired] public IReadOnlyDictionary<string,string> Permissions{get;set;}=new Dictionary<string,string>();
+    [Parameter,EditorRequired] public HashSet<string> Selected{get;set;}=[];
+    [Parameter] public string Level{get;set;}="View Only";
+    [Parameter] public EventCallback<string> OnToggle{get;set;}
+    static string Title(string key)=>key switch{"admin.workspaces.view"=>"Workspace Directory","admin.accounts.manage"=>"Manage Workspace Accounts","admin.requests.review"=>"Review Requests","admin.subscriptions.manage"=>"Manage Entitlements","admin.subadmins.view"=>"Sub-Admin Directory","admin.subadmins.manage"=>"Manage Sub-Admins","admin.rules.view"=>"Decision Rules","admin.rules.manage"=>"Change Decision Rules","admin.audit.view"=>"Audit Events",_=>key};
+}

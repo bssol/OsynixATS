@@ -6,6 +6,41 @@ using Osynix.Ats.Data;
 namespace Osynix.Ats.Services;
 public class Access(AuthenticationStateProvider state, IDbContextFactory<AtsDbContext>? factory = null)
 {
+    public const string AdminPermissionClaim = "osynix:admin-permission";
+    public const string AdminAccessLevelClaim = "osynix:admin-access-level";
+    public static readonly string[] AdminPermissionKeys = [
+        "admin.subadmins.view", "admin.subadmins.manage",
+        "admin.workspaces.view", "admin.accounts.manage", "admin.requests.review", "admin.subscriptions.manage",
+        "admin.rules.view", "admin.rules.manage", "admin.audit.view"
+    ];
+
+    public async Task<ClaimsPrincipal> RequireAdminPermission(string permission)
+    {
+        var user=(await state.GetAuthenticationStateAsync()).User;
+        if(user.Identity?.IsAuthenticated!=true || !(user.IsInRole("Admin")||user.IsInRole("SubAdmin")))
+            throw new UnauthorizedAccessException("Admin access is required.");
+        if(factory is null)throw new UnauthorizedAccessException("Admin access could not be verified.");
+        await using var db=await factory.CreateDbContextAsync();
+        var id=user.FindFirstValue(ClaimTypes.NameIdentifier);
+        var account=await db.Users.FindAsync(id);
+        if(account is null||account.Status!="Active")throw new UnauthorizedAccessException("This Admin account is not active.");
+        var roles=await (from ur in db.UserRoles join role in db.Roles on ur.RoleId equals role.Id where ur.UserId==account.Id select role.Name!).ToListAsync();
+        if(!roles.Order().SequenceEqual(user.FindAll(ClaimTypes.Role).Select(x=>x.Value).Order()))throw new UnauthorizedAccessException("Your permissions changed. Sign in again.");
+        if(user.IsInRole("Admin"))return user;
+        if(!user.IsInRole("SubAdmin"))throw new UnauthorizedAccessException("Admin access is required.");
+        var grants=await db.UserClaims.AsNoTracking().Where(claim=>claim.UserId==account.Id&&(claim.ClaimType==AdminPermissionClaim||claim.ClaimType==AdminAccessLevelClaim)).ToListAsync();
+        if(!grants.Any(claim=>claim.ClaimType==AdminPermissionClaim&&claim.ClaimValue==permission))throw new UnauthorizedAccessException("Your Sub-Admin role does not include this permission.");
+        var identity=new ClaimsIdentity(user.Identity as ClaimsIdentity);
+        foreach(var claim in identity.Claims.Where(claim=>claim.Type==AdminPermissionClaim||claim.Type==AdminAccessLevelClaim).ToList())identity.RemoveClaim(claim);
+        foreach(var grant in grants)identity.AddClaim(new Claim(grant.ClaimType!,grant.ClaimValue!));
+        return new ClaimsPrincipal(identity);
+    }
+
+    public async Task<bool> CanAdmin(string permission)
+    {
+        try{await RequireAdminPermission(permission);return true;}catch(UnauthorizedAccessException){return false;}
+    }
+
     public async Task<ClaimsPrincipal> Require(bool admin = false)
     {
         var user = (await state.GetAuthenticationStateAsync()).User;
@@ -36,6 +71,10 @@ public class Access(AuthenticationStateProvider state, IDbContextFactory<AtsDbCo
         var active=await Context();
         if(active is {Legacy:false}){
             var workspace=await db.EmployerWorkspaces.AsNoTracking().SingleAsync(w=>w.Id==active.Id);
+            if(permission=="EmailTemplates.Manage"){
+                if(!workspace.EmailTemplatesEnabled)throw new UnauthorizedAccessException("Email Templates Access Has Not Been Enabled By Admin For This Workspace.");
+                return;
+            }
             var clientsAllowed=workspace.Kind==AccountTypes.Freelance||(workspace.AgencyEnabled&&(!active.Owner||await PositionMode(db)==true))||account?.AccountType==AccountTypes.Legacy;
             if(permission is "Clients.View" or "Clients.Create" or "Clients.Delete"){
               if(!clientsAllowed||(!active.Owner&&!active.Membership!.CanCreateClients))throw new UnauthorizedAccessException("Agency Access And Client Permissions Are Required.");

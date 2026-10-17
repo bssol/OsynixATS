@@ -16,7 +16,7 @@ public class PasswordModel(UserManager<AtsUser> users,SignInManager<AtsUser> sig
  public string BackUrl{get;set;}="/profile";
  async Task<AtsUser?> Load(){
   var account=await users.GetUserAsync(User);
-  if(account is not null){HasPassword=await users.HasPasswordAsync(account);BackUrl=AccountRegistration.Home(await users.GetRolesAsync(account))=="/"?"/profile":"/Account/Portal";}
+  if(account is not null){HasPassword=await users.HasPasswordAsync(account);BackUrl=AccountRegistration.Home(await users.GetRolesAsync(account)) is "/" or "/settings"?"/profile":"/Account/Portal";}
   return account;
  }
  public async Task<IActionResult> OnGetAsync(){var account=await Load();return account is null||account.Status!="Active"?Challenge():Page();}

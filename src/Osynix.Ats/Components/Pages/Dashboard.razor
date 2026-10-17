@@ -1,3 +1,9 @@
 @page "/"
-@attribute [Authorize(Roles="Admin,Recruiter,Employer")]
-<AccountDashboard />
+@attribute [Authorize(Roles="Admin,SubAdmin,Recruiter,Employer")]
+<AuthorizeView Roles="Admin">
+    <Authorized><AdminDashboard /></Authorized>
+</AuthorizeView>
+<AuthorizeView Roles="SubAdmin"><Authorized><section class="panel"><h1>Admin Panel Access</h1><p class="muted">Open Settings to view the Admin sections assigned to your account.</p><a class="button" href="/settings">Open Settings</a></section></Authorized></AuthorizeView>
+<AuthorizeView Roles="Recruiter,Employer">
+    <Authorized><AccountDashboard /></Authorized>
+</AuthorizeView>

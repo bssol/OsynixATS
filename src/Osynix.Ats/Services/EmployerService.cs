@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
+using System.Text.Json;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Osynix.Ats.Data;
@@ -10,7 +11,9 @@ namespace Osynix.Ats.Services;
 public record PublicCareerJob(Guid Id,string Title,string Location,string EmploymentType,string SalaryRange,string Description,string Department="",string WorkArrangement="");
 public record PublicCareerApplication(Guid Id,bool ProfilePending=false);
 public record EmployerUsage(int ActiveRecruiters,int ActivePositions,int UsedPositionSlots,int Candidates,int UpcomingInterviews);
-public record EmployerOverview(EmployerWorkspace Workspace,List<EmployerAccessRequest> Requests);
+public record EmployerOverview(EmployerWorkspace Workspace,List<EmployerAccessRequest> Requests,int ActiveInternalMembers=0,int ActiveExternalRecruiters=0,int PendingInvitations=0,int UsedPositionSlots=0);
+public record AdminWorkspaceMember(string Name,string Email,string Kind,string Status,bool CreateClients,bool CreatePositions,bool ExportReports,bool TalentPool);
+public record AdminWorkspaceTeam(List<AdminWorkspaceMember> Members,List<AdminWorkspaceMember> Invitations);
 public class EmployerService(AuthenticationStateProvider auth,Access access,IDbContextFactory<AtsDbContext> factory,RecruitmentUpdates? updates=null,ICvProfileExtractionQueue? cvProfiles=null)
 {
     public async Task<AtsUser> RequireAccount()
@@ -64,27 +67,66 @@ public class EmployerService(AuthenticationStateProvider auth,Access access,IDbC
     public async Task Request(string feature,int quantity,string remarks)
     {
         var overview=await Overview();var user=await RequireAccount();
-        if(feature is not("Recruiter Seats" or "Position Slots" or "Team Talent Pool" or "Master Talent Pool" or "Employer Account" or "Agency Account")||quantity<1||quantity>1000||remarks.Length>2000)throw new InvalidOperationException("Choose a valid feature and quantity (1–1000).");
+        if(feature is not("Recruiter Seats" or "Position Slots" or "Team Talent Pool" or "Master Talent Pool" or "Employer Account" or "Agency Account" or "Email Templates")||quantity<1||quantity>1000||remarks.Length>2000)throw new InvalidOperationException("Choose a valid feature and quantity (1–1000).");
+        if(feature=="Email Templates"&&overview.Workspace.EmailTemplatesEnabled)throw new InvalidOperationException("Email Templates Are Already Enabled.");
         if(overview.Workspace.Kind==AccountTypes.Freelance&&feature=="Recruiter Seats")throw new InvalidOperationException("Upgrade To An Employer Account Before Adding Team Members.");
         if(feature=="Agency Account"&&(overview.Workspace.Kind!=AccountTypes.Employer||overview.Workspace.AgencyEnabled))throw new InvalidOperationException("Agency Upgrade Is Available Only To Employers Without Active Agency Access.");
-        await using var db=await factory.CreateDbContextAsync();if(feature=="Agency Account"&&await db.EmployerAccessRequests.AnyAsync(r=>r.WorkspaceId==overview.Workspace.Id&&r.Feature==feature&&(r.Status=="Submitted"||r.Status=="Under Review"||r.Status=="Needs Information")))throw new InvalidOperationException("An Agency Upgrade Request Is Already Pending.");var request=new EmployerAccessRequest{WorkspaceId=overview.Workspace.Id,Feature=feature,Quantity=feature is "Team Talent Pool" or "Master Talent Pool" or "Employer Account" or "Agency Account"?1:quantity,Remarks=remarks.Trim()};db.EmployerAccessRequests.Add(request);AtsService.Audit(db,user.Id,"Employer access requested",request.Id.ToString(),$"{feature}; quantity={request.Quantity}");await db.SaveChangesAsync();
+        await using var db=await factory.CreateDbContextAsync();if(feature=="Agency Account"&&await db.EmployerAccessRequests.AnyAsync(r=>r.WorkspaceId==overview.Workspace.Id&&r.Feature==feature&&(r.Status=="Submitted"||r.Status=="Under Review"||r.Status=="Needs Information")))throw new InvalidOperationException("An Agency Upgrade Request Is Already Pending.");var request=new EmployerAccessRequest{WorkspaceId=overview.Workspace.Id,Feature=feature,Quantity=feature is "Team Talent Pool" or "Master Talent Pool" or "Employer Account" or "Agency Account" or "Email Templates"?1:quantity,Remarks=remarks.Trim()};db.EmployerAccessRequests.Add(request);AtsService.Audit(db,user.Id,"Employer access requested",request.Id.ToString(),$"{feature}; quantity={request.Quantity}");await db.SaveChangesAsync();
     }
     public async Task<List<EmployerOverview>> Administration()
     {
-        await access.Require(true);await using var db=await factory.CreateDbContextAsync();var workspaces=await db.EmployerWorkspaces.AsNoTracking().OrderBy(w=>w.CompanyName).ToListAsync();var requests=await db.EmployerAccessRequests.AsNoTracking().OrderByDescending(r=>r.CreatedUtc).ToListAsync();return workspaces.Select(w=>new EmployerOverview(w,requests.Where(r=>r.WorkspaceId==w.Id).ToList())).ToList();
+        await access.RequireAdminPermission("admin.workspaces.view");
+        await using var db=await factory.CreateDbContextAsync();
+        // Directory rows do not need company artwork or document-sized cover photos.
+        var workspaces=await db.EmployerWorkspaces.AsNoTracking().OrderBy(w=>w.CompanyName).Select(w=>new EmployerWorkspace{
+            Id=w.Id,OwnerId=w.OwnerId,CompanyName=w.CompanyName,Kind=w.Kind,AgencyEnabled=w.AgencyEnabled,EmailTemplatesEnabled=w.EmailTemplatesEnabled,
+            FreeRecruiterSeats=w.FreeRecruiterSeats,AdditionalRecruiterSeats=w.AdditionalRecruiterSeats,
+            FreePositionSlots=w.FreePositionSlots,AdditionalPositionSlots=w.AdditionalPositionSlots,
+            TeamTalentPoolEnabled=w.TeamTalentPoolEnabled,MasterTalentPoolEnabled=w.MasterTalentPoolEnabled,
+            CreatedUtc=w.CreatedUtc,UpdatedUtc=w.UpdatedUtc,Revision=w.Revision
+        }).ToListAsync();
+        var requests=await db.EmployerAccessRequests.AsNoTracking().OrderByDescending(r=>r.CreatedUtc).ToListAsync();
+        var members=await (from m in db.WorkspaceMemberships.AsNoTracking() join u in db.Users.AsNoTracking() on m.UserId equals u.Id where m.Status=="Active"&&u.Status=="Active" select new{m.WorkspaceId,u.AccountType}).ToListAsync();
+        var invitations=await db.EmployerInvitations.AsNoTracking().Where(i=>i.Status=="Pending"&&i.ExpiresUtc>DateTime.UtcNow).Select(i=>i.WorkspaceId).ToListAsync();
+        var slots=await db.Positions.AsNoTracking().Where(p=>p.WorkspaceId!=null&&(p.Status=="Active"||p.Status=="On Hold")).GroupBy(p=>p.WorkspaceId!.Value).Select(g=>new{Id=g.Key,Count=g.Count()}).ToDictionaryAsync(g=>g.Id,g=>g.Count);
+        return workspaces.Select(w=>new EmployerOverview(w,requests.Where(r=>r.WorkspaceId==w.Id).ToList(),members.Count(m=>m.WorkspaceId==w.Id&&m.AccountType!=AccountTypes.Freelance&&m.AccountType!=AccountTypes.Employer),members.Count(m=>m.WorkspaceId==w.Id&&m.AccountType is AccountTypes.Freelance or AccountTypes.Employer),invitations.Count(id=>id==w.Id),slots.GetValueOrDefault(w.Id))).ToList();
+    }
+    public async Task<AdminWorkspaceTeam> AdministrationTeam(Guid workspaceId)
+    {
+        await access.RequireAdminPermission("admin.workspaces.view");
+        await using var db=await factory.CreateDbContextAsync();
+        var workspace=await db.EmployerWorkspaces.AsNoTracking().SingleAsync(w=>w.Id==workspaceId);
+        List<AdminWorkspaceMember> members;
+        if(workspace.Kind==AccountTypes.Freelance){
+            members=await (from m in db.WorkspaceMemberships.AsNoTracking() join w in db.EmployerWorkspaces.AsNoTracking() on m.WorkspaceId equals w.Id
+                           where m.UserId==workspace.OwnerId
+                           select new AdminWorkspaceMember(w.CompanyName,"","Employer Membership",m.Status,m.CanCreateClients,m.CanCreatePositions,m.CanExportReports,m.CanViewTalentPool)).ToListAsync();
+        }else{
+            members=await (from m in db.WorkspaceMemberships.AsNoTracking() join u in db.Users.AsNoTracking() on m.UserId equals u.Id
+                           where m.WorkspaceId==workspaceId
+                           select new AdminWorkspaceMember(u.FullName,u.Email??"",u.AccountType==AccountTypes.Freelance||u.AccountType==AccountTypes.Employer?"External Recruiter":"Internal Team Member",u.Status=="Active"?m.Status:u.Status,m.CanCreateClients,m.CanCreatePositions,m.CanExportReports,m.CanViewTalentPool)).ToListAsync();
+        }
+        var invitations=await db.EmployerInvitations.AsNoTracking().Where(i=>i.WorkspaceId==workspaceId&&i.Status=="Pending"&&i.ExpiresUtc>DateTime.UtcNow)
+            .Select(i=>new AdminWorkspaceMember(i.FullName,i.Email,"Invitation","Pending",false,false,false,false)).ToListAsync();
+        return new(members,invitations);
     }
     public async Task SetAccess(EmployerWorkspace input)
     {
-        var admin=await access.Require(true);if(new[]{input.FreeRecruiterSeats,input.AdditionalRecruiterSeats,input.FreePositionSlots,input.AdditionalPositionSlots}.Any(n=>n<0||n>1000))throw new InvalidOperationException("Limits must be between 0 and 1000.");
+        await access.RequireAdminPermission("admin.workspaces.view");
+        var admin=await access.RequireAdminPermission("admin.subscriptions.manage");if(new[]{input.FreeRecruiterSeats,input.AdditionalRecruiterSeats,input.FreePositionSlots,input.AdditionalPositionSlots}.Any(n=>n<0||n>1000))throw new InvalidOperationException("Limits must be between 0 and 1000.");
         await using var db=await factory.CreateDbContextAsync();var w=await db.EmployerWorkspaces.SingleAsync(w=>w.Id==input.Id);if(w.Revision!=input.Revision)throw new DbUpdateConcurrencyException("Access changed. Reload before saving.");
+        var previousAccess=JsonSerializer.Serialize(new{Seats=w.FreeRecruiterSeats+w.AdditionalRecruiterSeats,PositionSlots=w.FreePositionSlots+w.AdditionalPositionSlots,w.TeamTalentPoolEnabled,w.MasterTalentPoolEnabled,w.AgencyEnabled,w.EmailTemplatesEnabled});
         if(w.Kind==AccountTypes.Freelance&&(input.FreeRecruiterSeats!=0||input.AdditionalRecruiterSeats!=0))throw new InvalidOperationException("Upgrade This Account To Employer Before Granting Team Seats.");
-        w.FreeRecruiterSeats=input.FreeRecruiterSeats;w.AdditionalRecruiterSeats=input.AdditionalRecruiterSeats;w.FreePositionSlots=input.FreePositionSlots;w.AdditionalPositionSlots=input.AdditionalPositionSlots;w.TeamTalentPoolEnabled=input.TeamTalentPoolEnabled;w.MasterTalentPoolEnabled=input.MasterTalentPoolEnabled;if(input.AgencyEnabled&&w.Kind!=AccountTypes.Employer)throw new InvalidOperationException("Only Employer Workspaces Can Receive Agency Access.");w.AgencyEnabled=input.AgencyEnabled;
+        w.FreeRecruiterSeats=input.FreeRecruiterSeats;w.AdditionalRecruiterSeats=input.AdditionalRecruiterSeats;w.FreePositionSlots=input.FreePositionSlots;w.AdditionalPositionSlots=input.AdditionalPositionSlots;w.TeamTalentPoolEnabled=input.TeamTalentPoolEnabled;w.MasterTalentPoolEnabled=input.MasterTalentPoolEnabled;if(input.AgencyEnabled&&w.Kind!=AccountTypes.Employer)throw new InvalidOperationException("Only Employer Workspaces Can Receive Agency Access.");w.AgencyEnabled=input.AgencyEnabled;w.EmailTemplatesEnabled=input.EmailTemplatesEnabled;
         if(await db.Users.AnyAsync(u=>u.Id==w.OwnerId&&u.AccountType!=AccountTypes.Legacy))w.TeamTalentPoolEnabled=w.MasterTalentPoolEnabled;
-        AtsService.Audit(db,admin.FindFirstValue(ClaimTypes.NameIdentifier)!,"Employer entitlement updated",w.Id.ToString(),$"Seats={w.FreeRecruiterSeats+w.AdditionalRecruiterSeats}; slots={w.FreePositionSlots+w.AdditionalPositionSlots}; team talent={w.TeamTalentPoolEnabled}; agency={w.AgencyEnabled}");await db.SaveChangesAsync();updates?.Publish();
+        var currentAccess=JsonSerializer.Serialize(new{Seats=w.FreeRecruiterSeats+w.AdditionalRecruiterSeats,PositionSlots=w.FreePositionSlots+w.AdditionalPositionSlots,w.TeamTalentPoolEnabled,w.MasterTalentPoolEnabled,w.AgencyEnabled,w.EmailTemplatesEnabled});
+        AtsService.Audit(db,admin.FindFirstValue(ClaimTypes.NameIdentifier)!,"Employer entitlement updated",w.Id.ToString(),"Workspace access settings updated.",null,null,previousAccess,currentAccess);await db.SaveChangesAsync();updates?.Publish();
     }
     public async Task Respond(EmployerAccessRequest input)
     {
-        var admin=await access.Require(true);if(input.Status is not("Under Review" or "Needs Information" or "Granted" or "Rejected")||string.IsNullOrWhiteSpace(input.AdminResponse)||input.AdminResponse.Length>2000)throw new InvalidOperationException("Choose a response status and enter an Admin response.");
+        await access.RequireAdminPermission("admin.workspaces.view");
+        var admin=await access.RequireAdminPermission("admin.requests.review");if(input.Status is not("Under Review" or "Needs Information" or "Granted" or "Rejected")||string.IsNullOrWhiteSpace(input.AdminResponse)||input.AdminResponse.Length>2000)throw new InvalidOperationException("Choose a response status and enter an Admin response.");
+        if(input.Status=="Granted")await access.RequireAdminPermission("admin.subscriptions.manage");
         await using var db=await factory.CreateDbContextAsync();var r=await db.EmployerAccessRequests.SingleAsync(r=>r.Id==input.Id);if(r.Revision!=input.Revision)throw new DbUpdateConcurrencyException("Request changed. Reload before responding.");
         var w=await db.EmployerWorkspaces.SingleAsync(w=>w.Id==r.WorkspaceId);
         if(input.Status=="Granted"&&r.Feature=="Recruiter Seats"&&w.Kind==AccountTypes.Freelance)throw new InvalidOperationException("Approve The Employer Account Upgrade Before Adding Seats.");
@@ -93,7 +135,7 @@ public class EmployerService(AuthenticationStateProvider auth,Access access,IDbC
             w.Kind="Employer";w.FreeRecruiterSeats=Math.Max(1,w.FreeRecruiterSeats);w.FreePositionSlots=Math.Max(3,w.FreePositionSlots);
             var owner=await db.Users.SingleAsync(u=>u.Id==w.OwnerId);owner.AccountType=AccountTypes.Employer;owner.SecurityStamp=Guid.NewGuid().ToString();
             var recruiterRole=await db.Roles.SingleAsync(x=>x.Name=="Recruiter");var employerRole=await db.Roles.SingleAsync(x=>x.Name=="Employer");var oldRole=await db.UserRoles.SingleOrDefaultAsync(x=>x.UserId==owner.Id&&x.RoleId==recruiterRole.Id);if(oldRole is not null)db.UserRoles.Remove(oldRole);if(!await db.UserRoles.AnyAsync(x=>x.UserId==owner.Id&&x.RoleId==employerRole.Id))db.UserRoles.Add(new(){UserId=owner.Id,RoleId=employerRole.Id});
-        }else if(r.Feature=="Agency Account"){w.AgencyEnabled=true;}else {w.MasterTalentPoolEnabled=true;w.TeamTalentPoolEnabled=true;}}
+        }else if(r.Feature=="Agency Account"){w.AgencyEnabled=true;}else if(r.Feature=="Email Templates"){w.EmailTemplatesEnabled=true;}else {w.MasterTalentPoolEnabled=true;w.TeamTalentPoolEnabled=true;}}
         if(r.Status=="Granted"&&input.Status!="Granted")throw new InvalidOperationException("Use Workspace Access controls to revoke a grant; preserve the approval history.");
         r.Status=input.Status;r.AdminResponse=input.AdminResponse.Trim();r.RespondedUtc=DateTime.UtcNow;AtsService.Audit(db,admin.FindFirstValue(ClaimTypes.NameIdentifier)!,"Employer request responded",r.Id.ToString(),r.Status+"; "+r.Feature+"; Agency="+w.AgencyEnabled);await db.SaveChangesAsync();updates?.Publish();
     }

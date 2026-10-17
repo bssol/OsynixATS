@@ -36,12 +36,12 @@ public class AtsService(IDbContextFactory<AtsDbContext> factory, Access access,R
     }
     public async Task<List<DecisionRule>> Rules()
     {
-        await access.Require(); await using var db=await factory.CreateDbContextAsync();
+        await access.RequireAdminPermission("admin.rules.view"); await using var db=await factory.CreateDbContextAsync();
         return await db.DecisionRules.AsNoTracking().OrderByDescending(x=>x.MinimumMatch).ToListAsync();
     }
     public async Task SaveRules(List<DecisionRule> rules)
     {
-        var user=await access.Require(true); await using var db=await factory.CreateDbContextAsync();
+        var user=await access.RequireAdminPermission("admin.rules.manage"); await using var db=await factory.CreateDbContextAsync();
         if(rules.Any(x=>x.MinimumMatch<0 || x.MinimumMatch>100 || x.MustHaveFit is not ("Pass" or "Partial") || !Choices.Decisions.Contains(x.Decision))) throw new InvalidOperationException("Invalid decision rule.");
         if(rules.GroupBy(x=>new{x.MustHaveFit,x.MinimumMatch}).Any(g=>g.Count()>1)) throw new InvalidOperationException("Duplicate rule thresholds.");
         db.DecisionRules.RemoveRange(await db.DecisionRules.ToListAsync());

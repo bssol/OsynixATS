@@ -90,7 +90,15 @@ public class InterviewService(IDbContextFactory<AtsDbContext> factory,Access acc
   var messages=await db.InterviewDeliveries.AsNoTracking().Where(m=>m.InterviewId==id&&(m.Status=="Pending"||m.Status=="Failed"||m.Status=="Sending"&&m.UpdatedUtc<stale)).ToListAsync();
   foreach(var m in messages){
    var claimed=await db.InterviewDeliveries.Where(x=>x.Id==m.Id&&(x.Status=="Pending"||x.Status=="Failed"||x.Status=="Sending"&&x.UpdatedUtc<stale)).ExecuteUpdateAsync(set=>set.SetProperty(x=>x.Status,"Sending").SetProperty(x=>x.UpdatedUtc,DateTime.UtcNow));if(claimed!=1)continue;
-   try{await email.Send(m.Recipient,m.Subject,m.Body);await db.InterviewDeliveries.Where(x=>x.Id==m.Id&&x.Status=="Sending").ExecuteUpdateAsync(set=>set.SetProperty(x=>x.Status,"Sent").SetProperty(x=>x.SentUtc,DateTime.UtcNow).SetProperty(x=>x.UpdatedUtc,DateTime.UtcNow));}
+   try{
+    var booking=await db.InterviewBookings.AsNoTracking().SingleAsync(i=>i.Id==id);
+    var application=await db.Assessments.AsNoTracking().Include(a=>a.Position).SingleAsync(a=>a.Id==booking.AssessmentId);
+    var isCandidate=m.Recipient.Equals(booking.CandidateEmail,StringComparison.OrdinalIgnoreCase);
+    var initial=isCandidate&&m.Subject.StartsWith("Osynix — Interview Invitation · ");
+    var details=m.Body;
+    var original=$"Hello {application.CandidateName},\n\nYou Are Invited To Interview For {application.Position!.Title} With {application.Position.Client}.\nPlease Review The Schedule And Joining Details Below, Then Confirm Your Availability, Decline Or Propose Another Time Using The Response Link.\n\nWe Look Forward To Speaking With You.";
+    if(booking.Message==original)details=details.Replace(original,"");
+    await EmailTemplateService.Send(factory,email,application.Position!.WorkspaceId,initial?"interview-invitation":isCandidate?"interview-update":"manager-interview-update",m.Recipient,m.Subject,m.Body,new(){["CandidateName"]=application.CandidateName,["PositionTitle"]=application.Position.Title,["ClientName"]=application.Position.Client,["InterviewEvent"]=m.Subject.Replace("Osynix — ",""),["InterviewUpdate"]=m.Body,["InterviewScheduleAndJoiningDetails"]=details,["CandidateResponseLink"]=Link(booking)});await db.InterviewDeliveries.Where(x=>x.Id==m.Id&&x.Status=="Sending").ExecuteUpdateAsync(set=>set.SetProperty(x=>x.Status,"Sent").SetProperty(x=>x.SentUtc,DateTime.UtcNow).SetProperty(x=>x.UpdatedUtc,DateTime.UtcNow));}
    catch{await db.InterviewDeliveries.Where(x=>x.Id==m.Id&&x.Status=="Sending").ExecuteUpdateAsync(set=>set.SetProperty(x=>x.Status,"Failed").SetProperty(x=>x.UpdatedUtc,DateTime.UtcNow));}
   }
   updates.Publish();return await db.InterviewDeliveries.AnyAsync(m=>m.InterviewId==id&&m.Status=="Failed")?"Saved. Some Emails Failed. Retry Delivery From The Interview Panel.":"Interview Updates Saved And Emails Sent.";

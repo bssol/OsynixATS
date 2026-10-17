@@ -55,7 +55,8 @@ public class AccountFlowTests {
   Assert.Equal(HttpStatusCode.Redirect,login.StatusCode);
   var positions=await c.GetStringAsync("/positions");Assert.DoesNotContain("Private Role",positions);
   Assert.Contains("Manage Positions",positions);
-  var settings=await c.GetAsync("/settings");Assert.Equal(HttpStatusCode.Redirect,settings.StatusCode);Assert.Contains("/denied",settings.Headers.Location!.ToString());
+  var settings=await c.GetStringAsync("/settings");Assert.Contains("Open Email Templates",settings);Assert.DoesNotContain("Add a Sub-Admin",settings);
+  Assert.Contains("Email Templates Access Required",await c.GetStringAsync("/settings/email-templates"));
  }
  [Fact]public async Task EmployerRegistrationVerifiesEmailAndCreatesOnlyItsOwnWorkspace(){
   await using var h=new Host();using var c=h.CreateClient(new(){AllowAutoRedirect=false});

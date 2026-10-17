@@ -1,18 +1,83 @@
 @page "/settings/employers"
-@attribute [Authorize(Roles="Admin")]
+@attribute [Authorize(Roles="Admin,SubAdmin")]
 @inherits PageBase
 @inject EmployerService EmployerService
-<PageTitle>Employer Access · Osynix ATS</PageTitle>
-<div class="page-heading"><div><div class="eyebrow">ADMINISTRATION</div><h1>Employer &amp; Freelance Accounts</h1></div><a class="button secondary" href="/settings">Settings &amp; Users</a></div>
+@inject AdminService Admin
+@inject Access Access
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider Auth
+<PageTitle>Workspaces &amp; Subscriptions · Osynix ATS</PageTitle>
+<div class="workspace-admin">
 <Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
-@if(workspaces.Count==0){<section class="panel"><p>No Employer Workspaces Yet. A Workspace Is Created When A Verified Employer First Opens Their Portal.</p></section>}
-@foreach(var item in workspaces){<section class="panel"><h2>@item.Workspace.CompanyName</h2><p class="muted">@item.Workspace.Kind · Workspace @item.Workspace.Id</p><div class="form-grid"><label>Free Recruiter Seats<input type="number" min="0" max="1000" @bind="item.Workspace.FreeRecruiterSeats" /></label><label>Additional Recruiter Seats<input type="number" min="0" max="1000" @bind="item.Workspace.AdditionalRecruiterSeats" /></label><label>Free Position Slots<input type="number" min="0" max="1000" @bind="item.Workspace.FreePositionSlots" /></label><label>Additional Position Slots<input type="number" min="0" max="1000" @bind="item.Workspace.AdditionalPositionSlots" /></label></div><label class="check"><input type="checkbox" @bind="item.Workspace.MasterTalentPoolEnabled" /> Osynix Master Talent Pool Entitlement</label>@if(item.Workspace.Kind==AccountTypes.Employer){<label class="check"><input type="checkbox" @bind="item.Workspace.AgencyEnabled" /> Agency Account — Clients Module Access</label>}<p class="muted">Access Remains Active Until Revoked. Changing These Limits Preserves Recruitment History.</p><button disabled="@Busy" @onclick="()=>SaveAccess(item.Workspace)">Save Workspace Access</button>
-@foreach(var request in item.Requests){<hr/><h3>@request.Feature · Quantity @request.Quantity · @request.CreatedUtc.ToString("dd MMM yyyy HH:mm") UTC</h3><p class="preserve">@request.Remarks</p><label>Response Status<select @bind="request.Status"><option>Submitted</option><option>Under Review</option><option>Needs Information</option><option>Granted</option><option>Rejected</option></select></label><label>Admin Response<textarea rows="2" maxlength="2000" @bind="request.AdminResponse"></textarea></label><p class="muted small">Granting Adds The Requested Capacity Once. Use Workspace Access Above To Revoke Or Adjust It.</p><button disabled="@Busy" @onclick="()=>Respond(request)">Save Response</button>}
-</section>}
+@if(!loaded){<section class="panel"><p role="status">Loading Workspace Accounts…</p></section>}
+else if(!canView){<section class="panel"><h2>Workspace Access Not Assigned</h2><p class="muted">Your Admin account needs the View Workspaces permission to open this section.</p></section>}
+else if(Selected is { } selected){
+<AdminWorkspaceDetails @key="selected.Workspace.Id" Item="selected" Owner="@Owner(selected)" CanManageAccounts="canManageAccounts" CanManageEntitlements="canManageEntitlements" CanReviewRequests="canReviewRequests" CanViewAudit="canViewAudit" OnBack="Back" OnChanged="Load" />
+}else{
+<div class="page-heading"><div><div class="eyebrow">PLATFORM ADMINISTRATION</div><h1>Workspaces &amp; Subscriptions</h1><p class="muted">Manage Account Access, Workspace Capacity And Subscription Requests.</p></div><button class="secondary" disabled="@Busy" @onclick="()=>Run(Load)">Refresh</button></div>
+<div class="account-categories" role="group" aria-label="Account Type">
+@foreach(var type in Types){var items=workspaces.Where(i=>Kind(i)==type).ToList();
+<button type="button" class="category secondary @(accountType==type?"selected":"")" aria-pressed="@(accountType==type)" @onclick="()=>SelectType(type)"><span class="category-icon"><NavIcon Name="@(type=="Freelance Recruiter"?"candidates":"clients")" /></span><span><b>@TypeTitle(type)</b><small>@items.Sum(Pending) Requests Need Review</small></span><strong>@items.Count</strong></button>
+}
+</div>
+<section class="panel directory-panel">
+<div class="directory-heading"><div><h2>@TypeTitle(accountType)</h2><p class="muted small">@Filtered.Count Accounts Match Your Filters</p></div><div class="view-toggle" role="group" aria-label="Directory View"><button type="button" class="@(view=="list"?"primary selected":"secondary")" aria-pressed="@(view=="list")" @onclick='()=>SetView("list")'><NavIcon Name="pipeline" />List View</button><button type="button" class="@(view=="cards"?"primary selected":"secondary")" aria-pressed="@(view=="cards")" @onclick='()=>SetView("cards")'><NavIcon Name="dashboard" />Card View</button></div></div>
+<div class="directory-filters">
+<label class="directory-search">Search Accounts<input type="search" placeholder="Account, Owner, Email Or Workspace ID" @bind="query" @bind:event="oninput" @bind:after="ResetPage" /></label>
+<label>Account Status<select @bind="status" @bind:after="ResetPage"><option value="All">All Statuses</option><option>Active</option><option>Inactive</option><option>Pending</option></select></label>
+<label>Requests<select @bind="requestFilter" @bind:after="ResetPage"><option value="All">All Requests</option><option value="Pending">Needs Review</option><option value="None">No Pending Requests</option></select></label>
+<label>Sort By<select @bind="sort" @bind:after="ResetPage"><option value="name">Account Name</option><option value="recent">Recently Updated</option><option value="requests">Pending Requests</option></select></label>
+</div>
+@if(Filtered.Count==0){<div class="directory-empty"><h3>No Accounts Found</h3><p class="muted">Try Another Search Or Change Your Filters.</p><button class="secondary" @onclick="ClearFilters">Clear Filters</button></div>}
+else if(view=="list"){
+<div class="directory-table"><table><thead><tr><th>Account / Owner</th><th>Status</th><th>Subscription Access</th><th>Capacity</th><th>Requests</th><th>Updated</th><th>Account</th></tr></thead><tbody>
+@foreach(var item in PageItems){var w=item.Workspace;var owner=Owner(item);
+<tr @key="w.Id"><td><div class="account-name"><span class="account-avatar">@Initials(w.CompanyName)</span><div><b>@w.CompanyName</b><small>@OwnerName(item)</small><small>@owner?.Email</small></div></div></td><td><span class="account-status @(owner?.Status=="Active"?"enabled":"neutral")">@(owner?.Status??"Unavailable")</span></td><td><b>@AccessLabel(item)</b><small>Master Pool: @(w.MasterTalentPoolEnabled?"Enabled":"Disabled")</small></td><td><b>@item.UsedPositionSlots / @Slots(w) Slots</b>@if(w.Kind!=AccountTypes.Freelance){<small>@item.ActiveInternalMembers / @Seats(w) Internal Seats</small>}</td><td><span class="account-status @(Pending(item)>0?"pending":"neutral")">@Pending(item) Pending</span></td><td>@w.UpdatedUtc.ToString("dd MMM yyyy")<small>UTC</small></td><td><button class="secondary open-account" @onclick="()=>Open(w.Id)">View →</button></td></tr>
+}
+</tbody></table></div>
+}else{
+<div class="account-grid">
+@foreach(var item in PageItems){var w=item.Workspace;var owner=Owner(item);
+<article class="account-card" @key="w.Id"><div class="card-top"><span class="account-avatar">@Initials(w.CompanyName)</span><span class="account-status @(owner?.Status=="Active"?"enabled":"neutral")">@(owner?.Status??"Unavailable")</span></div><h3>@w.CompanyName</h3><p class="card-owner">@OwnerName(item)<small>@owner?.Email</small></p><span class="account-status neutral">@AccessLabel(item)</span><div class="card-capacity"><span><b>@item.UsedPositionSlots / @Slots(w)</b>Position Slots</span><span><b>@(w.Kind==AccountTypes.Freelance?"Individual":$"{item.ActiveInternalMembers} / {Seats(w)}")</b>@(w.Kind==AccountTypes.Freelance?"No Team Seats":"Internal Seats")</span></div><div class="card-footer"><span class="@(Pending(item)>0?"pending-text":"muted")">@Pending(item) Pending Requests</span><button class="secondary open-account" @onclick="()=>Open(w.Id)">Open Account →</button></div></article>
+}
+</div>
+}
+<div class="directory-pagination"><span>Showing @(Filtered.Count==0?0:(CurrentPage-1)*pageSize+1)–@Math.Min(CurrentPage*pageSize,Filtered.Count) Of @Filtered.Count Accounts</span><div><label>Per Page<select aria-label="Accounts Per Page" @bind="pageSize" @bind:after="ResetPage"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select></label><button class="secondary" disabled="@(CurrentPage==1)" @onclick="()=>page=CurrentPage-1">Previous</button><span>@CurrentPage / @Pages</span><button class="secondary" disabled="@(CurrentPage>=Pages)" @onclick="()=>page=CurrentPage+1">Next</button></div></div>
+</section>
+}
+</div>
 @code{
+static readonly string[] Types=["Employer","Agency","Freelance Recruiter"];
 List<EmployerOverview> workspaces=[];
+Dictionary<string,WorkspaceUser> owners=[];
+string accountType="Employer",view="list",query="",status="All",requestFilter="All",sort="name",preferenceKey="";
+Guid? selectedId;
+int page=1,pageSize=10;
+bool loaded,canView,canManageAccounts,canManageEntitlements,canReviewRequests,canViewAudit;
+EmployerOverview? Selected=>workspaces.FirstOrDefault(i=>i.Workspace.Id==selectedId);
+WorkspaceUser? Owner(EmployerOverview item)=>owners.GetValueOrDefault(item.Workspace.OwnerId);
+string OwnerName(EmployerOverview item)=>Owner(item) is { } owner?(string.IsNullOrWhiteSpace(owner.FullName)?owner.Username:owner.FullName):"Owner Unavailable";
+static string Kind(EmployerOverview i)=>i.Workspace.Kind==AccountTypes.Freelance?"Freelance Recruiter":i.Workspace.AgencyEnabled?"Agency":"Employer";
+static string TypeTitle(string type)=>type=="Freelance Recruiter"?"Freelance Recruiters":$"{type} Accounts";
+static int Pending(EmployerOverview i)=>i.Requests.Count(r=>r.Status is "Submitted" or "Under Review" or "Needs Information");
+static int Slots(EmployerWorkspace w)=>w.FreePositionSlots+w.AdditionalPositionSlots;
+static int Seats(EmployerWorkspace w)=>w.FreeRecruiterSeats+w.AdditionalRecruiterSeats;
+static string AccessLabel(EmployerOverview i)=>i.Workspace.AdditionalPositionSlots>0||i.Workspace.AdditionalRecruiterSeats>0||i.Workspace.MasterTalentPoolEnabled||i.Workspace.AgencyEnabled?"Admin Granted Access":"Free Allowance";
+static string Initials(string name)=>string.Concat(name.Split(' ',StringSplitOptions.RemoveEmptyEntries).Take(2).Select(p=>char.ToUpperInvariant(p[0])));
+List<EmployerOverview> Filtered{get{
+var q=query.Trim();var items=workspaces.Where(i=>Kind(i)==accountType&&(status=="All"||Owner(i)?.Status==status)&&(requestFilter=="All"||requestFilter=="Pending"&&Pending(i)>0||requestFilter=="None"&&Pending(i)==0));
+if(q.Length>0)items=items.Where(i=>new[]{i.Workspace.CompanyName,OwnerName(i),Owner(i)?.Email??"",i.Workspace.Id.ToString()}.Any(s=>s.Contains(q,StringComparison.OrdinalIgnoreCase)));
+return (sort switch{"recent"=>items.OrderByDescending(i=>i.Workspace.UpdatedUtc).ThenBy(i=>i.Workspace.Id),"requests"=>items.OrderByDescending(Pending).ThenBy(i=>i.Workspace.CompanyName).ThenBy(i=>i.Workspace.Id),_=>items.OrderBy(i=>i.Workspace.CompanyName).ThenBy(i=>i.Workspace.Id)}).ToList();}}
+int Pages=>Math.Max(1,(Filtered.Count+pageSize-1)/pageSize);
+int CurrentPage=>Math.Clamp(page,1,Pages);
+IEnumerable<EmployerOverview> PageItems=>Filtered.Skip((CurrentPage-1)*pageSize).Take(pageSize);
 protected override Task OnInitializedAsync()=>Run(Load);
-async Task Load()=>workspaces=await EmployerService.Administration();
-Task SaveAccess(EmployerWorkspace w)=>Run(async()=>{await EmployerService.SetAccess(w);await Load();Notice="Employer Access Updated.";});
-Task Respond(EmployerAccessRequest r)=>Run(async()=>{await EmployerService.Respond(r);await Load();Notice="Response Saved And Available In The Employer Portal.";});
+protected override async Task OnAfterRenderAsync(bool firstRender){if(!firstRender)return;var user=(await Auth.GetAuthenticationStateAsync()).User;preferenceKey="osynix.admin.workspace-view."+user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;try{var saved=await JS.InvokeAsync<string?>("localStorage.getItem",preferenceKey);if(saved is "list" or "cards"){view=saved;StateHasChanged();}}catch(JSException){}catch(InvalidOperationException){}}
+async Task Load(){canView=await Access.CanAdmin("admin.workspaces.view");canManageAccounts=await Access.CanAdmin("admin.accounts.manage");canManageEntitlements=await Access.CanAdmin("admin.subscriptions.manage");canReviewRequests=await Access.CanAdmin("admin.requests.review");canViewAudit=await Access.CanAdmin("admin.audit.view");if(canView){workspaces=await EmployerService.Administration();owners=(await Admin.WorkspaceOwners()).ToDictionary(u=>u.Id);}else{workspaces=[];owners=[];}loaded=true;}
+void SelectType(string type){accountType=type;ResetPage();}
+void ResetPage()=>page=1;
+void ClearFilters(){query="";status=requestFilter="All";ResetPage();}
+void Open(Guid id)=>selectedId=id;
+void Back()=>selectedId=null;
+async Task SetView(string value){view=value;try{await JS.InvokeVoidAsync("localStorage.setItem",preferenceKey,value);}catch(JSException){}catch(InvalidOperationException){}}
 }

@@ -1,0 +1,87 @@
+@inherits PageBase
+@inject EmployerService EmployerService
+@inject AdminService Admin
+<div class="account-detail">
+<button class="back-link" disabled="@Busy" @onclick="()=>OnBack.InvokeAsync()">← Back To Accounts</button>
+<p class="breadcrumb">Workspaces &amp; Subscriptions <span>›</span> @AccountType Accounts</p>
+<header class="account-heading"><div class="identity"><span class="company-avatar">@Initials(Item.Workspace.CompanyName)</span><div><h1>@Item.Workspace.CompanyName</h1><div class="subline"><span class="status @(Owner?.Status=="Active"?"green":"gray")">@(Owner?.Status??"Owner Unavailable")</span><span>@AccountType</span><span>Created @Item.Workspace.CreatedUtc.ToString("dd MMM yyyy")</span></div></div></div><div class="heading-actions"><button class="secondary" disabled="@Busy" @onclick="()=>Run(Refresh)">Refresh</button>@if(CanManageAccounts&&Owner is not null){<button disabled="@Busy" @onclick="EditAccount">Edit Account</button>}</div></header>
+<Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
+@if(Pending.Count>0){<div class="request-notice"><span><b>@Pending.Count Requests Need Review</b> — Access And Capacity Requests Are Waiting For A Response.</span><button @onclick='()=>SelectTab("Requests")'>Review Requests →</button></div>}
+<nav class="account-tabs" aria-label="Account Sections">
+@foreach(var name in new[]{"Overview","Team","Requests","Activity"}){<button class="@(tab==name?"selected":"")" aria-pressed="@(tab==name)" @onclick="()=>SelectTab(name)">@((name=="Team"&&Freelance)?"Employer Memberships":name) @if(name=="Requests"){<span>@Pending.Count</span>}@if(name=="Team"){<span>@team.Members.Count</span>}</button>}
+</nav>
+@if(tab=="Overview"){
+<div class="overview-grid"><div class="detail-stack">
+<section class="detail-card"><div class="card-heading"><h2>Account Owner</h2>@if(CanManageAccounts&&Owner is not null){<button class="text-button" @onclick="EditAccount">Manage Access →</button>}</div><div class="owner-identity"><span class="owner-avatar">@Initials(OwnerName)</span><div><b>@OwnerName</b><small>Workspace Owner · @AccountType</small></div></div><div class="owner-fields"><div><small>Email Address</small><b>@(Owner?.Email??"Unavailable")</b></div><div><small>Account Status</small><b>@Owner?.Status</b></div><div><small>ATS Password</small><b>@(Owner?.HasPassword==true?"Configured":"Not Configured")</b></div></div>
+@if(editAccount){<div class="edit-area"><h3>Edit Account &amp; Access</h3><div class="form-grid"><label>Owner Name<input maxlength="160" @bind="ownerName" /></label><label>Account Status<select @bind="ownerStatus"><option>Active</option><option>Inactive</option><option>Pending</option></select></label></div><p class="muted small">Account Status Controls The Owner's Sign-In Across Workspaces.</p><div class="toolbar"><button disabled="@Busy" @onclick="SaveAccount">Save Account Access</button><button class="secondary" disabled="@Busy" @onclick="()=>editAccount=false">Cancel</button></div><details class="password-tray"><summary>Reset ATS Password</summary><label>New Password<input type="password" autocomplete="new-password" @bind="ownerPassword" /></label><p class="muted small">At Least 6 Characters With Uppercase, Lowercase, A Number And A Symbol. Existing Sessions Will Be Invalidated.</p><button disabled="@Busy" @onclick="ResetPassword">Reset Password</button></details></div>}
+</section>
+<section class="detail-card"><div class="card-heading"><h2>Subscription &amp; Capacity</h2>@if(CanManageEntitlements){<button class="text-button" @onclick="EditSubscription">Manage Access →</button>}</div><div class="card-body"><div class="plan-heading"><div><h3>@(HasGrantedAccess?"Admin Granted Access":"Free Allowance")</h3><p class="muted small">Feature Access Remains Active Until Admin Revokes It.</p></div><span class="status blue">@AccountType</span></div><div class="capacity-line"><span>Position Slots Used</span><b>@Item.UsedPositionSlots / @Slots</b></div><progress value="@Item.UsedPositionSlots" max="@Math.Max(1,Slots)" aria-label="Position Slots Used"></progress><div class="capacity-note">@Math.Max(0,Slots-Item.UsedPositionSlots) Available · Active And On-Hold Positions Use Slots</div><div class="capacity-boxes">
+@if(!Freelance){<div><small>Internal Seats</small><b>@Item.ActiveInternalMembers / @Seats</b></div>}<div><small>@(Freelance?"Employer Memberships":"External Recruiters")</small><b>@(Freelance?team.Members.Count:Item.ActiveExternalRecruiters)</b></div><div><small>Pending Invitations</small><b>@Item.PendingInvitations</b></div></div>
+<div class="feature-line"><span>Email Templates</span><span class="status @(Item.Workspace.EmailTemplatesEnabled?"green":"gray")">@(Item.Workspace.EmailTemplatesEnabled?"Enabled":"Disabled")</span></div>
+<div class="feature-line"><span>Osynix Master Talent Pool</span><span class="status @(Item.Workspace.MasterTalentPoolEnabled?"green":"gray")">@(Item.Workspace.MasterTalentPoolEnabled?"Enabled":"Disabled")</span></div>
+@if(!Freelance){<div class="feature-line"><span>Agency / Client Module</span><span class="status @(Item.Workspace.AgencyEnabled?"green":"gray")">@(Item.Workspace.AgencyEnabled?"Enabled":"Disabled")</span></div>}
+@if(Freelance){<p class="muted small">Employer-Assigned Positions Use The Employer's Capacity. Team Seats Require An Employer Account Upgrade.</p>}else{<p class="muted small">External Freelance Recruiters Do Not Use Internal Team Seats.</p>}
+@if(editSubscription){<div class="edit-area"><h3>Workspace Access Settings</h3><div class="form-grid"><label>Free Position Slots<input type="number" min="0" max="1000" @bind="entitlement.FreePositionSlots" /></label><label>Additional Position Slots<input type="number" min="0" max="1000" @bind="entitlement.AdditionalPositionSlots" /></label>@if(!Freelance){<label>Free Internal Seats<input type="number" min="0" max="1000" @bind="entitlement.FreeRecruiterSeats" /></label><label>Additional Internal Seats<input type="number" min="0" max="1000" @bind="entitlement.AdditionalRecruiterSeats" /></label>}</div><label class="check"><input type="checkbox" @bind="entitlement.EmailTemplatesEnabled" /> Email Templates — Create, Edit And Use Workspace Templates</label><label class="check"><input type="checkbox" @bind="entitlement.MasterTalentPoolEnabled" /> Osynix Master Talent Pool Access</label>@if(!Freelance){<label class="check"><input type="checkbox" @bind="entitlement.AgencyEnabled" /> Agency Account And Client Module Access</label>}<div class="toolbar"><button disabled="@Busy" @onclick="SaveAccess">Save Workspace Access</button><button class="secondary" disabled="@Busy" @onclick="()=>editSubscription=false">Cancel</button></div></div>}
+</div></section>
+<section class="detail-card"><div class="card-heading"><h2>Recent Activity</h2><button class="text-button" @onclick='()=>SelectTab("Activity")'>View Audit History →</button></div>@if(!CanViewAudit){<p class="empty">View Admin Audit Events Permission Is Required.</p>}else if(activity.Count==0){<p class="empty">No Account Activity Recorded.</p>}@foreach(var entry in activity.Take(3)){<div class="activity-row"><span class="activity-dot"></span><div><b>@entry.Action</b><p>@entry.Details</p><small>@entry.AccountInfo · @entry.CreatedUtc.ToString("dd MMM yyyy HH:mm") UTC</small></div></div>}</section>
+</div><div class="detail-stack">
+<section class="detail-card"><div class="card-heading"><h2>@(Freelance?"Employer Memberships":"Team")</h2><button class="text-button" @onclick='()=>SelectTab("Team")'>View All →</button></div>@if(team.Members.Count==0){<p class="empty">@(Freelance?"No Employer Memberships.":"No Team Members Yet.")</p>}@foreach(var member in team.Members.Take(3)){<div class="member-row"><span class="owner-avatar">@Initials(member.Name)</span><div><b>@member.Name</b><small>@member.Kind</small></div><span class="status @(member.Status=="Active"?"green":"gray")">@member.Status</span></div>}<div class="card-foot">@team.Members.Count Total · @team.Invitations.Count Pending Invitations</div></section>
+<section class="detail-card"><div class="card-heading"><h2>Open Requests</h2><button class="text-button" @onclick='()=>SelectTab("Requests")'>Review All →</button></div>@if(Pending.Count==0){<p class="empty">No Requests Awaiting Review.</p>}@foreach(var request in Pending.Take(3)){<button class="request-row" @onclick="()=>Review(request)"><span><b>@request.Feature</b><small>Quantity @request.Quantity · @request.CreatedUtc.ToString("dd MMM yyyy")</small></span><span class="status amber">@request.Status</span></button>}</section>
+<section class="detail-card"><div class="card-heading"><h2>Workspace Access</h2></div><div class="card-body"><small>Workspace ID</small><p class="workspace-id">@Item.Workspace.Id</p><div class="feature-line"><span>Account Type</span><b>@AccountType</b></div><div class="feature-line"><span>Last Updated</span><b>@Item.Workspace.UpdatedUtc.ToString("dd MMM yyyy") UTC</b></div><p class="muted small">@(!CanManageAccounts?"Account Access Is Read-Only For Your Admin Role.":"Manage The Owner's Name, Status And Password From Account Owner.")</p></div></section>
+</div></div>
+}else if(tab=="Team"){
+<section class="detail-card"><div class="card-heading"><h2>@(Freelance?"Employer Memberships":"Team Members")</h2><span class="muted small">@team.Members.Count Total</span></div><p class="table-note">@(Freelance?"Access Granted By Each Employer Workspace.":"Internal Members Use Seats. External Recruiters Have Separate Position Assignments. Team Permissions Are Managed By The Workspace Owner.")</p><div class="table-wrap"><table><thead><tr><th>@(Freelance?"Employer":"Member")</th><th>Type</th><th>Status</th><th>Permissions Granted</th></tr></thead><tbody>@foreach(var member in team.Members){<tr><td><b>@member.Name</b><small>@member.Email</small></td><td>@member.Kind</td><td>@member.Status</td><td>@Permissions(member)</td></tr>}</tbody></table></div>@if(team.Members.Count==0){<p class="empty">No Memberships Found.</p>}
+@if(!Freelance&&team.Invitations.Count>0){<div class="card-heading"><h3>Pending Invitations</h3></div>@foreach(var invite in team.Invitations){<div class="member-row"><div><b>@invite.Name</b><small>@invite.Email</small></div><span class="status amber">@invite.Status</span></div>}}
+</section>
+}else if(tab=="Requests"){
+<section class="detail-card"><div class="card-heading"><h2>Access &amp; Subscription Requests</h2><span class="status amber">@Pending.Count Pending</span></div>
+@if(Item.Requests.Count==0){<p class="empty">No Requests For This Workspace.</p>}
+<div class="table-wrap"><table><thead><tr><th>Request</th><th>Submitted</th><th>Quantity</th><th>Status</th><th>Action</th></tr></thead><tbody>@foreach(var request in Item.Requests){<tr><td><b>@request.Feature</b></td><td>@request.CreatedUtc.ToString("dd MMM yyyy")</td><td>@request.Quantity</td><td><span class="status @(request.Status=="Granted"?"green":"gray")">@request.Status</span></td><td><button class="secondary" @onclick="()=>Review(request)">@(CanReviewRequests?"Review":"View")</button></td></tr>}</tbody></table></div>
+@if(requestDraft is { } draft){<div class="request-editor"><h3>@draft.Feature · Quantity @draft.Quantity</h3><p class="preserve">@draft.Remarks</p>
+@if(CanReviewRequests&&draft.Status!="Granted"){
+<label>Response Status<select @bind="draft.Status"><option>Under Review</option><option>Needs Information</option>@if(CanGrant){<option>Granted</option>}<option>Rejected</option></select></label><label>Admin Response<textarea rows="3" maxlength="2000" @bind="draft.AdminResponse"></textarea></label><p class="muted small">Granting Access Requires Review Requests And Manage Entitlements. Capacity Is Added Once.</p><div class="toolbar"><button disabled="@Busy" @onclick="Respond">Save Response</button><button class="secondary" @onclick="()=>requestDraft=null">Close</button></div>
+}else{<p><b>Admin Response</b></p><p class="preserve">@draft.AdminResponse</p><p class="muted small">@(draft.Status=="Granted"?"Granted Requests Remain In The Approval History. Use Manage Access To Revoke Features.":"Review Requests Permission Is Required To Respond.")</p><button class="secondary" @onclick="()=>requestDraft=null">Close</button>}
+</div>}
+</section>
+}else{
+<section class="detail-card"><div class="card-heading"><h2>Account Activity</h2><span class="muted small">Latest 100 Recorded Events · UTC</span></div>@if(!CanViewAudit){<p class="empty">View Admin Audit Events Permission Is Required.</p>}else if(activity.Count==0){<p class="empty">No Account Activity Recorded.</p>}else{<div class="table-wrap"><table><thead><tr><th>Activity</th><th>Performed By</th><th>Details</th><th>Date &amp; Time</th></tr></thead><tbody>@foreach(var entry in activity){<tr><td><b>@entry.Action</b></td><td>@entry.AccountInfo</td><td>@entry.Details</td><td>@entry.CreatedUtc.ToString("dd MMM yyyy HH:mm") UTC</td></tr>}</tbody></table></div>}</section>
+}
+</div>
+@code{
+[Parameter,EditorRequired]public EmployerOverview Item{get;set;}=null!;
+[Parameter]public WorkspaceUser? Owner{get;set;}
+[Parameter]public bool CanManageAccounts{get;set;}
+[Parameter]public bool CanManageEntitlements{get;set;}
+[Parameter]public bool CanReviewRequests{get;set;}
+[Parameter]public bool CanViewAudit{get;set;}
+[Parameter]public EventCallback OnBack{get;set;}
+[Parameter]public EventCallback OnChanged{get;set;}
+AdminWorkspaceTeam team=new([],[]);
+List<AdminActivitySummary> activity=[];
+EmployerWorkspace entitlement=new();
+EmployerAccessRequest? requestDraft;
+Guid? loadedId;
+bool editAccount,editSubscription;
+string tab="Overview",ownerName="",ownerStatus="Active",ownerPassword="";
+bool Freelance=>Item.Workspace.Kind==AccountTypes.Freelance;
+bool CanGrant=>CanReviewRequests&&CanManageEntitlements;
+string AccountType=>Freelance?"Freelance Recruiter":Item.Workspace.AgencyEnabled?"Agency":"Employer";
+string OwnerName=>string.IsNullOrWhiteSpace(Owner?.FullName)?Owner?.Username??"Owner Unavailable":Owner.FullName;
+int Slots=>Item.Workspace.FreePositionSlots+Item.Workspace.AdditionalPositionSlots;
+int Seats=>Item.Workspace.FreeRecruiterSeats+Item.Workspace.AdditionalRecruiterSeats;
+bool HasGrantedAccess=>Item.Workspace.AdditionalPositionSlots>0||Item.Workspace.AdditionalRecruiterSeats>0||Item.Workspace.MasterTalentPoolEnabled||Item.Workspace.AgencyEnabled||Item.Workspace.EmailTemplatesEnabled;
+List<EmployerAccessRequest> Pending=>Item.Requests.Where(r=>r.Status is "Submitted" or "Under Review" or "Needs Information").ToList();
+static string Initials(string name)=>string.Concat(name.Split(' ',StringSplitOptions.RemoveEmptyEntries).Take(2).Select(p=>char.ToUpperInvariant(p[0])));
+static string Permissions(AdminWorkspaceMember m){var granted=new List<string>();if(m.CreateClients)granted.Add("Create Clients");if(m.CreatePositions)granted.Add("Create Positions");if(m.ExportReports)granted.Add("Export Reports");if(m.TalentPool)granted.Add("Talent Pool");return granted.Count>0?string.Join(" · ",granted):"Operational Access Only";}
+protected override async Task OnParametersSetAsync(){if(loadedId!=Item.Workspace.Id){loadedId=Item.Workspace.Id;await Run(LoadDetails);}}
+async Task LoadDetails(){team=await EmployerService.AdministrationTeam(Item.Workspace.Id);activity=CanViewAudit?await Admin.WorkspaceActivity(Item.Workspace.Id):[];}
+async Task Refresh(){await OnChanged.InvokeAsync();await LoadDetails();editAccount=editSubscription=false;requestDraft=null;}
+void SelectTab(string value){tab=value;Error=Notice="";}
+void EditAccount(){ownerName=Owner?.FullName??"";ownerStatus=Owner?.Status??"Active";ownerPassword="";editAccount=true;tab="Overview";}
+void EditSubscription(){entitlement=JsonSerializer.Deserialize<EmployerWorkspace>(JsonSerializer.Serialize(Item.Workspace))!;editSubscription=true;}
+void Review(EmployerAccessRequest request){requestDraft=JsonSerializer.Deserialize<EmployerAccessRequest>(JsonSerializer.Serialize(request))!;if(requestDraft.Status=="Submitted")requestDraft.Status="Under Review";tab="Requests";}
+Task SaveAccount()=>Run(async()=>{await Admin.UpdateWorkspaceOwner(Item.Workspace.Id,ownerName,ownerStatus);await Refresh();Notice="Workspace Owner Account Updated.";});
+Task ResetPassword()=>Run(async()=>{await Admin.ResetWorkspaceOwnerPassword(Item.Workspace.Id,ownerPassword);ownerPassword="";await Refresh();Notice="ATS Password Reset. Share It Through Your Secure Channel.";});
+Task SaveAccess()=>Run(async()=>{await EmployerService.SetAccess(entitlement);await Refresh();Notice="Workspace Access Updated.";});
+Task Respond()=>Run(async()=>{if(requestDraft is null)return;await EmployerService.Respond(requestDraft);await Refresh();Notice="Response Saved In The Workspace Portal.";});
+}

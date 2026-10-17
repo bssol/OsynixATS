@@ -1,4 +1,4 @@
-<aside class="panel candidate-identity-card"><div class="section-heading"><h3>Candidate Details</h3>@if(CanEdit){<button class="secondary candidate-pencil" aria-label="Edit Candidate Details" title="Edit Candidate Details" @onclick="Edit"><NavIcon Name="pencil" /></button>}</div>
+<section class="panel candidate-identity-card"><div class="section-heading"><h3>Candidate Details</h3>@if(CanEdit){<button type="button" class="secondary candidate-pencil" aria-label="Edit Candidate Details" title="Edit Candidate Details" @onclick="Edit"><NavIcon Name="pencil" /></button>}</div>
 <CandidateFact Icon="badge" Label="Candidate ID" Value="@(Person.LegacyId.Length>0?Person.LegacyId:"Not Assigned")" />
 <CandidateFact Icon="mail" Label="Email" Value="@Person.Email" />
 <CandidateFact Icon="phone" Label="Phone" Value="@Person.Phone" />
@@ -8,5 +8,5 @@
 <CandidateFact Icon="layers" Label="Seniority" Value="@Person.Seniority" />
 <CandidateFact Icon="clock" Label="Total Experience" Value="@(Person.TotalExperience is double years?$"{years:0.#} Years":null)" />
 <CandidateFact Icon="talent" Label="Talent Status" Value="@Person.TalentStatus" />
-</aside>
+</section>
 @code{[Parameter,EditorRequired]public Candidate Person{get;set;}=default!;[Parameter]public bool CanEdit{get;set;}[Parameter]public EventCallback Edit{get;set;}}

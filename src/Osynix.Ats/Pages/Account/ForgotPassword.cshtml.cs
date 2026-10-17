@@ -8,9 +8,10 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.WebUtilities;
 using Osynix.Ats.Data;
 using Osynix.Ats.Services;
+using Microsoft.EntityFrameworkCore;
 namespace Osynix.Ats.Pages.Account;
 [AllowAnonymous,EnableRateLimiting("auth")]
-public class ForgotPasswordModel(UserManager<AtsUser> users,IAccountEmail mail,IConfiguration config):PageModel {
+public class ForgotPasswordModel(UserManager<AtsUser> users,IAccountEmail mail,IConfiguration config,IDbContextFactory<AtsDbContext>? templateFactory=null):PageModel {
  [BindProperty,Required,EmailAddress]public string Email{get;set;}="";public bool Sent{get;set;}
  public async Task<IActionResult> OnPostAsync(){
   if(!ModelState.IsValid)return Page();
@@ -19,7 +20,9 @@ public class ForgotPasswordModel(UserManager<AtsUser> users,IAccountEmail mail,I
   try{if(user is not null&&user.EmailConfirmed&&user.Status=="Active"){
    var token=WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(await users.GeneratePasswordResetTokenAsync(user)));
    var origin=(config["Auth:PublicBaseUrl"]??"http://localhost:5080").TrimEnd('/');
-   await mail.Send(user.Email!,"Reset Your Osynix Password",$"Use this secure link to choose a new password:\n{origin}/Account/ResetPassword?email={Uri.EscapeDataString(user.Email!)}&token={token}\n\nThe link expires in one hour.");
+   var link=$"{origin}/Account/ResetPassword?email={Uri.EscapeDataString(user.Email!)}&token={token}";
+   var body=$"Use this secure link to choose a new password:\n{link}\n\nThe link expires in one hour.";
+   if(templateFactory is null)await mail.Send(user.Email!,"Reset Your Osynix Password",body);else await EmailTemplateService.Send(templateFactory,mail,null,"password-reset",user.Email!,"Reset Your Osynix Password",body,new(){["PasswordResetLink"]=link});
   }Sent=true;}catch{ModelState.AddModelError("","We could not send reset instructions. Please try again later.");}return Page();
  }
 }

@@ -624,14 +624,6 @@ namespace Osynix.Ats.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("CvProfileError")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("CvProfileStatus")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.Property<DateTime>("CreatedUtc")
                         .HasColumnType("TEXT");
 
@@ -640,6 +632,14 @@ namespace Osynix.Ats.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("CurrentRole")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CvProfileError")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CvProfileStatus")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -1099,6 +1099,65 @@ namespace Osynix.Ats.Data.Migrations
                     b.ToTable("DecisionRules");
                 });
 
+            modelBuilder.Entity("Osynix.Ats.Domain.EmailTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BodyHtml")
+                        .IsRequired()
+                        .HasMaxLength(30000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Custom")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Recipient")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Key")
+                        .IsUnique()
+                        .HasFilter("WorkspaceId IS NULL");
+
+                    b.HasIndex("WorkspaceId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("EmailTemplates");
+                });
+
             modelBuilder.Entity("Osynix.Ats.Domain.EmployerAccessRequest", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1341,6 +1400,9 @@ namespace Osynix.Ats.Data.Migrations
 
                     b.Property<DateTime>("CreatedUtc")
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("EmailTemplatesEnabled")
+                        .HasColumnType("INTEGER");
 
                     b.Property<int>("FreePositionSlots")
                         .HasColumnType("INTEGER");
@@ -2437,6 +2499,14 @@ namespace Osynix.Ats.Data.Migrations
                         .HasForeignKey("PositionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Osynix.Ats.Domain.EmailTemplate", b =>
+                {
+                    b.HasOne("Osynix.Ats.Domain.EmployerWorkspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Osynix.Ats.Domain.EmployerAccessRequest", b =>

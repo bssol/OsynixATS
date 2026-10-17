@@ -21,6 +21,7 @@ public class AtsUser : IdentityUser
 }
 public class AtsDbContext(DbContextOptions<AtsDbContext> options) : IdentityDbContext<AtsUser>(options)
 {
+    public DbSet<EmailTemplate> EmailTemplates => Set<EmailTemplate>();
     public DbSet<InterviewBooking> InterviewBookings=>Set<InterviewBooking>();
     public DbSet<InterviewDelivery> InterviewDeliveries=>Set<InterviewDelivery>();
     public DbSet<RecruiterAction> RecruiterActions=>Set<RecruiterAction>();
@@ -55,6 +56,9 @@ public class AtsDbContext(DbContextOptions<AtsDbContext> options) : IdentityDbCo
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<EmailTemplate>().HasIndex(t=>new{t.WorkspaceId,t.Key}).IsUnique();
+        b.Entity<EmailTemplate>().HasIndex(t=>t.Key).IsUnique().HasFilter("WorkspaceId IS NULL");
+        b.Entity<EmailTemplate>().HasOne<EmployerWorkspace>().WithMany().HasForeignKey(t=>t.WorkspaceId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<InterviewBooking>().HasIndex(i=>i.TokenHash).IsUnique();
         b.Entity<InterviewBooking>().HasOne<Assessment>().WithMany().HasForeignKey(i=>i.AssessmentId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<InterviewBooking>().HasOne<HiringSubmission>().WithMany().HasForeignKey(i=>i.SubmissionId).OnDelete(DeleteBehavior.Restrict);

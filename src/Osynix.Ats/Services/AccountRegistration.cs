@@ -5,10 +5,11 @@ using System.Text.Json;
 using System.Collections.Concurrent;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Osynix.Ats.Data;
 using Osynix.Ats.Domain;
 namespace Osynix.Ats.Services;
-public class AccountRegistration(UserManager<AtsUser> users,IAccountEmail mail,IDataProtectionProvider protection){
+public class AccountRegistration(UserManager<AtsUser> users,IAccountEmail mail,IDataProtectionProvider protection,IDbContextFactory<AtsDbContext>? templateFactory=null){
  public static readonly string[] Roles=["Recruiter","Employer","Candidate"];
  static readonly ConcurrentDictionary<string,SemaphoreSlim> gates=new();
  readonly IDataProtector protector=protection.CreateProtector("Osynix.EmailOtp.v1");
@@ -35,7 +36,7 @@ public class AccountRegistration(UserManager<AtsUser> users,IAccountEmail mail,I
    var state=new Otp(Hash(account.Id,code),DateTimeOffset.UtcNow.AddMinutes(10),DateTimeOffset.UtcNow,0);
    var result=await users.SetAuthenticationTokenAsync(account,"Osynix","EmailOtp",protector.Protect(JsonSerializer.Serialize(state)));
    if(!result.Succeeded)throw new InvalidOperationException("Unable to prepare a verification code.");
-   try{await mail.Send(account.Email!,"Your Osynix Verification Code",$"Your verification code is {code}.\n\nIt expires in 10 minutes.");}
+   try{if(templateFactory is null)await mail.Send(account.Email!,"Your Osynix Verification Code",$"Your verification code is {code}.\n\nIt expires in 10 minutes.");else await EmailTemplateService.Send(templateFactory,mail,null,"email-verification",account.Email!,"Your Osynix Verification Code",$"Your verification code is {code}.\n\nIt expires in 10 minutes.",new(){["VerificationCode"]=code});}
    catch{await users.RemoveAuthenticationTokenAsync(account,"Osynix","EmailOtp");throw new InvalidOperationException("We could not send the verification email. Please try again later.");}
   }finally{gate.Release();}
  }
@@ -53,5 +54,5 @@ public class AccountRegistration(UserManager<AtsUser> users,IAccountEmail mail,I
  async Task<Otp?> Read(AtsUser account){var value=await users.GetAuthenticationTokenAsync(account,"Osynix","EmailOtp");try{return value is null?null:JsonSerializer.Deserialize<Otp>(protector.Unprotect(value));}catch{return null;}}
  static string Hash(string id,string code)=>Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(id+":"+code)));
  record Otp(string Hash,DateTimeOffset Expiry,DateTimeOffset Sent,int Attempts);
- public static string Home(IEnumerable<string> roles)=>roles.Contains("Admin")||roles.Contains("Recruiter")?"/":roles.Contains("Employer")?"/employer":"/Account/Portal";
+ public static string Home(IEnumerable<string> roles)=>roles.Contains("SubAdmin")?"/settings":roles.Contains("Admin")||roles.Contains("Recruiter")?"/":roles.Contains("Employer")?"/employer":"/Account/Portal";
 }

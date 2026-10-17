@@ -1,0 +1,38 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+<div class="rich-editor">
+    <div class="rich-toolbar" role="toolbar" aria-label="Message Formatting">
+        <button type="button" @onclick='()=>Format("bold")' aria-label="Bold"><b>B</b></button>
+        <button type="button" @onclick='()=>Format("italic")' aria-label="Italic"><i>I</i></button>
+        <button type="button" @onclick='()=>Format("underline")' aria-label="Underline"><u>U</u></button>
+        <button type="button" @onclick='()=>Format("insertUnorderedList")' aria-label="Bulleted List">• List</button>
+        <button type="button" @onclick='()=>Format("insertOrderedList")' aria-label="Numbered List">1. List</button>
+        <button type="button" @onclick='()=>Format("justifyLeft")' aria-label="Align Left">Left</button>
+        <button type="button" @onclick='()=>Format("justifyCenter")' aria-label="Align Center">Center</button>
+        <button type="button" @onclick='()=>Format("justifyRight")' aria-label="Align Right">Right</button>
+        <button type="button" @onclick='()=>Format("formatBlock","h2")'>Heading</button>
+        <button type="button" @onclick='()=>Format("formatBlock","p")'>Paragraph</button>
+        <button type="button" @onclick='()=>Format("removeFormat")'>Clear Format</button>
+    </div>
+    <div class="rich-content" @ref="element" contenteditable="true" role="textbox" aria-label="@Label" aria-multiline="true" data-placeholder="Write Your Message..."></div>
+    <div class="rich-insert">
+        <label>Link<input type="url" placeholder="https://..." @bind="link" /></label><button type="button" @onclick="InsertLink">Insert Link</button>
+        @if(Fields.Length>0){<label>Insert Field<select @bind="field">@foreach(var name in Fields){<option value="@name">@name</option>}</select></label><button type="button" @onclick="InsertField">Insert Field</button>}
+    </div>
+    @if(error.Length>0){<p class="error" role="alert">@error</p>}
+</div>
+@code{
+    [Parameter]public string Value{get;set;}="";
+    [Parameter]public string Label{get;set;}="Template Message";
+    [Parameter]public string[] Fields{get;set;}=[];
+    ElementReference element;IJSObjectReference? module;string? loaded;string link="",field="CandidateName",error="";
+    protected override async Task OnAfterRenderAsync(bool first){
+        module??=await JS.InvokeAsync<IJSObjectReference>("import","./email-editor.js");
+        if(loaded!=Value){await module.InvokeVoidAsync("set",element,Value);loaded=Value;}
+    }
+    public async Task<string> GetHtml()=>module is null?Value:await module.InvokeAsync<string>("get",element);
+    async Task Format(string command,string? value=null){if(module is not null)await module.InvokeVoidAsync("format",element,command,value);}
+    async Task InsertLink(){error="";if(!Uri.TryCreate(link,UriKind.Absolute,out var uri)||uri.Scheme is not("http" or "https" or "mailto")){error="Enter A Valid HTTPS, HTTP Or Email Link.";return;}await Format("createLink",uri.AbsoluteUri);link="";}
+    async Task InsertField(){if(module is not null)await module.InvokeVoidAsync("insert",element,"{{"+field+"}}");}
+    public async ValueTask DisposeAsync(){if(module is not null){try{await module.InvokeVoidAsync("dispose",element);await module.DisposeAsync();}catch(JSDisconnectedException){}}}
+}

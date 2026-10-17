@@ -137,7 +137,7 @@ public class HiringReviewService(IDbContextFactory<AtsDbContext> factory,Access 
 
   try{
 
-   await email.Send(address,"Osynix — Profiles Ready For Review",$"Hello {client.Name} Team,\n\n{apps.Count} profiles are ready for {apps[0].Position!.Title} (#{apps[0].Position!.Reference}).\n\n{message}\n\nReview assessment reports, add feedback, and propose interview availability:\n{link}\n\nUse the same link to revisit profiles and positions shared for your client team. You may share it with authorized team members reviewing on your behalf. The same link remains available until the workspace owner replaces or revokes it. Candidate contact details and CVs are not shared.");
+   await EmailTemplateService.Send(factory,email,apps[0].Position!.WorkspaceId,"profiles-review",address,"Osynix — Profiles Ready For Review",$"Hello {client.Name} Team,\n\n{apps.Count} profiles are ready for {apps[0].Position!.Title} (#{apps[0].Position!.Reference}).\n\n{message}\n\nReview assessment reports, add feedback, and propose interview availability:\n{link}\n\nUse the same link to revisit profiles and positions shared for your client team. You may share it with authorized team members reviewing on your behalf. The same link remains available until the workspace owner replaces or revokes it. Candidate contact details and CVs are not shared.",new(){["ClientName"]=client.Name,["ClientContactName"]=contact?.Name??client.Name,["ProfileCount"]=apps.Count.ToString(),["PositionTitle"]=apps[0].Position!.Title,["PositionReference"]=apps[0].Position!.Reference,["RecruiterMessage"]=message,["ReviewLink"]=link});
 
    foreach(var sub in submitted)sub.Delivery="Email Sent";await db.SaveChangesAsync();updates.Publish();
 

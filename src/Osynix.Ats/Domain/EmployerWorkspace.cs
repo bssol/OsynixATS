@@ -5,6 +5,7 @@ public class EmployerWorkspace : Record
 {
     public string Kind {get;set;} = "Employer";
     public bool AgencyEnabled {get;set;}
+    public bool EmailTemplatesEnabled {get;set;}
     public bool MasterTalentPoolEnabled {get;set;}
     [MaxLength(450)] public string OwnerId { get; set; } = "";
     [MaxLength(30)] public string OperatingType { get; set; } = "Company Owner";

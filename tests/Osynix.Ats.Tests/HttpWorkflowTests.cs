@@ -31,6 +31,23 @@ public class HttpWorkflowTests
         var html=await client.GetStringAsync("/Account/Login");var token=Regex.Match(html,"name=\"__RequestVerificationToken\"[^>]*value=\"([^\"]+)\"").Groups[1].Value;
         var result=await client.PostAsync("/Account/Login",new FormUrlEncodedContent(new Dictionary<string,string>{{"Email","HttpUser"},{"Password","Test-password!123"},{"__RequestVerificationToken",token}}));Assert.Equal(HttpStatusCode.Redirect,result.StatusCode);return client;
     }
+    [Fact] public async Task AdminWorkspaceDirectoryRendersCategoriesViewsAndRealOwnerDetails(){
+        await using var host=new Host();using var client=await Login(host);
+        using(var scope=host.Services.CreateScope()){
+            var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();
+            var user=new AtsUser{Id="directory-owner",UserName="directory-owner",Email="owner@directory.test",FullName="Directory Owner",EmailConfirmed=true,AccountType=AccountTypes.Employer};db.Users.Add(user);
+            db.UserRoles.Add(new(){UserId=user.Id,RoleId=(await db.Roles.SingleAsync(r=>r.Name=="Employer")).Id});
+            db.EmployerWorkspaces.Add(new(){OwnerId=user.Id,CompanyName="Directory Employer"});await db.SaveChangesAsync();
+        }
+        var response=await client.GetAsync("/settings/employers");Assert.Equal(HttpStatusCode.OK,response.StatusCode);var html=WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
+        foreach(var text in new[]{"Employer Accounts","Agency Accounts","Freelance Recruiters","List View","Card View","Osynix.Ats.styles.css","Directory Employer","Directory Owner","owner@directory.test","Search Accounts","Accounts Per Page"})Assert.Contains(text,html);
+        Assert.DoesNotContain("The operation failed",html);Assert.DoesNotContain("The page could not load",html);
+    }
+    [Fact]public async Task AdminTemplatePageRendersApprovedLibraryAndCreateAction(){
+        await using var host=new Host();using var client=await Login(host);var html=WebUtility.HtmlDecode(await client.GetStringAsync("/settings/email-templates"));
+        foreach(var text in new[]{"Select Template","Create Template","Interview Invitation","Application Received","Offer Notification","Email Verification Code","Email Templates"})Assert.Contains(text,html);
+        Assert.DoesNotContain("The operation failed",html);Assert.DoesNotContain("The page could not load",html);
+    }
     [Fact] public async Task CareersPageAndCoverArePublicOnlyWhileTheEmployerPublishesThem(){
         await using var host=new Host();using var signedIn=await Login(host,"Employer");Guid id;Guid jobId;var png=Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0lcAAAAASUVORK5CYII=");
         using(var scope=host.Services.CreateScope()){var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();var owner=await db.Users.SingleAsync(u=>u.UserName=="HttpUser");var w=new EmployerWorkspace{OwnerId=owner.Id,CompanyName="Public Company",CareersPublished=true,CareersCoverMode="Upload",CareersCoverContent=png,CareersCoverContentType="image/png",BusinessEmail="PRIVATE-CONTACT@example.test"};db.EmployerWorkspaces.Add(w);var job=new Position{WorkspaceId=w.Id,Reference="PUB-HTTP",Title="Public Operations Role",Client="PRIVATE CLIENT",HiringContact="PRIVATE MANAGER",CareersPublished=true,PublicJobDescription="Public Description",JobDescription="PRIVATE JD"};db.Positions.Add(job);await db.SaveChangesAsync();id=w.Id;jobId=job.Id;}
@@ -68,7 +85,8 @@ public class HttpWorkflowTests
         foreach(var route in new[]{"/employer","/clients","/positions","/pipeline","/assessment","/candidates","/search?q=Employer"}){var response=await client.GetAsync(route);Assert.Equal(HttpStatusCode.OK,response.StatusCode);var html=await response.Content.ReadAsStringAsync();Assert.DoesNotContain("Hidden Other",html);Assert.DoesNotContain("Hidden Legacy",html);Assert.DoesNotContain("The page could not load",html);}
         Assert.Contains("Owned Employer Position",await client.GetStringAsync("/positions"));Assert.Contains("+ Create Client",WebUtility.HtmlDecode(await client.GetStringAsync("/clients")));Assert.Contains("Owned Employer Candidate",await client.GetStringAsync("/pipeline"));
         Assert.Equal(HttpStatusCode.OK,(await client.GetAsync("/files/"+ownDoc)).StatusCode);Assert.Equal(HttpStatusCode.Forbidden,(await client.GetAsync("/files/"+privateDoc)).StatusCode);Assert.Equal(HttpStatusCode.OK,(await client.GetAsync("/reports?ids="+ownApplication)).StatusCode);Assert.Equal(HttpStatusCode.Forbidden,(await client.GetAsync("/reports?ids="+privateApplication)).StatusCode);
-        Assert.Equal(HttpStatusCode.Redirect,(await client.GetAsync("/settings")).StatusCode);
+        var settings=await client.GetStringAsync("/settings");Assert.Contains("Open Email Templates",settings);Assert.DoesNotContain("Add a Sub-Admin",settings);Assert.DoesNotContain("Assessment Decision Rules</b>",settings);
+        var templates=await client.GetStringAsync("/settings/email-templates");Assert.Contains("Email Templates Access Required",templates);Assert.DoesNotContain("+ Create Template",templates);
     }
     [Fact] public async Task AuthenticatedWorkspacesAndHistoricalReportsRenderStoredEvidence()
     {

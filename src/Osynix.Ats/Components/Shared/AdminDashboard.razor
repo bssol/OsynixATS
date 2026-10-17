@@ -1,0 +1,82 @@
+@inherits PageBase
+@inject AdminService Admin
+@inject EmployerService Employers
+<PageTitle>Admin Overview · Osynix ATS</PageTitle>
+<div class="dashboard-page admin-dashboard">
+    <div class="page-heading">
+        <div><div class="eyebrow">PLATFORM ADMINISTRATION</div><h1>Admin Overview</h1><p class="muted">Account access, Employer workspaces and platform activity.</p></div>
+        <a class="button secondary" href="/settings">Open Settings</a>
+    </div>
+    <Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
+    @if(loaded){
+        <div class="kpis admin-account-counts">
+            <a class="kpi" href="/settings"><span class="kpi-icon icon-blue"><NavIcon Name="talent" /></span><span>Freelance Recruiters</span><strong>@freelance.Count</strong><small>@freelance.Count(x=>x.Status=="Active") active accounts</small></a>
+            <a class="kpi" href="/settings/employers"><span class="kpi-icon icon-teal"><NavIcon Name="clients" /></span><span>Employer Accounts</span><strong>@employers.Count</strong><small>@employers.Count(x=>x.Status=="Active") active accounts</small></a>
+            <a class="kpi" href="/settings/employers"><span class="kpi-icon icon-violet"><NavIcon Name="positions" /></span><span>Agency Enabled</span><strong>@agencyWorkspaces</strong><small>Employer workspaces with Agency access</small></a>
+            <a class="kpi" href="/settings"><span class="kpi-icon icon-amber"><NavIcon Name="clients" /></span><span>Pending Access Requests</span><strong>@pendingAccessRequests</strong><small>Accounts awaiting Admin access review</small></a>
+            <a class="kpi" href="/settings/employers"><span class="kpi-icon icon-blue"><NavIcon Name="positions" /></span><span>Pending Subscription Requests</span><strong>@pendingSubscriptionRequests</strong><small>Workspace requests awaiting an Admin response</small></a>
+            <a class="kpi" href="/settings/employers"><span class="kpi-icon icon-teal"><NavIcon Name="settings" /></span><span>Pending Payments</span><strong>@pendingPayments</strong><small>Payment tracking is not connected yet</small></a>
+        </div>
+        <div class="two-col admin-overview-columns">
+            <section class="panel table-wrap">
+                <div class="section-heading"><h2>Recent Platform Activity</h2><a href="/settings">Open account administration</a></div>
+                @if(audit.Count==0){<p class="empty">No platform activity has been recorded yet.</p>}else{
+                    <table><thead><tr><th>Time (UTC)</th><th>Action</th><th>Affected Account</th><th>Details</th></tr></thead><tbody>
+                    @foreach(var item in audit.Take(8)){
+                        <tr><td>@item.CreatedUtc.ToString("dd MMM yyyy HH:mm")</td><td>@item.Action</td><td><b>@item.Account</b><small>@item.AccountInfo</small></td><td>@item.Details</td></tr>
+                    }
+                    </tbody></table>
+                }
+            </section>
+            <section class="panel">
+                <div class="section-heading"><h2>Access Requests</h2><a href="/settings/employers">Review</a></div>
+                @if(pendingRequests==0){<p class="empty">No Employer access requests need review.</p>}else{
+                    <p><strong>@pendingRequests</strong> request@(pendingRequests==1?"":"s") waiting for an Admin response.</p>
+                    @foreach(var item in requestSummaries.Take(5)){
+                        <div class="admin-request-row"><div><b>@item.Workspace</b><small>@item.Feature · @item.Status</small></div><a href="/settings/employers">Open</a></div>
+                    }
+                }
+                <hr />
+                <h3>Platform controls</h3>
+                <p class="muted">Manage account status and Recruiter permissions. Set Employer seats, position slots, Agency access and Master Pool entitlements by workspace.</p>
+                <div class="admin-quick-links"><a href="/settings">Settings</a><a href="/settings/employers">Workspaces &amp; Subscriptions</a><a href="/import">Workbook Import</a></div>
+            </section>
+        </div>
+    }
+</div>
+@code {
+    List<WorkspaceUser> users=[];
+    List<AdminActivitySummary> audit=[];
+    List<AdminRequestSummary> requestSummaries=[];
+    int agencyWorkspaces;
+    int pendingRequests;
+    int pendingAccessRequests;
+    int pendingSubscriptionRequests;
+    int pendingPayments;
+    bool loaded;
+    List<WorkspaceUser> freelance=[];
+    List<WorkspaceUser> employers=[];
+
+    record AdminRequestSummary(string Workspace,string Feature,string Status);
+
+    protected override Task OnInitializedAsync()=>Run(Load);
+
+    async Task Load(){
+        users=await Admin.Users();
+        audit=await Admin.RecentAdminActivity();
+        var workspaces=await Employers.Administration();
+        freelance=users.Where(IsFreelance).ToList();
+        employers=users.Where(IsEmployer).ToList();
+        pendingAccessRequests=users.Count(x=>x.Status=="Pending");
+        agencyWorkspaces=workspaces.Count(x=>x.Workspace.Kind==AccountTypes.Employer&&x.Workspace.AgencyEnabled);
+        var requests=workspaces.SelectMany(x=>x.Requests.Where(r=>r.Status is "Submitted" or "Under Review" or "Needs Information").Select(r=>new AdminRequestSummary(x.Workspace.CompanyName,r.Feature,r.Status))).ToList();
+        pendingRequests=requests.Count;
+        pendingSubscriptionRequests=requests.Count;
+        pendingPayments=0;
+        requestSummaries=requests;
+        loaded=true;
+    }
+
+    static bool IsFreelance(WorkspaceUser user)=>user.AccountType==AccountTypes.Freelance||(user.AccountType==AccountTypes.Legacy&&user.Role=="Recruiter"&&user.EmployerWorkspaceId is null);
+    static bool IsEmployer(WorkspaceUser user)=>user.AccountType==AccountTypes.Employer||(user.AccountType==AccountTypes.Legacy&&user.Role=="Employer");
+}

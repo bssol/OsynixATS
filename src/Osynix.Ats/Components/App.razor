@@ -1,6 +1,6 @@
 @inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment Environment
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><base href="/" /><link rel="stylesheet" href="@AssetUrl("app.css")" /><link rel="stylesheet" href="@AssetUrl("careers.css")" /><HeadOutlet @rendermode="InteractiveServer" /></head>
+<html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><base href="/" /><link rel="stylesheet" href="@AssetUrl("app.css")" /><link rel="stylesheet" href="@AssetUrl("careers.css")" /><link rel="stylesheet" href="@AssetUrl("Osynix.Ats.styles.css")" /><HeadOutlet @rendermode="InteractiveServer" /></head>
 <body><Routes @rendermode="InteractiveServer" /><script src="_framework/blazor.web.js"></script><script src="@AssetUrl("app.js")"></script></body></html>
 @code {
     string AssetUrl(string path)

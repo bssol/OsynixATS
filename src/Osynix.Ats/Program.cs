@@ -12,6 +12,8 @@ using Osynix.Ats.Services;
 
 if(args.Contains("--install-browser")) return Microsoft.Playwright.Program.Main(["install","--with-deps","chromium"]);
 var builder=WebApplication.CreateBuilder(args);
+// Load component styles when the built app is started without a launch profile.
+builder.WebHost.UseStaticWebAssets();
 builder.Configuration.AddJsonFile("appsettings.Local.json",optional:true,reloadOnChange:true).AddEnvironmentVariables();
 var openAiKey=Environment.GetEnvironmentVariable("OpenAI__ApiKey")??Environment.GetEnvironmentVariable("OpenAI_APIKey");
 if(string.IsNullOrWhiteSpace(openAiKey)&&OperatingSystem.IsWindows())openAiKey=Environment.GetEnvironmentVariable("OpenAI__ApiKey",EnvironmentVariableTarget.User)??Environment.GetEnvironmentVariable("OpenAI_APIKey",EnvironmentVariableTarget.User);
@@ -35,6 +37,7 @@ builder.Services.ConfigureApplicationCookie(o=>{o.LoginPath="/Account/Login";o.A
 builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics",LogLevel.Warning);
 builder.Services.Configure<DataProtectionTokenProviderOptions>(o=>o.TokenLifespan=TimeSpan.FromHours(1));
 builder.Services.AddScoped<IAccountEmail,AccountEmail>();
+builder.Services.AddScoped<EmailTemplateService>();
 builder.Services.AddScoped<AccountRegistration>();
 if(!string.IsNullOrWhiteSpace(builder.Configuration["Authentication:Google:ClientId"])&&!string.IsNullOrWhiteSpace(builder.Configuration["Authentication:Google:ClientSecret"])){
  builder.Services.AddAuthentication().AddGoogle(o=>{
@@ -77,7 +80,7 @@ using(var scope=app.Services.CreateScope()) {
     await DatabaseInitializer.InitializeAsync(db);
     await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;");
     var roles=scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-    foreach(var role in new[]{"Admin","Recruiter","Employer","Candidate"}) if(!await roles.RoleExistsAsync(role)) await roles.CreateAsync(new(role));
+    foreach(var role in new[]{"Admin","SubAdmin","Recruiter","Employer","Candidate"}) if(!await roles.RoleExistsAsync(role)) await roles.CreateAsync(new(role));
     await WorkspaceUpgrade.Apply(db);
     await CandidateCityUpgrade.Apply(db);
     await RecruiterActionService.Backfill(db);

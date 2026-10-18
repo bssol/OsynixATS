@@ -2,6 +2,7 @@
 @inject RecruitmentUpdates Updates
 @using Microsoft.EntityFrameworkCore
 @inject Access Access
+@inject NavigationManager Navigation
 @inject AuthenticationStateProvider Auth
 @inject IDbContextFactory<Osynix.Ats.Data.AtsDbContext> Factory
 @inherits LayoutComponentBase
@@ -22,12 +23,10 @@
                 <NavLink href="/master-talent" title="Osynix Master Talent Pool"><NavIcon Name="talent" /><span>Master Talent Pool</span></NavLink>
                 <NavLink href="/activity" title="Platform Activity"><NavIcon Name="clock" /><span>Platform Activity</span></NavLink>
                 <NavLink href="/import" title="Import Workbook"><NavIcon Name="import" /><span>Import Workbook</span></NavLink>
-                <NavLink href="/profile" title="My Profile"><NavIcon Name="settings" /><span>My Profile</span></NavLink>
-                <NavLink href="/settings" Match="NavLinkMatch.All" title="Settings"><NavIcon Name="settings" /><span>Settings</span></NavLink>
+                <NavLink href="/settings" class="@(SettingsRoute?"active":"")" Match="NavLinkMatch.All" title="Settings"><NavIcon Name="settings" /><span>Settings</span></NavLink>
             }else if(isSubAdmin){
-                <NavLink href="/profile" title="My Profile"><NavIcon Name="settings" /><span>My Profile</span></NavLink>
                 @if(canAdminWorkspaces){<NavLink href="/settings/employers" title="Workspaces & Subscriptions"><NavIcon Name="clients" /><span>Workspaces &amp; Subscriptions</span></NavLink>}
-                <NavLink href="/settings" Match="NavLinkMatch.All" title="Settings"><NavIcon Name="settings" /><span>Settings</span></NavLink>
+                <NavLink href="/settings" class="@(SettingsRoute?"active":"")" Match="NavLinkMatch.All" title="Settings"><NavIcon Name="settings" /><span>Settings</span></NavLink>
             }else{
                 <AuthorizeView Roles="Recruiter,Employer" Context="workspaceAuth">
                     @if(employerMember){
@@ -50,15 +49,12 @@
                         <NavLink href="/pipeline" title="Recruitment Pipeline"><NavIcon Name="pipeline" /><span>Recruitment Pipeline</span></NavLink>
                         @if(owner){
                             @if(employerAccount){<NavLink href="/employer/team" title="My Team"><NavIcon Name="talent" /><span>My Team</span></NavLink>}
-                            <NavLink href="/employer/subscriptions" title="Subscriptions"><NavIcon Name="settings" /><span>Subscriptions</span></NavLink>
-                            <NavLink href="/employer/company" title="Company Settings"><NavIcon Name="clients" /><span>Business Settings</span></NavLink>
                         }
-                        <NavLink href="/profile"><NavIcon Name="settings" /><span>My Profile</span></NavLink>
                     }
-                    <NavLink href="/settings" Match="NavLinkMatch.All" title="Settings"><NavIcon Name="settings" /><span>Settings</span></NavLink>
+                    <NavLink href="/settings" class="@(SettingsRoute?"active":"")" Match="NavLinkMatch.All" title="Settings"><NavIcon Name="settings" /><span>Settings</span></NavLink>
                 </AuthorizeView>
             }
-            <AuthorizeView Roles="Candidate"><NavLink href="/Account/Portal">My Account</NavLink><NavLink href="/profile">My Profile</NavLink></AuthorizeView>
+            <AuthorizeView Roles="Candidate"><NavLink href="/Account/Portal">My Account</NavLink><NavLink href="/settings" class="@(SettingsRoute?"active":"")" Match="NavLinkMatch.All"><NavIcon Name="settings" /><span>Settings</span></NavLink></AuthorizeView>
         </nav>
         <div class="side-footer">Building scalable organizations<br />through strategic people operations.</div>
     </aside>
@@ -66,6 +62,7 @@
 </div>
 <div id="blazor-error-ui">The connection was interrupted. <a href="">Reload</a></div>
 @code {
+    bool SettingsRoute{get{var path=new Uri(Navigation.Uri).AbsolutePath;return path is "/settings" or "/profile" or "/employer/subscriptions"||path.StartsWith("/employer/company",StringComparison.Ordinal)||path.StartsWith("/settings/email-templates",StringComparison.Ordinal);}}
     string sidebarLogo="",sidebarCompany="";
     bool employerMember,collapsed,owner,employerAccount,isAdmin,isSubAdmin,canAdminWorkspaces,masterGranted,showClients;
     protected override async Task OnInitializedAsync(){Updates.Changed+=AccessChanged;var user=(await Auth.GetAuthenticationStateAsync()).User;isAdmin=user.IsInRole("Admin");isSubAdmin=user.IsInRole("SubAdmin");canAdminWorkspaces=isSubAdmin&&await Access.CanAdmin("admin.workspaces.view");showClients=isAdmin||await Access.Can("Clients.View");masterGranted=isAdmin||await Access.Can("Talent.Master");if(!isAdmin&&!isSubAdmin&&user.Identity?.IsAuthenticated==true&&(user.IsInRole("Employer")||user.IsInRole("Recruiter"))){try{var active=await Access.Context();owner=active?.Owner==true;employerMember=active?.Membership is not null;if(owner){await using var db=await Factory.CreateDbContextAsync();var kind=(await db.EmployerWorkspaces.FindAsync(active!.Id))?.Kind;employerAccount=kind!=AccountTypes.Freelance;showClients=await Access.Can("Clients.View");}}catch(UnauthorizedAccessException){}}await LoadBrand();}

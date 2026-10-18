@@ -6,12 +6,14 @@
 @implements IDisposable
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+<SettingsNavigation Selected="@Section" Enabled="@(Section is "company" or "careers" or "subscriptions")">
 <PageTitle>@Title · Osynix ATS</PageTitle>
 <div class="employer-page">
 <Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
 @if(data is not null){
+@if(Section is "company" or "careers"){
 @if(Section=="company"){
-<div class="page-heading"><div><div class="eyebrow">YOUR BUSINESS</div><h1>Company Settings</h1><p class="muted">Your Company Information And Careers Presence.</p></div></div>
+<div class="page-heading"><div><h1>Business Settings</h1><p class="muted">Company information and branding for your workspace.</p></div></div>
 <section class="panel"><h2>Company Information</h2><div class="form-grid">
 <label>Operating Type<select @bind="data.Workspace.OperatingType"><option>Company Owner</option><option>Freelancer</option></select></label>
 <label>Company / Trading Name<input maxlength="200" @bind="data.Workspace.CompanyName" /></label>
@@ -21,28 +23,32 @@
 <label>Country<input maxlength="100" @bind="data.Workspace.Country" /></label>
 <label>Address<input maxlength="500" @bind="data.Workspace.Address" /></label>
 <label>Time Zone<input maxlength="100" @bind="data.Workspace.TimeZone" /></label>
-</div><label>About Us<textarea rows="4" maxlength="5000" @bind="data.Workspace.AboutUs"></textarea></label>
+</div><label>About Us<textarea rows="6" @bind="data.Workspace.AboutUs" @bind:event="oninput"></textarea><small>No word or character limit.</small></label>
 <label>Company Logo (PNG Or JPEG · Up To 1 MB)<InputFile OnChange="UploadLogo" accept="image/png,image/jpeg" /></label>
 @if(data.Workspace.LogoContent is {Length:>0}){<img class="employer-company-logo" src="@Logo(data.Workspace)" alt="Company Logo" /><button class="secondary" @onclick="RemoveLogo">Remove Logo</button>}
-<div class="careers-brand-editor"><div class="section-heading"><div><h2>Careers Page Appearance</h2><p class="muted">The Jobs-First Layout Is Fixed. Choose Your Colours And Cover Photo.</p></div></div>
+
+<button disabled="@Busy" @onclick="SaveCompany">Save Business Details</button><a class="button secondary" href="/employer/company/careers">Careers Page Settings →</a></section>
+}else{
+<div class="page-heading"><div><h1>Careers Page</h1><p class="muted">Edit your page and review the candidate experience before saving.</p></div><button disabled="@Busy" @onclick="SaveCompany">Save Changes</button></div>
+<div class="career-settings-toolbar"><label>Public Page Link<input readonly value="@CareerLink" /></label><button class="secondary" @onclick="CopyCareerLink">Copy Link</button>@if(publishedSaved){<a class="button secondary" href="@CareerLink" target="_blank" rel="noopener">Open Public Page ↗</a>}</div>
+<div class="career-settings-split"><section class="career-settings-editor"><div class="careers-brand-editor"><div class="section-heading"><div><h2>Careers Page Appearance</h2><p class="muted">Choose your colours and cover photo. Review your changes before saving.</p></div></div>
 <label>Colour Scheme<select aria-label="Careers Colour Scheme" @bind="data.Workspace.CareersColorScheme">@foreach(var palette in CareersBranding.Palettes){<option value="@palette.Key">@palette.Name</option>}</select></label>
 <div class="careers-palette-options">@foreach(var palette in CareersBranding.Palettes){<button type="button" class="careers-palette @(data.Workspace.CareersColorScheme==palette.Key?"chosen":"")" aria-pressed="@(data.Workspace.CareersColorScheme==palette.Key)" @onclick="()=>data.Workspace.CareersColorScheme=palette.Key"><span style="@($"background:linear-gradient(120deg,{palette.Primary},{palette.Deep})")"></span>@palette.Name</button>}</div>
 <label>Cover Photo<select aria-label="Careers Cover Source" @bind="data.Workspace.CareersCoverMode"><option value="Stock">Choose A Stock Photo</option><option value="Upload">Upload My Own Photo</option><option value="None">Theme Background Only</option></select></label>
 @if(data.Workspace.CareersCoverMode=="Stock"){
-<div class="careers-stock-grid">@foreach(var cover in CareersBranding.Covers){<button type="button" class="careers-stock-choice @(data.Workspace.CareersStockCover==cover.Id?"chosen":"")" aria-pressed="@(data.Workspace.CareersStockCover==cover.Id)" @onclick="()=>data.Workspace.CareersStockCover=cover.Id"><img src="@cover.Path" alt="" loading="lazy" /><span>@cover.Name</span></button>}</div><small>Stock Photography From Unsplash.</small>
+<details class="career-cover-picker"><summary>Choose A Stock Photo (10)</summary><div class="careers-stock-grid">@foreach(var cover in CareersBranding.Covers){<button type="button" class="careers-stock-choice @(data.Workspace.CareersStockCover==cover.Id?"chosen":"")" aria-pressed="@(data.Workspace.CareersStockCover==cover.Id)" @onclick="()=>data.Workspace.CareersStockCover=cover.Id"><img src="@cover.Path" alt="" loading="lazy" /><span>@cover.Name</span></button>}</div><small>Stock Photography From Unsplash.</small></details>
 }else if(data.Workspace.CareersCoverMode=="Upload"){
 <label>Upload Cover Photo (PNG Or JPEG · Up To 5 MB)<InputFile OnChange="UploadCover" accept="image/png,image/jpeg" /></label><small>A Wide Image Works Best. The Hero Crops It To Fit On Each Screen.</small>
 @if(data.Workspace.CareersCoverContent is {Length:>0}){<button class="secondary" @onclick="RemoveCover">Remove Uploaded Cover</button>}}
-@{var previewPalette=CareersBranding.Palette(data.Workspace.CareersColorScheme);}
-<div class="careers-brand-preview" style="@($"--career-primary:{previewPalette.Primary};--career-deep:{previewPalette.Deep};--career-tint:{previewPalette.Tint}")">@if(CoverPreview.Length>0){<img src="@CoverPreview" alt="Selected Cover Preview" />}<div><small>EXPLORE CAREERS WITH @data.Workspace.CompanyName</small><h3>Find Your Next Opportunity</h3><span>Preview Of Your Careers Page Colours And Cover</span></div></div>
 </div>
 <label class="check"><input type="checkbox" @bind="data.Workspace.ShowBusinessContacts" /> Show Business Contact Details On Careers Page</label>
 <label class="check"><input type="checkbox" @bind="data.Workspace.CareersPublished" /> Publish Company Careers Page</label>
-<button disabled="@Busy" @onclick="SaveCompany">Save Company Information</button></section>
-<section class="panel"><h2>Workspace Management</h2><a class="button secondary" href="/clients">Manage Clients</a> <a class="button secondary" href="/positions">Manage Positions</a> <a class="button secondary" href="/Account/Workspaces">Switch Workspace</a> <a class="button secondary" href="/employer/subscriptions">Subscriptions</a></section>
-<section class="panel"><h2>Careers Page</h2><p class="muted">A Standard Page With Your Logo, About Us, Published Positions And A Simple Candidate Application Form.</p>
-@if(data.Workspace.CareersPublished){<a class="button secondary" target="_blank" rel="noopener" href="@CareerLink">View Careers Page</a><label>Shareable Careers Link<input readonly value="@CareerLink" /></label><button class="secondary" @onclick="CopyCareerLink">Copy Link</button>}else{<p>Enable Publication And Save To Make Your Careers Page Available.</p>}
-</section>
+
+
+<label>About Us<textarea rows="10" @bind="data.Workspace.AboutUs" @bind:event="oninput"></textarea><small>Add as much information as needed. No word or character limit.</small></label>
+</section><section class="career-settings-review"><div class="section-heading"><h2>Review Pane</h2><span class="badge">Live Preview</span></div><CareersPagePreview Workspace="data.Workspace" Jobs="previewJobs" /></section></div>
+<div class="career-settings-save"><span class="muted">Preview updates as you edit. Changes are applied only when saved.</span><button class="secondary" disabled="@Busy" @onclick="ReloadCompany">Discard Changes</button><button disabled="@Busy" @onclick="SaveCompany">Save Changes</button></div>
+}
 }else if(Section=="subscriptions"){
 <div class="page-heading"><div><div class="eyebrow">WORKSPACE ACCESS</div><h1>Subscriptions</h1><p class="muted">Admin-Approved Access Remains Active Until Revoked.</p></div></div>
 <div class="kpis"><div class="kpi"><span class="kpi-icon icon-blue"><NavIcon Name="talent" /></span><span>Internal Team Seat Allowance</span><strong>@(data.Workspace.FreeRecruiterSeats+data.Workspace.AdditionalRecruiterSeats)</strong><small>@usage?.ActiveRecruiters Used · @data.Workspace.FreeRecruiterSeats Free · @data.Workspace.AdditionalRecruiterSeats Additional</small></div><div class="kpi"><span class="kpi-icon icon-violet"><NavIcon Name="positions" /></span><span>Shared Position Slots</span><strong>@(data.Workspace.FreePositionSlots+data.Workspace.AdditionalPositionSlots)</strong><small>@usage?.UsedPositionSlots Used · @data.Workspace.FreePositionSlots Free · @data.Workspace.AdditionalPositionSlots Additional</small></div><div class="kpi"><span class="kpi-icon icon-green"><NavIcon Name="talent" /></span><span>Osynix Master Talent Pool</span><strong class="employer-status">@(data.Workspace.MasterTalentPoolEnabled?"Enabled":"Not Enabled")</strong></div></div>
@@ -59,17 +65,20 @@
 }
 }
 </div>
+
+</SettingsNavigation>
 @code{
-EmployerUsage? usage;EmployerOverview? data;string accountName="",feature="Position Slots",remarks="";int quantity=1;
+List<PublicCareerJob> previewJobs=[];EmployerUsage? usage;EmployerOverview? data;bool publishedSaved;string accountName="",feature="Position Slots",remarks="";int quantity=1;
 [Parameter] public string Section {get;set;}="dashboard";
-string Title=>Section switch{"company"=>"Company Settings","subscriptions"=>"Subscriptions","team"=>"My Team",_=>"Employer Dashboard"};
+string Title=>Section switch{"company"=>"Business Settings","careers"=>"Careers Page","subscriptions"=>"Subscriptions","team"=>"My Team",_=>"Employer Dashboard"};
 string CareerLink=>Navigation.BaseUri+"careers/"+data!.Workspace.Id;
 static string Logo(EmployerWorkspace w)=>$"data:{w.LogoContentType};base64,{Convert.ToBase64String(w.LogoContent!)}";
 protected override void OnInitialized()=>Updates.Changed+=Changed;
-void Changed()=>_=InvokeAsync(async()=>{await Run(Load);StateHasChanged();});
+void Changed(){if(Section is "company" or "careers")return;_=InvokeAsync(async()=>{await Run(Load);StateHasChanged();});}
 public void Dispose()=>Updates.Changed-=Changed;
 protected override Task OnParametersSetAsync()=>Run(Load);
-async Task Load(){var account=await EmployerService.RequireAccount();accountName=string.IsNullOrWhiteSpace(account.FullName)?account.UserName!:account.FullName;data=await EmployerService.Overview();usage=await EmployerService.Usage();}
+async Task Load(){var account=await EmployerService.RequireAccount();accountName=string.IsNullOrWhiteSpace(account.FullName)?account.UserName!:account.FullName;data=await EmployerService.Overview();publishedSaved=data.Workspace.CareersPublished;usage=await EmployerService.Usage();if(Section=="careers")previewJobs=await EmployerService.CareersPreviewJobs();}
+Task ReloadCompany()=>Run(Load);
 Task SaveCompany()=>Run(async()=>{await EmployerService.SaveCompany(data!.Workspace);await Load();Notice="Company Information Saved.";});
 Task RequestAccess()=>Run(async()=>{await EmployerService.Request(feature,quantity,remarks);remarks="";await Load();Notice="Request Submitted To Admin.";});
 Task UploadLogo(InputFileChangeEventArgs e)=>Run(async()=>{await using var stream=e.File.OpenReadStream(1024*1024);using var buffer=new MemoryStream();await stream.CopyToAsync(buffer);data!.Workspace.LogoContent=buffer.ToArray();data.Workspace.LogoContentType=e.File.ContentType;Notice="Logo Selected. Save Company Information To Apply It.";});

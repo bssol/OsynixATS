@@ -52,7 +52,7 @@ public class EmployerService(AuthenticationStateProvider auth,Access access,IDbC
         var w=await db.EmployerWorkspaces.SingleOrDefaultAsync(w=>w.OwnerId==user.Id&&w.Id==input.Id)??throw new UnauthorizedAccessException("Company not found in your workspace.");
         if(w.Revision!=input.Revision)throw new DbUpdateConcurrencyException("Company details changed. Reload before saving.");
         if(input.OperatingType is not("Company Owner" or "Freelancer"))throw new InvalidOperationException("Choose Company Owner or Freelancer.");
-        if(string.IsNullOrWhiteSpace(input.CompanyName)||input.CompanyName.Length>200||input.AboutUs.Length>5000||input.BusinessEmail.Length>320||input.Website.Length>500||input.ContactNumber.Length>50||input.Address.Length>500||input.Country.Length>100||input.TimeZone.Length>100)throw new InvalidOperationException("Check the company fields and their maximum lengths.");
+        if(string.IsNullOrWhiteSpace(input.CompanyName)||input.CompanyName.Length>200||input.BusinessEmail.Length>320||input.Website.Length>500||input.ContactNumber.Length>50||input.Address.Length>500||input.Country.Length>100||input.TimeZone.Length>100)throw new InvalidOperationException("Check the company fields and their maximum lengths.");
         if(input.BusinessEmail.Length>0&&!new EmailAddressAttribute().IsValid(input.BusinessEmail))throw new InvalidOperationException("Enter a valid business email.");
         if(input.Website.Length>0&&(!Uri.TryCreate(input.Website,UriKind.Absolute,out var uri)||uri.Scheme is not("https" or "http")))throw new InvalidOperationException("Website must start with https:// or http://.");
         try{TimeZoneInfo.FindSystemTimeZoneById(input.TimeZone);}catch{throw new InvalidOperationException("Enter a valid time zone, such as Asia/Karachi.");}
@@ -138,6 +138,13 @@ public class EmployerService(AuthenticationStateProvider auth,Access access,IDbC
         }else if(r.Feature=="Agency Account"){w.AgencyEnabled=true;}else if(r.Feature=="Email Templates"){w.EmailTemplatesEnabled=true;}else {w.MasterTalentPoolEnabled=true;w.TeamTalentPoolEnabled=true;}}
         if(r.Status=="Granted"&&input.Status!="Granted")throw new InvalidOperationException("Use Workspace Access controls to revoke a grant; preserve the approval history.");
         r.Status=input.Status;r.AdminResponse=input.AdminResponse.Trim();r.RespondedUtc=DateTime.UtcNow;AtsService.Audit(db,admin.FindFirstValue(ClaimTypes.NameIdentifier)!,"Employer request responded",r.Id.ToString(),r.Status+"; "+r.Feature+"; Agency="+w.AgencyEnabled);await db.SaveChangesAsync();updates?.Publish();
+    }
+    public async Task<List<PublicCareerJob>> CareersPreviewJobs()
+    {
+        var user=await RequireAccount();await using var db=await factory.CreateDbContextAsync();
+        var workspace=await EnsureWorkspace(db,user);
+        return await db.Positions.AsNoTracking().Where(p=>p.WorkspaceId==workspace.Id&&p.CareersPublished&&p.Status=="Active")
+            .OrderByDescending(p=>p.CreatedUtc).Select(p=>new PublicCareerJob(p.Id,p.Title,p.Location,p.EmploymentType,workspace.Kind==AccountTypes.Freelance||p.ShowSalaryPublicly?p.SalaryRange:"",p.PublicJobDescription,p.Department,p.WorkArrangement)).ToListAsync();
     }
     public async Task<List<PublicCareerJob>> PublicJobs(Guid workspaceId)
     {

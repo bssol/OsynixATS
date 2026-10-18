@@ -54,7 +54,7 @@ builder.Services.AddRateLimiter(o=>{
 });
 builder.Services.AddAuthorization();
 builder.Services.AddCascadingAuthenticationState();
-builder.Services.AddRazorComponents().AddInteractiveServerComponents();
+builder.Services.AddRazorComponents().AddInteractiveServerComponents().AddHubOptions(options=>options.MaximumReceiveMessageSize=2*1024*1024);
 builder.Services.AddRazorPages();
 builder.Services.AddScoped<AuthenticationStateProvider,RevalidatingIdentityStateProvider>();
 builder.Services.AddScoped<AdminService>(); builder.Services.AddScoped<Access>(); builder.Services.AddScoped<AtsService>(); builder.Services.AddScoped<WorkbookImport>(); builder.Services.AddScoped<ReportService>();
@@ -66,6 +66,7 @@ builder.Services.AddScoped<TalentAdministration>();
 builder.Services.AddScoped<EmployerTeamService>();
 builder.Services.AddScoped<FreelancerDirectory>();
 builder.Services.AddScoped<SelfProfileService>();
+builder.Services.AddScoped<ProfessionalProfileService>();
 builder.Services.AddScoped<RecruiterActionService>();
 builder.Services.AddScoped<InterviewService>();
 builder.Services.AddScoped<HiringReviewService>();builder.Services.AddSingleton<RecruitmentUpdates>();

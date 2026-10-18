@@ -13,6 +13,12 @@ using Osynix.Ats.Services;
 using Xunit;
 namespace Osynix.Ats.Tests;
 public class WorkspaceAccountTests {
+ [Theory][InlineData("Admin")][InlineData("SubAdmin")][InlineData("Employer")][InlineData("Employee")][InlineData("Candidate")][InlineData("Freelance Recruiter")]
+ public async Task ProfessionalProfilesAreEditableForEveryAccountAndRemainPrivateByDefault(string kind){
+  await using var f=new Fixture();await f.Init();await using(var db=f.Factory.CreateDbContext()){db.Users.Add(new(){Id="profile-owner",UserName="profile-owner",FullName="Profile Owner",AccountType=kind,Status="Active",EmailConfirmed=true});await db.SaveChangesAsync();}
+  var service=new ProfessionalProfileService(new State("profile-owner",kind),f.Factory);var p=await service.Get();Assert.False(p.Published);p.Headline="Professional Headline";p.Bio="My professional background.";p.Languages="English — Fluent";p.Skills="Research, Communication";p.Experience="Relevant Work Experience";p.Education="Professional Qualification";p.CaseStudies="Anonymised Project";await service.Save(p);var saved=await service.Get();Assert.Equal(p.Experience,saved.Experience);Assert.Equal(p.Languages,saved.Languages);Assert.Equal(p.CaseStudies,saved.CaseStudies);Assert.False(saved.Published);
+  saved.UserId="first";await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>service.Save(saved));saved.UserId="profile-owner";saved.Published=true;if(kind!="Freelance Recruiter"){await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>service.Save(saved));}else{await service.Save(saved);Assert.True((await service.Get()).Published);await Assert.ThrowsAsync<InvalidOperationException>(()=>service.Save(saved));}
+ }
  sealed class State(string id,string role,Guid? workspace=null,string? mode=null):AuthenticationStateProvider{public override Task<AuthenticationState> GetAuthenticationStateAsync(){var claims=new List<Claim>{new(ClaimTypes.NameIdentifier,id),new(ClaimTypes.Name,id),new(ClaimTypes.Role,role)};if(mode is not null)claims.Add(new(ProfileModes.Claim,mode));if(workspace is Guid selected)claims.Add(new(WorkspaceContext.Claim,selected.ToString()));return Task.FromResult(new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity(claims,"Test"))));}}
  sealed class Factory(DbContextOptions<AtsDbContext> options):IDbContextFactory<AtsDbContext>{public AtsDbContext CreateDbContext()=>new(options);}
  sealed class Mail:IAccountEmail{public bool Configured=>false;public Task Send(string address,string subject,string body)=>throw new InvalidOperationException("No Test Emails");}

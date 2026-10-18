@@ -10,7 +10,7 @@ public class EmployerWorkspace : Record
     [MaxLength(450)] public string OwnerId { get; set; } = "";
     [MaxLength(30)] public string OperatingType { get; set; } = "Company Owner";
     [MaxLength(200)] public string CompanyName { get; set; } = "";
-    [MaxLength(5000)] public string AboutUs { get; set; } = "";
+    public string AboutUs { get; set; } = "";
     [MaxLength(500)] public string Website { get; set; } = "";
     [MaxLength(320)] public string BusinessEmail { get; set; } = "";
     [MaxLength(50)] public string ContactNumber { get; set; } = "";

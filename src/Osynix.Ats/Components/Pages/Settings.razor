@@ -1,14 +1,17 @@
 @page "/settings"
-@attribute [Authorize(Roles="Admin,SubAdmin,Employer,Recruiter")]
+@attribute [Authorize(Roles="Admin,SubAdmin,Employer,Recruiter,Candidate")]
 @inherits PageBase
 @inject AtsService Ats
 @inject AdminService Admin
 @inject Access Access
 @inject AuthenticationStateProvider Auth
+<SettingsNavigation Selected="@(platform?"administration":"profile")">
+@if(loaded){
+@if(!platform){<Profile Embedded="true" />}else{
 <PageTitle>Settings · Osynix ATS</PageTitle>
 
 <div class="page-heading">
-    <div><div class="eyebrow">ADMINISTRATION</div><h1>Settings</h1><p class="muted">@(platform?"Manage Admin Panel users, delegated permissions, and assessment decision rules.":"Manage Communication Templates For Your Workspace.")</p></div>
+    <div><div class="eyebrow">ADMINISTRATION</div><h1>Settings</h1><p class="muted">@(platform?"Manage Admin Panel users, delegated permissions, and assessment decision rules.":"Choose A Settings Section To Manage Your Account.")</p></div>
 </div>
 <Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
 
@@ -101,6 +104,10 @@
     <section class="panel"><h2>No Admin access assigned</h2><p class="muted">Ask the root Admin to grant access to an Admin Panel section.</p></section>
 }
 
+
+}
+}
+</SettingsNavigation>
 @code {
     List<DecisionRule> rules=[];
     List<SubAdminAccount> subAdmins=[];
@@ -109,12 +116,12 @@
     string newFullName="",newEmail="",newPassword="",newLevel="View Only";
     string editFullName="",editStatus="Active",editLevel="View Only";
     HashSet<string> newPermissions=new(StringComparer.Ordinal),editPermissions=new(StringComparer.Ordinal);
-    bool platform,canViewSubAdmins,canManageSubAdmins,canViewRules,canManageRules,canViewAudit,canWorkspaces;
+    bool loaded,platform,canViewSubAdmins,canManageSubAdmins,canViewRules,canManageRules,canViewAudit,canWorkspaces;
 
     protected override Task OnInitializedAsync()=>Run(Load);
 
     async Task Load(){
-        var principal=(await Auth.GetAuthenticationStateAsync()).User;platform=principal.IsInRole("Admin")||principal.IsInRole("SubAdmin");if(!platform)return;
+        var principal=(await Auth.GetAuthenticationStateAsync()).User;platform=principal.IsInRole("Admin")||principal.IsInRole("SubAdmin");if(!platform){loaded=true;return;}
         canViewSubAdmins=await Access.CanAdmin("admin.subadmins.view");
         canManageSubAdmins=await Access.CanAdmin("admin.subadmins.manage");
         canWorkspaces=await Access.CanAdmin("admin.workspaces.view");
@@ -124,7 +131,7 @@
         if(canViewSubAdmins)subAdmins=await Admin.SubAdmins();
         if(canViewRules)rules=await Ats.Rules();
         if(canViewAudit)audit=await Admin.AdminAudit();
-        SetNewLevel();
+        SetNewLevel();loaded=true;
     }
 
     void SetNewLevel()=>SetPreset(newLevel,newPermissions);

@@ -1,0 +1,33 @@
+@inject AuthenticationStateProvider Auth
+@inject Access Access
+@if(!Enabled){@ChildContent}else{
+<div class="settings-page">
+    <header class="settings-heading"><div class="eyebrow">ACCOUNT PREFERENCES</div><h1>Settings</h1><p class="muted">Manage your profile, account preferences and available services.</p></header>
+    <div class="settings-frame">
+        <nav class="settings-sections" aria-label="Settings sections">
+            <a href="/profile" class="@(Selected=="profile"?"selected":"")"><NavIcon Name="talent" /> My Profile</a>
+            @if(owner){
+                <a href="/employer/company" class="@(Selected=="company"?"selected":"")"><NavIcon Name="clients" /> Business Settings</a>
+                <a href="/employer/company/careers" class="nested @(Selected=="careers"?"selected":"")">↳ Careers Page</a>
+                <a href="/employer/subscriptions" class="@(Selected=="subscriptions"?"selected":"")"><NavIcon Name="positions" /> Subscription</a>
+            }
+            <a href="/profile#sign-in-options"><NavIcon Name="settings" /> Sign-In &amp; Security</a>
+            @if(!candidate){<a href="/settings/email-templates" class="@(Selected=="templates"?"selected":"")"><NavIcon Name="assessment" /> Email Templates</a>}
+            @if(platform){<a href="/settings" class="@(Selected=="administration"?"selected":"")"><NavIcon Name="settings" /> Platform Settings</a>}
+        </nav>
+        <div class="settings-detail">@ChildContent</div>
+    </div>
+</div>
+}
+@code {
+    [Parameter] public RenderFragment? ChildContent {get;set;}
+    [Parameter] public string Selected {get;set;}="";
+    [Parameter] public bool Enabled {get;set;}=true;
+    bool owner,platform,candidate;
+    protected override async Task OnInitializedAsync(){
+        if(!Enabled)return;
+        var user=(await Auth.GetAuthenticationStateAsync()).User;
+        platform=user.IsInRole("Admin")||user.IsInRole("SubAdmin");candidate=user.IsInRole("Candidate");
+        if(!platform&&!candidate&&(user.IsInRole("Employer")||user.IsInRole("Recruiter"))){try{owner=(await Access.Context())?.Owner==true;}catch(UnauthorizedAccessException){}}
+    }
+}

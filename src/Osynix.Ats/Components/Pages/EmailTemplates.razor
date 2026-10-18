@@ -4,6 +4,7 @@
 @inject EmailTemplateService Templates
 @inject Access Access
 @inject AuthenticationStateProvider Auth
+<SettingsNavigation Selected="templates">
 <PageTitle>Email Templates · Osynix ATS</PageTitle>
 <div class="templates-page">
     <p class="template-breadcrumb"><a href="/settings">Settings</a><span>›</span>Email Templates</p>
@@ -35,6 +36,8 @@
         </div>
     }
 </div>
+
+</SettingsNavigation>
 @code{
     List<EmailTemplate> items=[];EmailTemplate? draft;RichTextEditor? editor;string selectedKey="",previewHtml="";Guid editorKey;bool loaded,locked,platform,canEdit,creating,showPreview;
     string[] MergeFields=>platform?EmailTemplateCatalog.Fields:EmailTemplateCatalog.Fields.Except(new[]{"VerificationCode","PasswordResetLink"}).ToArray();

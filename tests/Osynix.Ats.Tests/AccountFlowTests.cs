@@ -55,7 +55,7 @@ public class AccountFlowTests {
   Assert.Equal(HttpStatusCode.Redirect,login.StatusCode);
   var positions=await c.GetStringAsync("/positions");Assert.DoesNotContain("Private Role",positions);
   Assert.Contains("Manage Positions",positions);
-  var settings=await c.GetStringAsync("/settings");Assert.Contains("Open Email Templates",settings);Assert.DoesNotContain("Add a Sub-Admin",settings);
+  var settings=await c.GetStringAsync("/settings");Assert.Contains("My Profile",settings);Assert.Contains("Settings sections",settings);Assert.DoesNotContain("Add a Sub-Admin",settings);
   Assert.Contains("Email Templates Access Required",await c.GetStringAsync("/settings/email-templates"));
  }
  [Fact]public async Task EmployerRegistrationVerifiesEmailAndCreatesOnlyItsOwnWorkspace(){
@@ -67,7 +67,7 @@ public class AccountFlowTests {
   var code=Regex.Match(h.Mail.LastBody,@"\b\d{6}\b").Value;
   await c.PostAsync("/Account/Verify",new FormUrlEncodedContent(await Form(c,"/Account/Verify?email=owner%40example.test",new(){{"Email","owner@example.test"},{"Code",code}})));
   var login=await c.PostAsync("/Account/Login",new FormUrlEncodedContent(await Form(c,"/Account/Login",new(){{"Email","owner@example.test"},{"Password","Ab1!xy"}})));Assert.Equal("/employer",login.Headers.Location!.ToString());
-  foreach(var page in new[]{"/employer","/employer/company","/employer/subscriptions","/employer/team","/profile"}){var response=await c.GetAsync(page);Assert.Equal(HttpStatusCode.OK,response.StatusCode);var html=await response.Content.ReadAsStringAsync();Assert.DoesNotContain("The page could not load",html);Assert.DoesNotContain("role=\"alert\">Error",html);}
+  foreach(var page in new[]{"/employer","/employer/company","/employer/company/careers","/employer/subscriptions","/employer/team","/profile","/settings"}){var response=await c.GetAsync(page);Assert.Equal(HttpStatusCode.OK,response.StatusCode);var html=await response.Content.ReadAsStringAsync();Assert.DoesNotContain("The page could not load",html);Assert.DoesNotContain("role=\"alert\">Error",html);if(page=="/employer/company/careers"){Assert.Contains("Review Pane",html);Assert.Contains("Careers page live preview",html);Assert.DoesNotContain("maxlength=\"5000\"",html);}}
   Assert.Contains("Employer Owner",await c.GetStringAsync("/employer"));
   using var scope=h.Services.CreateScope();var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();var w=Assert.Single(await db.EmployerWorkspaces.ToListAsync());Assert.Equal(1,w.FreeRecruiterSeats);Assert.Equal(3,w.FreePositionSlots);Assert.False(w.TeamTalentPoolEnabled);Assert.False(w.CareersPublished);
   using var guest=h.CreateClient();Assert.DoesNotContain("Employer Owner",await guest.GetStringAsync("/careers/"+w.Id));

@@ -31,6 +31,17 @@ public class EmployerTests
         public Access RecruiterAccess(string id="recruiter")=>new(new State(id,"Recruiter"),Factory);
         public ValueTask DisposeAsync()=>connection.DisposeAsync();
     }
+    [Fact]public async Task CareersPreviewShowsOnlyOwnersPublishedActiveJobsAndSavesLongAboutUs(){
+        await using var f=new Fixture();await f.Init();var owner=f.Service("first");var own=(await owner.Overview()).Workspace;var other=(await f.Service("second").Overview()).Workspace;
+        own.AboutUs=new string('A',12000)+"\nCompany values and opportunities.";await owner.SaveCompany(own);
+        Assert.Equal(own.AboutUs,(await owner.Overview()).Workspace.AboutUs);
+        Assert.Null(await owner.PublicCompany(own.Id));
+        await using(var db=f.Factory.CreateDbContext()){
+            db.Positions.AddRange(new Position{WorkspaceId=own.Id,Reference="PV1",Title="Visible",CareersPublished=true,Status="Active"},new Position{WorkspaceId=own.Id,Reference="PV2",Title="Draft",CareersPublished=false,Status="Active"},new Position{WorkspaceId=own.Id,Reference="PV3",Title="Closed",CareersPublished=true,Status="Closed"},new Position{WorkspaceId=other.Id,Reference="PV4",Title="Other Company",CareersPublished=true,Status="Active"});await db.SaveChangesAsync();
+        }
+        Assert.Equal("Visible",Assert.Single(await owner.CareersPreviewJobs()).Title);
+        Assert.Equal("Other Company",Assert.Single(await f.Service("second").CareersPreviewJobs()).Title);
+    }
     [Fact]public async Task CareersBrandingPersistsOwnerSelectionsAndRejectsInvalidUploads(){
         await using var f=new Fixture();await f.Init();var owner=f.Service("first");var w=(await owner.Overview()).Workspace;
         Assert.Equal(10,CareersBranding.Covers.Length);Assert.Equal(10,CareersBranding.Covers.Select(c=>c.Path).Distinct().Count());

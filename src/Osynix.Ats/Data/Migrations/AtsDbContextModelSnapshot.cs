@@ -1340,7 +1340,6 @@ namespace Osynix.Ats.Data.Migrations
 
                     b.Property<string>("AboutUs")
                         .IsRequired()
-                        .HasMaxLength(5000)
                         .HasColumnType("TEXT");
 
                     b.Property<int>("AdditionalPositionSlots")
@@ -1479,10 +1478,34 @@ namespace Osynix.Ats.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("CaseStudies")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("CreatedUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Education")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Experience")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Headline")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HiringMarkets")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Industries")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Languages")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -1497,7 +1520,15 @@ namespace Osynix.Ats.Data.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SeniorityLevels")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Skills")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TimeZone")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -1505,6 +1536,14 @@ namespace Osynix.Ats.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WeeklyAvailability")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WorkingStyle")
                         .IsRequired()
                         .HasColumnType("TEXT");
 

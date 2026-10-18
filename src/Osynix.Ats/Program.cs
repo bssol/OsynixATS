@@ -76,6 +76,9 @@ builder.Services.AddHttpClient<AiService>(c=>c.Timeout=TimeSpan.FromMinutes(4));
 builder.Services.AddSingleton<CvProfileExtractionQueue>();
 builder.Services.AddSingleton<ICvProfileExtractionQueue>(sp=>sp.GetRequiredService<CvProfileExtractionQueue>());
 builder.Services.AddHostedService(sp=>sp.GetRequiredService<CvProfileExtractionQueue>());
+builder.Services.AddSingleton<PublicApplicationAssessmentQueue>();
+builder.Services.AddSingleton<IPublicApplicationAssessmentQueue>(sp=>sp.GetRequiredService<PublicApplicationAssessmentQueue>());
+builder.Services.AddHostedService(sp=>sp.GetRequiredService<PublicApplicationAssessmentQueue>());
 var app=builder.Build();
 using(var scope=app.Services.CreateScope()) {
     var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();

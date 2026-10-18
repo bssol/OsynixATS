@@ -269,6 +269,14 @@ namespace Osynix.Ats.Data.Migrations
                     b.Property<Guid?>("BatchId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("AutoAssessmentError")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AutoAssessmentStatus")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("BatchIndex")
                         .HasColumnType("INTEGER");
 

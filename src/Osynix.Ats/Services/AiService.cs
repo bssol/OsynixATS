@@ -117,10 +117,25 @@ public class AiService(HttpClient http, IConfiguration config, IDbContextFactory
         await db.SaveChangesAsync(ct);
     }
 
-    async Task<Guid> AssessCore(Guid positionId,object document,string name,byte[]? bytes,Guid? candidateId,bool refreshProfile,Guid? batchId,int batchIndex,CancellationToken ct)
+    internal async Task AssessPublicApplication(Guid applicationId,CancellationToken ct=default)
     {
-        var uid=await access.UserId();if(refreshProfile&&candidateId is null)throw new InvalidOperationException("Select the existing candidate for an explicit profile refresh."); await using var db=await factory.CreateDbContextAsync(ct);
-        await access.RequirePosition(positionId);if(candidateId is Guid candidateRef){if(bytes is null&&!refreshProfile)await access.RequireTalentCandidate(candidateRef);else await access.RequireCandidate(candidateRef);}var position=await db.Positions.Include(x=>x.Criteria).SingleAsync(x=>x.Id==positionId,ct);
+        await using var db=await factory.CreateDbContextAsync(ct);
+        var application=await db.Assessments.AsNoTracking().SingleOrDefaultAsync(a=>a.Id==applicationId&&a.AutoAssessmentStatus=="Pending",ct);
+        if(application is null)return;
+        if(application.DocumentId is not Guid documentId)throw new InvalidOperationException("The original CV is unavailable. The application is saved for review.");
+        var document=await documents.Read(documentId,ct)??throw new InvalidOperationException("The original CV is unavailable. The application is saved for review.");
+        await AssessCore(application.PositionId,DocumentContent(document.FileName,document.Content),document.FileName,null,application.CandidateId,false,null,0,ct,applicationId);
+    }
+
+    async Task<Guid> AssessCore(Guid positionId,object document,string name,byte[]? bytes,Guid? candidateId,bool refreshProfile,Guid? batchId,int batchIndex,CancellationToken ct,Guid? automaticApplicationId=null)
+    {
+        if(refreshProfile&&candidateId is null)throw new InvalidOperationException("Select the existing candidate for an explicit profile refresh."); await using var db=await factory.CreateDbContextAsync(ct);
+        var automatic=automaticApplicationId is Guid applicationId?await db.Assessments.SingleOrDefaultAsync(a=>a.Id==applicationId&&a.AutoAssessmentStatus=="Pending"&&a.State=="Saved",ct):null;
+        if(automaticApplicationId is not null&&automatic is null)throw new InvalidOperationException("This application is no longer awaiting automatic assessment.");
+        var uid=automatic?.OwnerId??await access.UserId();
+        if(automatic is null){await access.RequirePosition(positionId);if(candidateId is Guid candidateRef){if(bytes is null&&!refreshProfile)await access.RequireTalentCandidate(candidateRef);else await access.RequireCandidate(candidateRef);}}
+        var position=await db.Positions.Include(x=>x.Criteria).SingleAsync(x=>x.Id==positionId,ct);
+        if(automatic is not null&&(automatic.PositionId!=positionId||candidateId is null||automatic.CandidateId!=candidateId||!await db.Candidates.AnyAsync(c=>c.Id==candidateId&&c.WorkspaceId==position.WorkspaceId,ct)||!await db.EmployerWorkspaces.AnyAsync(w=>w.Id==position.WorkspaceId&&w.OwnerId==uid&&db.Users.Any(u=>u.Id==uid&&u.Status=="Active"&&u.EmailConfirmed),ct)))throw new InvalidOperationException("The application is not available in an active workspace.");
         if(position.Status!="Active"||!position.CriteriaLocked) throw new InvalidOperationException("Choose an active position with reviewed, locked criteria.");
         ScoringEngine.ValidateCriteria(position.Criteria);
         var rules=await db.DecisionRules.AsNoTracking().ToListAsync(ct);
@@ -129,7 +144,8 @@ public class AiService(HttpClient http, IConfiguration config, IDbContextFactory
             var batch=await db.AssessmentBatches.Include(x=>x.Items).SingleOrDefaultAsync(x=>x.Id==batchId&&x.OwnerId==uid&&x.PositionId==positionId&&x.State=="Open",ct);
             if(batch is null||batch.SourceCandidateId!=candidateId||batch.RefreshProfile!=refreshProfile||!batch.Items.Any(x=>x.Index==batchIndex&&x.State is "Pending" or "Failed")) throw new UnauthorizedAccessException("Batch item not available.");
         }
-        var known=candidateId is null?null:await db.Candidates.SingleAsync(x=>x.Id==candidateId,ct);
+        var known=candidateId is null?null:await db.Candidates.Include(x=>x.EmploymentHistory).Include(x=>x.EducationHistory).SingleAsync(x=>x.Id==candidateId,ct);
+        var applicationRevision=automatic?.Revision;
         var criteriaRevision=position.Revision;
         var fields=new Dictionary<string,object>();
         foreach(var key in new[]{"candidate_name","mobile_phone_number","email_id","current_designation","current_company","location"}) fields[key]=Str();
@@ -147,11 +163,31 @@ public class AiService(HttpClient http, IConfiguration config, IDbContextFactory
         var evidence=ai.GetProperty("criterion_results").EnumerateArray().Select(e=>new Evidence(S(e,"criterion"),e.GetProperty("score_10").GetInt32(),e.GetProperty("evidence_confidence_10").GetInt32(),S(e,"evidence_found"),S(e,"assessment_rationale"))).ToList();
         var score=ScoringEngine.Calculate(position.Criteria,evidence,rules); var p=ai.GetProperty("talent_profile");
         var profile=new Candidate{Name=S(ai,"candidate_name"),Phone=S(ai,"mobile_phone_number"),Email=S(ai,"email_id"),Location=S(ai,"location"),CurrentRole=S(ai,"current_designation"),CurrentCompany=S(ai,"current_company"),TotalExperience=N(ai,"total_experience_years"),Function=S(p,"primary_function"),Specialization=S(p,"secondary_function_specialization"),Industry=S(p,"industries_domains"),Skills=S(p,"core_skills"),Seniority=S(p,"seniority_level"),Systems=S(p,"systems_tools"),Markets=S(p,"geographic_market_exposure"),Summary=S(p,"professional_summary"),CareerSummary=S(p,"career_profile_summary"),Employment=p.GetProperty("employment_career_history").GetRawText(),Education=p.GetProperty("education").GetRawText(),IntelligenceJson=ai.GetProperty("source_evidence").GetRawText()};
-        profile.City=CandidateCity.Explicit(profile.Location);profile.Location=profile.City;CandidateProfile.ReadStructuredHistory(profile);CandidateProfile.ReconcileCurrentEmployment(profile);
+        profile.City=CandidateCity.Explicit(profile.Location);profile.Location=profile.City;
+        if(automatic is not null&&known is not null){profile.Name=known.Name;profile.Email=known.Email;profile.Phone=known.Phone;profile.City=known.City;profile.Location=known.City;profile.LegacyId=known.LegacyId;}
+        CandidateProfile.ReadStructuredHistory(profile);CandidateProfile.ReconcileCurrentEmployment(profile);
         if(string.IsNullOrWhiteSpace(profile.Name)) throw new InvalidOperationException("Candidate name was not evidenced. No record was created.");
         var snap=new AssessmentSnapshot(profile,N(ai,"relevant_industry_experience_years"),score.Criteria,$"ATS match {score.Match}%. Must-have fit: {score.MustHave}. Evidence-based screening recommendation: {score.Decision}.",string.Join("\n",score.Criteria.Where(x=>x.Score>=6).Select(x=>x.Name+": "+x.Found)),string.Join("\n",score.Criteria.Where(x=>x.Score<6).OrderByDescending(x=>x.Weight).Select(x=>x.Name+": "+x.Rationale)),position.Client,position.Title,position.Reference);
         await db.Entry(position).ReloadAsync(ct);
         if(position.Revision!=criteriaRevision||position.Status!="Active") throw new InvalidOperationException("Position changed during assessment. Review it before retrying.");
+        if(automatic is not null&&known is not null){
+            await db.Entry(automatic).ReloadAsync(ct);
+            if(automatic.Revision!=applicationRevision||automatic.AutoAssessmentStatus!="Pending")throw new InvalidOperationException("The application changed during assessment. Review it before retrying.");
+            var assessed=DateTime.UtcNow;
+            automatic.SnapshotJson=JsonSerializer.Serialize(snap);automatic.MatchPercent=score.Match;automatic.MustHaveFit=score.MustHave;automatic.CoreRoleFit=score.Core;automatic.EvidenceStrength=score.Confidence;automatic.Decision=score.Decision;
+            automatic.Model=config["OpenAI:Model"]!;automatic.DateScreened=assessed;automatic.LastAssessedDate=assessed;automatic.PolicyJson=JsonSerializer.Serialize(rules);automatic.AutoAssessmentStatus="Ready";automatic.AutoAssessmentError="";
+            if(known.DocumentId==automatic.DocumentId){
+                AtsService.UpdateProfile(known,profile);
+                db.EmploymentHistory.RemoveRange(known.EmploymentHistory);db.EducationHistory.RemoveRange(known.EducationHistory);known.EmploymentHistory=[];known.EducationHistory=[];
+                CandidateProfile.ReadStructuredHistory(known);CandidateProfile.ReconcileCurrentEmployment(known);
+                db.EmploymentHistory.AddRange(known.EmploymentHistory);db.EducationHistory.AddRange(known.EducationHistory);
+                known.CvProfileStatus="Ready";known.CvProfileError="";
+            }
+            known.FirstScreenedDate??=assessed;known.LastAssessedDate=assessed;
+            db.AssessmentVersions.Add(DatabaseInitializer.VersionOf(automatic));
+            AtsService.Audit(db,"Public Careers Page","Application automatically assessed",automatic.Id.ToString(),$"ATS match {score.Match}%; recommendation: {score.Decision}.",known.Id,automatic.Id);
+            await db.SaveChangesAsync(ct);return automatic.Id;
+        }
         if(batchId is not null && !await db.AssessmentBatches.AnyAsync(x=>x.Id==batchId&&x.OwnerId==uid&&x.PositionId==positionId&&x.State=="Open",ct)) throw new UnauthorizedAccessException("Batch not available.");
         var storedDocument=bytes is null?null:await documents.Store(name,bytes,ct);
         var now=DateTime.UtcNow;

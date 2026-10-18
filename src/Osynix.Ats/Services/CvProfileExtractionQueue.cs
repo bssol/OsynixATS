@@ -20,7 +20,7 @@ public sealed class CvProfileExtractionQueue(IServiceScopeFactory scopes,IDbCont
     {
         try{
             await using var db=await factory.CreateDbContextAsync(stoppingToken);
-            foreach(var id in await db.Candidates.AsNoTracking().Where(c=>c.CvProfileStatus=="Pending").Select(c=>c.Id).ToListAsync(stoppingToken))queue.Writer.TryWrite(id);
+            foreach(var id in await db.Candidates.AsNoTracking().Where(c=>c.CvProfileStatus=="Pending"&&!db.Assessments.Any(a=>a.CandidateId==c.Id&&a.AutoAssessmentStatus=="Pending")).Select(c=>c.Id).ToListAsync(stoppingToken))queue.Writer.TryWrite(id);
         }catch(Exception ex)when(!stoppingToken.IsCancellationRequested){logger.LogError(ex,"Could not recover pending candidate CV profile extractions.");}
 
         await foreach(var candidateId in queue.Reader.ReadAllAsync(stoppingToken))await Process(candidateId,stoppingToken);

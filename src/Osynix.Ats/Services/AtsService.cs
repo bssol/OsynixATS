@@ -232,7 +232,7 @@ public class AtsService(IDbContextFactory<AtsDbContext> factory, Access access,R
         UpdateProfile(c,input); await TalentIdentity.Attach(db,c); c.TalentStatus=input.TalentStatus;if((await access.Require()).IsInRole("Admin"))c.Notes=input.Notes;
         Audit(db,uid,"Candidate profile updated",c.Id.ToString(),"",c.Id,null,old,JsonSerializer.Serialize(new{c.Name,c.Email,c.Phone,c.TalentStatus,c.Notes})); await db.SaveChangesAsync();
     }
-    static void UpdateProfile(Candidate target,Candidate source)
+    internal static void UpdateProfile(Candidate target,Candidate source)
     {
         target.Name=source.Name.Trim();target.NormalizedName=Choices.MatchKey(target.Name);target.Email=CandidateIdentity.Email(source.Email);target.Phone=source.Phone;target.NormalizedPhone=CandidateIdentity.Phone(source.Phone);
         target.City=source.City.Length>0?CandidateCity.Explicit(source.City):CandidateCity.FromLegacy(source.Location);target.Location=target.City;target.CurrentRole=source.CurrentRole;target.CurrentCompany=source.CurrentCompany;target.TotalExperience=source.TotalExperience;

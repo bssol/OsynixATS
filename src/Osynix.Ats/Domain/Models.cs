@@ -142,6 +142,8 @@ public class Assessment : Record
     public string SourceFileName { get; set; } = "";
     public Guid? SourceCandidateId { get; set; }
     public bool RefreshProfile { get; set; }
+    public string AutoAssessmentStatus { get; set; } = "Not Requested";
+    public string AutoAssessmentError { get; set; } = "";
 }
 public class StoredDocument : Record
 {

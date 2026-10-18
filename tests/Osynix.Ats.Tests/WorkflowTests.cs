@@ -21,9 +21,9 @@ public class WorkflowTests
         public override Task<AuthenticationState> GetAuthenticationStateAsync()=>Task.FromResult(new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity([new(ClaimTypes.Name,id),new(ClaimTypes.NameIdentifier,id),new(ClaimTypes.Role,role)],"Test"))));
     }
     sealed class Factory(DbContextOptions<AtsDbContext> options):IDbContextFactory<AtsDbContext>{public AtsDbContext CreateDbContext()=>new(options);}
-    sealed class Fixture:IAsyncDisposable {
-        public SqliteConnection Connection=new("Data Source=:memory:");public Factory Factory=null!;
-        public async Task Init(){await Connection.OpenAsync();Factory=new(new DbContextOptionsBuilder<AtsDbContext>().UseSqlite(Connection).Options);await using var db=Factory.CreateDbContext();await DatabaseInitializer.InitializeAsync(db);}
+    sealed class Fixture(bool separateConnections=false):IAsyncDisposable {
+        public SqliteConnection Connection=new(separateConnections?$"Data Source=assessment-test-{Guid.NewGuid():N};Mode=Memory;Cache=Shared":"Data Source=:memory:");public Factory Factory=null!;
+        public async Task Init(){await Connection.OpenAsync();var options=new DbContextOptionsBuilder<AtsDbContext>();if(separateConnections)options.UseSqlite(Connection.ConnectionString);else options.UseSqlite(Connection);Factory=new(options.Options);await using var db=Factory.CreateDbContext();await DatabaseInitializer.InitializeAsync(db);}
         public ValueTask DisposeAsync()=>Connection.DisposeAsync();
     }
     [Fact] public async Task PositionNotesRemainScopedAfterOneOfTheCandidatesPositionsIsReassigned(){
@@ -58,6 +58,46 @@ public class WorkflowTests
     sealed class ProfileProvider:HttpMessageHandler {
         public int Calls;
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct){Calls++;var output=new{current_designation="Senior Recruiter",current_company="Osynix Group",total_experience_years=7,talent_profile=new{primary_function="Talent Acquisition",secondary_function_specialization="Technology Hiring",industries_domains="Software",core_skills="Sourcing, Interviewing",seniority_level="Senior",systems_tools="ATS",geographic_market_exposure="Lahore",career_profile_summary="Seven years of recruitment experience.",professional_summary="Senior recruiter specializing in technology roles."},employment_career_history=new[]{new{company_name="Osynix Group",designation="Senior Recruiter",start_date="2021",end_date="Present",location="Lahore"}},education=new[]{new{qualification="MBA",institution="City University",start_date="2018",end_date="2020",location="Lahore"}},source_evidence=new[]{new{fact="Senior recruiter since 2021",source="Employment History"}}};return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=JsonContent.Create(new{status="completed",output=new[]{new{content=new[]{new{type="output_text",text=JsonSerializer.Serialize(output)}}}}})});}
+    }
+    sealed class AnonymousState:AuthenticationStateProvider {
+        public override Task<AuthenticationState> GetAuthenticationStateAsync()=>Task.FromResult(new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity())));
+    }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CareersApplicationAutomaticallyAssessesAndFillsProfileOrRetainsApplicationOnProviderFailure(bool failProvider){
+        await using var f=new Fixture(separateConnections:true);await f.Init();
+        var workspace=new EmployerWorkspace{OwnerId="owner",Kind=AccountTypes.Freelance,CompanyName="Test Workspace",CareersPublished=true};
+        var position=new Position{WorkspaceId=workspace.Id,Reference="AUTO",Title="Operations Manager",Client="Test Workspace",Status="Active",CareersPublished=true,CriteriaLocked=true,PublicJobDescription="Operations role",Criteria=[new(){Name="Experience",Weight=100}]};
+        await using(var db=f.Factory.CreateDbContext()){
+            db.Users.Add(new AtsUser{Id="owner",UserName="owner@example.test",AccountType=AccountTypes.Freelance,EmailConfirmed=true});
+            db.EmployerWorkspaces.Add(workspace);db.Positions.Add(position);db.DecisionRules.Add(new(){MustHaveFit="Pass",MinimumMatch=0,Decision="Shortlist"});await db.SaveChangesAsync();
+        }
+        var provider=new Provider{FailFirst=failProvider};
+        var config=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{{"OpenAI:ApiKey","test-key"},{"OpenAI:Model","test-model"}}).Build();
+        var anonymous=new AnonymousState();var services=new ServiceCollection();services.AddLogging();services.AddSingleton<IDbContextFactory<AtsDbContext>>(f.Factory);
+        services.AddScoped(_=>new AiService(new HttpClient(provider),config,f.Factory,new Access(anonymous,f.Factory),new DatabaseDocumentStore(f.Factory)));
+        using var root=services.BuildServiceProvider();var updates=new RecruitmentUpdates();
+        using var worker=new PublicApplicationAssessmentQueue(root.GetRequiredService<IServiceScopeFactory>(),f.Factory,updates,NullLogger<PublicApplicationAssessmentQueue>.Instance);
+        var intake=new EmployerService(anonymous,new Access(anonymous,f.Factory),f.Factory,updates,automaticAssessments:worker);
+        var submitted=await intake.ApplyPublic(workspace.Id,position.Id,"Form Name","form@example.test","+92 300 1234567","Lahore","candidate.txt","Synthetic professional CV"u8.ToArray());
+        Assert.True(submitted.ProfilePending);
+        // Start after submission to also exercise durable recovery and duplicate queue entries.
+        await worker.StartAsync(CancellationToken.None);
+        var deadline=DateTime.UtcNow.AddSeconds(15);string status="Pending";
+        while(status=="Pending"&&DateTime.UtcNow<deadline){await Task.Delay(50);await using var db=f.Factory.CreateDbContext();status=(await db.Assessments.AsNoTracking().SingleAsync()).AutoAssessmentStatus;}
+        await worker.StopAsync(CancellationToken.None);
+        await using var check=f.Factory.CreateDbContext();var application=await check.Assessments.SingleAsync();var candidate=await check.Candidates.Include(c=>c.EmploymentHistory).SingleAsync();
+        Assert.True(provider.Calls==1,application.AutoAssessmentError);Assert.Equal(submitted.Id,application.Id);Assert.Equal("Saved",application.State);Assert.Equal("Applied",application.Stage);
+        Assert.Equal("Form Name",candidate.Name);Assert.Equal("form@example.test",candidate.Email);Assert.Equal("+92 300 1234567",candidate.Phone);Assert.Equal("Lahore",candidate.City);
+        Assert.Single(await check.Documents.ToListAsync());Assert.Equal(application.DocumentId,candidate.DocumentId);
+        if(failProvider){
+            Assert.Equal("Failed",application.AutoAssessmentStatus);Assert.Null(application.MatchPercent);Assert.Equal("Not Assessed",application.Decision);Assert.Contains("503",application.AutoAssessmentError);Assert.Equal("Failed",candidate.CvProfileStatus);Assert.Empty(await check.AssessmentVersions.ToListAsync());
+        }else{
+            Assert.Equal("Ready",application.AutoAssessmentStatus);Assert.Equal(80,application.MatchPercent);Assert.NotEqual("Not Assessed",application.Decision);Assert.Equal("test-model",application.Model);Assert.NotNull(application.LastAssessedDate);
+            Assert.Equal("Actual Manager",candidate.CurrentRole);Assert.Equal("Actual Company",candidate.CurrentCompany);Assert.Equal("Permanent facts",candidate.Summary);Assert.Equal("Ready",candidate.CvProfileStatus);Assert.Single(candidate.EmploymentHistory);Assert.Single(await check.AssessmentVersions.ToListAsync());
+            var snapshot=JsonSerializer.Deserialize<AssessmentSnapshot>(application.SnapshotJson)!;Assert.Equal("form@example.test",snapshot.Profile.Email);Assert.Equal("Lahore",snapshot.Profile.City);Assert.Single(snapshot.Criteria);
+        }
     }
     [Fact] public async Task PublicCvProfileIsExtractedBeforeAssessmentAndKeepsApplicationIdentityAuthoritative(){
         await using var f=new Fixture();await f.Init();var person=new Candidate{Name="Applicant Supplied Name",Email="applicant@example.test",Phone="+92 300 1234567",City="Karachi",Location="Karachi",CvProfileStatus="Pending"};await using(var db=f.Factory.CreateDbContext()){db.Candidates.Add(person);await db.SaveChangesAsync();}

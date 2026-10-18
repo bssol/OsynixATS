@@ -14,7 +14,7 @@ public record EmployerUsage(int ActiveRecruiters,int ActivePositions,int UsedPos
 public record EmployerOverview(EmployerWorkspace Workspace,List<EmployerAccessRequest> Requests,int ActiveInternalMembers=0,int ActiveExternalRecruiters=0,int PendingInvitations=0,int UsedPositionSlots=0);
 public record AdminWorkspaceMember(string Name,string Email,string Kind,string Status,bool CreateClients,bool CreatePositions,bool ExportReports,bool TalentPool);
 public record AdminWorkspaceTeam(List<AdminWorkspaceMember> Members,List<AdminWorkspaceMember> Invitations);
-public class EmployerService(AuthenticationStateProvider auth,Access access,IDbContextFactory<AtsDbContext> factory,RecruitmentUpdates? updates=null,ICvProfileExtractionQueue? cvProfiles=null)
+public class EmployerService(AuthenticationStateProvider auth,Access access,IDbContextFactory<AtsDbContext> factory,RecruitmentUpdates? updates=null,ICvProfileExtractionQueue? cvProfiles=null,IPublicApplicationAssessmentQueue? automaticAssessments=null)
 {
     public async Task<AtsUser> RequireAccount()
     {
@@ -193,8 +193,10 @@ public class EmployerService(AuthenticationStateProvider auth,Access access,IDbC
         var snapshot=new AssessmentSnapshot(candidate,null,[],"Public Careers Page Application","","",position.Client,position.Title,position.Reference);
         var assessment=new Assessment{PositionId=position.Id,CandidateId=candidate.Id,CandidateKey=candidate.LegacyId,DocumentId=document.Id,OwnerId=workspace.OwnerId,CandidateName=candidate.Name,State="Saved",Stage="Applied",Decision="Not Assessed",SnapshotJson=System.Text.Json.JsonSerializer.Serialize(snapshot),SourceFileName=document.FileName};
         db.Assessments.Add(assessment);
+        if(automaticAssessments is not null){assessment.AutoAssessmentStatus="Pending";candidate.CvProfileStatus="Pending";}
         AtsService.Audit(db,"Public Careers Page","Candidate application received",assessment.Id.ToString(),$"Position {position.Reference}; workspace {workspaceId}",candidate.Id,assessment.Id);
         await db.SaveChangesAsync();
-        cvProfiles?.Queue(candidate.Id);updates?.Publish();return new(assessment.Id,cvProfiles is not null);
+        if(automaticAssessments is not null)automaticAssessments.Queue(assessment.Id);else cvProfiles?.Queue(candidate.Id);
+        updates?.Publish();return new(assessment.Id,automaticAssessments is not null||cvProfiles is not null);
     }
 }

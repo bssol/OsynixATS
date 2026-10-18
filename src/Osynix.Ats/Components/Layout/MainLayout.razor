@@ -35,6 +35,7 @@
                         <NavLink href="/assessment"><NavIcon Name="assessment" /><span>Candidate Assessment</span></NavLink>
                         <NavLink href="/talent"><NavIcon Name="talent" /><span>My Talent Pool</span></NavLink>
                         <NavLink href="/attention"><NavIcon Name="clock" /><span>Team Tasks</span></NavLink>
+                        <MessageNav />
                         <NavLink href="/pipeline"><NavIcon Name="pipeline" /><span>Recruitment Pipeline</span></NavLink>
                         <a href="/my-work" class="workspace-return-link"><NavIcon Name="dashboard" /><span>Change Workspace</span></a>
                     }else{
@@ -46,6 +47,7 @@
                         <NavLink href="/talent" title="Workspace Talent Pool"><NavIcon Name="talent" /><span>My Talent Pool</span></NavLink>
                         @if(masterGranted){<NavLink href="/master-talent" title="Osynix Master Talent Pool"><NavIcon Name="talent" /><span>Master Talent Pool</span></NavLink>}else{<span class="workspace-nav-locked" role="link" aria-disabled="true" title="Locked — Admin Has Not Granted Master Talent Pool Access"><NavIcon Name="talent" /><span>Master Talent Pool 🔒</span></span>}
                         <NavLink href="/attention" title="My Tasks"><NavIcon Name="clock" /><span>My Tasks</span></NavLink>
+                        <MessageNav />
                         <NavLink href="/pipeline" title="Recruitment Pipeline"><NavIcon Name="pipeline" /><span>Recruitment Pipeline</span></NavLink>
                         @if(owner){
                             @if(employerAccount){<NavLink href="/employer/team" title="My Team"><NavIcon Name="talent" /><span>My Team</span></NavLink>}

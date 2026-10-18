@@ -1,0 +1,69 @@
+@page "/messages"
+@attribute [Authorize(Roles="Recruiter,Employer")]
+@inherits PageBase
+@implements IDisposable
+@inject MarketplaceMessages InboxService
+@inject RecruitmentUpdates Updates
+@inject NavigationManager Navigation
+<PageTitle>Messages · Osynix ATS</PageTitle>
+<div class="messages-page">
+<div class="page-heading"><div><div class="eyebrow">YOUR CONVERSATIONS</div><h1>Messages</h1><p class="muted">Project invitations and conversations with your recruitment partners.</p></div><button class="secondary" disabled="@Busy" @onclick="()=>Run(Load)">Refresh</button></div>
+<Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
+<section class="messages-shell">
+    <aside class="conversation-list"><div class="inbox-heading"><h2>Inbox</h2><span class="inbox-total">@conversations.Sum(c=>c.Unread) Unread</span></div>
+        <input class="conversation-search" aria-label="Search Conversations" placeholder="Search conversations…" @bind="search" @bind:event="oninput" />
+        <div class="inbox-filters"><button class="secondary @(!unreadOnly?"selected":"")" @onclick="()=>unreadOnly=false">All</button><button class="secondary @(unreadOnly?"selected":"")" @onclick="()=>unreadOnly=true">Unread</button></div>
+        @foreach(var c in Filtered){<button class="conversation-item secondary @(detail?.Id==c.Id?"current":"") @(c.Unread>0?"unread":"")" @onclick="()=>Select(c.Id)"><span class="conversation-avatar">@Initial(c.Name)</span><span class="conversation-copy"><span class="conversation-meta"><b>@c.Name</b><time>@c.UpdatedUtc.ToString("dd MMM")</time></span><span class="conversation-context">@c.Context</span><span class="conversation-preview">@c.Preview</span>@if(c.InvitationStatus.Length>0){<span class="conversation-invite-status">Invitation: @c.InvitationStatus</span>}</span>@if(c.Unread>0){<span class="unread-badge">@c.Unread</span>}</button>}
+        @if(!Filtered.Any()){<p class="empty small">@(unreadOnly?"You are all caught up.":"No conversations yet. Employer invitations will appear here. Employers can start a conversation from a freelancer profile.")</p>}
+    </aside>
+    <section class="message-thread">
+    @if(detail is null){<div class="inbox-empty"><NavIcon Name="message" /><h2>Your Conversations</h2><p>Select a conversation to review invitations and messages.</p></div>}
+    else{
+        <header class="message-thread-heading"><span class="conversation-avatar">@Initial(detail.Name)</span><div><h2>@detail.Name</h2><p>@(detail.Employer?"Freelance Recruiter":detail.Agency?"Agency":"Employer") · @detail.Company</p></div>@if(detail.Employer){<a class="button secondary" href="@($"/employer/recruiters/{detail.FreelancerId}")">View Profile</a><button class="secondary" disabled="@Busy" @onclick="()=>inviteOpen=true">Invite To Project</button>}</header>
+        <div class="message-history" aria-live="polite">
+            @if(detail.Messages.Count==0){<p class="empty">Start the conversation with a message or project invitation.</p>}
+            @foreach(var message in detail.Messages){
+                <article class="message-row @(message.SenderName=="You"?"mine":"")"><div class="message-author">@message.SenderName <time>@message.SentUtc.ToString("dd MMM · HH:mm") UTC</time></div>
+                    @if(message.Body.Length>0){<div class="message-bubble preserve">@message.Body</div>}
+                    @if(message.AttachmentName.Length>0){<a class="message-file" href="@($"/messages/attachments/{message.Id}")" target="_blank" rel="noopener"><NavIcon Name="import" />@message.AttachmentName</a>}
+                    @if(message.Invitation is ProjectInvitation invitation){
+                    <section class="project-invitation"><div class="project-invite-title"><div><span class="eyebrow">PROJECT INVITATION</span><h3>@invitation.Title</h3></div><span class="invitation-status @invitation.Status.ToLowerInvariant()">@(invitation.Status=="Pending"?detail.Employer?"Awaiting Response":"Awaiting Your Response":invitation.Status)</span></div>
+                        <p class="preserve">@invitation.Summary</p><dl><dt>Expected Start</dt><dd>@invitation.Start</dd><dt>Duration</dt><dd>@invitation.Duration</dd></dl>
+                        @if(invitation.PositionId.HasValue){<p class="small muted">Acceptance adds this position to your Employer workspace assignments.</p>}else{<p class="small muted">Project discussion. Position access is managed separately by the Employer.</p>}
+                        @if(invitation.Status=="Pending"){
+                            <div class="invitation-actions">@if(!detail.Employer){<button disabled="@Busy" @onclick='()=>Respond(invitation,"Accepted")'>Accept Invitation</button><button class="secondary" disabled="@Busy" @onclick="()=>Question(invitation)">Ask A Question</button><button class="secondary" disabled="@Busy" @onclick='()=>Respond(invitation,"Declined")'>Decline</button>}else{<button class="secondary" disabled="@Busy" @onclick='()=>Respond(invitation,"Cancelled")'>Cancel Invitation</button>}</div>
+                        }else if(invitation.Status=="Accepted"){
+                            <p class="invitation-success">✓ Invitation accepted.</p>@if(!detail.Employer){<WorkOpenButton WorkspaceId="detail.WorkspaceId" Mode="@(detail.Agency?"Agency":"Employer")" Path="/workspace-dashboard" Text="Open Employer Workspace" />}else{<a href="/employer/team?view=external">Manage External Team Access</a>}
+                        }
+                        @if(detail.Employer){<small class="invitation-email">Email: @invitation.EmailDelivery</small>}
+                    </section>}
+                </article>
+            }
+        </div>
+        <div class="message-compose"><label class="sr-only" for="message-body">Message</label><textarea id="message-body" maxlength="10000" rows="2" @bind="body" @bind:event="oninput" placeholder="Write a message…"></textarea><div class="composer-actions"><label class="attach-file"><NavIcon Name="import" /><span>Attach</span><InputFile OnChange="Attach" accept=".pdf,.docx,.png,.jpg,.jpeg" disabled="@Busy" /></label><small class="muted">PDF, DOCX or image · Up to 5 MB</small><button disabled="@(Busy||(string.IsNullOrWhiteSpace(body)&&fileContent is null))" @onclick="Send">Send Message</button></div>@if(fileContent is not null){<div class="pending-attachment">@fileName <button class="secondary" aria-label="Remove Attachment" @onclick="RemoveAttachment">×</button></div>}</div>
+    }
+    </section>
+</section>
+@if(inviteOpen&&detail?.Employer==true){<ProjectInviteDialog FreelancerId="detail.FreelancerId" FreelancerName="detail.Name" Close="()=>inviteOpen=false" Sent="Invited" />}
+@if(question is not null){<div class="overlay"><section class="drawer" role="dialog" aria-modal="true" aria-label="Ask About Assignment"><div class="drawer-head"><h2>Ask A Question</h2><button class="secondary" @onclick="()=>question=null">Close</button></div><Feedback Error="@Error" Busy="Busy" /><p>@question.Title</p><label>Your Question<textarea rows="5" maxlength="10000" @bind="questionText"></textarea></label><button disabled="@(Busy||string.IsNullOrWhiteSpace(questionText))" @onclick="SendQuestion">Send Question</button></section></div>}
+</div>
+@code{
+    [SupplyParameterFromQuery(Name="conversation")] public Guid? ConversationId{get;set;}
+    List<ConversationSummary> conversations=[];ConversationDetail? detail;ProjectInvitation? question;
+    string search="",body="",fileName="",questionText="";byte[]? fileContent;bool unreadOnly,inviteOpen,disposed;
+    IEnumerable<ConversationSummary> Filtered=>conversations.Where(c=>(!unreadOnly||c.Unread>0)&&$"{c.Name} {c.Context} {c.Preview}".Contains(search,StringComparison.OrdinalIgnoreCase));
+    protected override void OnInitialized()=>Updates.Changed+=Changed;
+    protected override Task OnParametersSetAsync()=>Run(async()=>{detail=null;body="";RemoveAttachment();await Load();});
+    async Task Load(){conversations=await InboxService.Inbox();var id=ConversationId??detail?.Id??conversations.FirstOrDefault()?.Id;if(id is Guid selected){detail=await InboxService.Open(selected);conversations=await InboxService.Inbox();}}
+    void Select(Guid id){Navigation.NavigateTo($"/messages?conversation={id}");}
+    Task Send()=>Run(async()=>{await InboxService.Send(detail!.Id,body,fileName,fileContent);body="";RemoveAttachment();await Load();});
+    Task Attach(InputFileChangeEventArgs e)=>Run(async()=>{RemoveAttachment();var file=e.File;if(file.Size>5*1024*1024)throw new InvalidOperationException("Attachments must be 5 MB or smaller.");using var stream=new MemoryStream();await file.OpenReadStream(5*1024*1024).CopyToAsync(stream);fileContent=stream.ToArray();fileName=file.Name;});
+    void RemoveAttachment(){fileContent=null;fileName="";}
+    static string Initial(string name)=>string.IsNullOrWhiteSpace(name)?"?":name[..1].ToUpperInvariant();
+    Task Respond(ProjectInvitation invitation,string response)=>Run(async()=>{await InboxService.Respond(invitation.Id,invitation.Revision,response);await Load();});
+    void Question(ProjectInvitation invitation){question=invitation;questionText="";Error="";}
+    Task SendQuestion()=>Run(async()=>{await InboxService.Respond(question!.Id,question.Revision,"Question",questionText);question=null;questionText="";await Load();});
+    Task Invited(Guid id)=>Run(async()=>{inviteOpen=false;await Load();});
+    void Changed(){if(!disposed)_=InvokeAsync(async()=>{if(!Busy&&!inviteOpen)await Run(Load);StateHasChanged();});}
+    public void Dispose(){disposed=true;Updates.Changed-=Changed;}
+}

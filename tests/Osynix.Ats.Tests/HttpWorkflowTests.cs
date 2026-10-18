@@ -31,6 +31,30 @@ public class HttpWorkflowTests
         var html=await client.GetStringAsync("/Account/Login");var token=Regex.Match(html,"name=\"__RequestVerificationToken\"[^>]*value=\"([^\"]+)\"").Groups[1].Value;
         var result=await client.PostAsync("/Account/Login",new FormUrlEncodedContent(new Dictionary<string,string>{{"Email","HttpUser"},{"Password","Test-password!123"},{"__RequestVerificationToken",token}}));Assert.Equal(HttpStatusCode.Redirect,result.StatusCode);return client;
     }
+    [Fact] public async Task EmployerDirectoryProfileShowsFullPublishedPortfolioAndProjectActions(){
+        await using var host=new Host();using var client=await Login(host,"Employer");
+        using(var scope=host.Services.CreateScope()){
+            var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();var owner=await db.Users.SingleAsync(u=>u.UserName=="HttpUser");owner.AccountType=AccountTypes.Employer;await db.SaveChangesAsync();await EmployerService.EnsureWorkspace(db,owner);
+            db.Users.Add(new(){Id="marketplace-free",UserName="marketplace-free",FullName="Profile Recruiter",Email="private-email@example.test",EmailConfirmed=true,AccountType=AccountTypes.Freelance});db.UserRoles.Add(new(){UserId="marketplace-free",RoleId=(await db.Roles.SingleAsync(r=>r.Name=="Recruiter")).Id});
+            db.FreelancerProfiles.Add(new(){UserId="marketplace-free",Published=true,Headline="Executive Search Expert",Bio="Complete professional introduction",Skills="Sourcing, Interviewing",Technologies="LinkedIn Recruiter",Industries="Technology",WorkingStyle="Remote",Location="Lahore",Experience="Detailed career history",Education="Professional qualifications",CaseStudies="Anonymised project outcomes"});await db.SaveChangesAsync();
+        }
+        var html=WebUtility.HtmlDecode(await client.GetStringAsync("/employer/recruiters/marketplace-free"));
+        foreach(var text in new[]{"Profile Recruiter","Executive Search Expert","Complete professional introduction","LinkedIn Recruiter","Invite To Project","Send A Message","Experience","Case Studies"})Assert.Contains(text,html);
+        Assert.DoesNotContain("private-email@example.test",html);Assert.DoesNotContain("The operation failed",html);Assert.DoesNotContain("The page could not load",html);
+        var directory=await client.GetStringAsync("/employer/team?view=directory");Assert.Contains("/employer/recruiters/marketplace-free",directory);Assert.Contains("View Profile",directory);
+    }
+    [Fact] public async Task FreelancerMessagesRendersInvitationsAndSidebarDirectlyBelowTasks(){
+        await using var host=new Host();using var client=await Login(host,"Recruiter");Guid conversationId;
+        using(var scope=host.Services.CreateScope()){
+            var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();var free=await db.Users.SingleAsync(u=>u.UserName=="HttpUser");free.AccountType=AccountTypes.Freelance;await db.SaveChangesAsync();await EmployerService.EnsureWorkspace(db,free);
+            var owner=new AtsUser{Id="message-employer",UserName="message-employer",FullName="Message Employer",Email="employer@example.test",EmailConfirmed=true,AccountType=AccountTypes.Employer};db.Users.Add(owner);db.UserRoles.Add(new(){UserId=owner.Id,RoleId=(await db.Roles.SingleAsync(r=>r.Name=="Employer")).Id});await db.SaveChangesAsync();var w=await EmployerService.EnsureWorkspace(db,owner);
+            var c=new MarketplaceConversation{WorkspaceId=w.Id,FreelancerId=free.Id};db.Add(c);conversationId=c.Id;var invite=new ProjectInvitation{ConversationId=c.Id,Title="Project Hiring Support",Summary="Help source candidates"};db.Add(invite);db.MarketplaceMessages.Add(new(){ConversationId=c.Id,SenderId=owner.Id,Body="Invitation note",InvitationId=invite.Id});await db.SaveChangesAsync();
+        }
+        var html=WebUtility.HtmlDecode(await client.GetStringAsync($"/messages?conversation={conversationId}"));
+        foreach(var text in new[]{"Inbox","Project Hiring Support","Invitation note","Accept Invitation","Ask A Question","Decline","Send Message"})Assert.Contains(text,html);
+        var nav=html[html.IndexOf("workspace-nav",StringComparison.Ordinal)..];Assert.True(nav.IndexOf("href=\"/messages\"",StringComparison.Ordinal)>nav.IndexOf("href=\"/attention\"",StringComparison.Ordinal));
+        Assert.DoesNotContain("The operation failed",html);Assert.DoesNotContain("The page could not load",html);
+    }
     [Fact] public async Task AdminWorkspaceDirectoryRendersCategoriesViewsAndRealOwnerDetails(){
         await using var host=new Host();using var client=await Login(host);
         using(var scope=host.Services.CreateScope()){

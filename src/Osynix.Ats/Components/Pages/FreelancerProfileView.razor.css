@@ -1,0 +1,16 @@
+.market-profile{max-width:1500px;margin:auto}.market-back{display:inline-block;margin-bottom:20px}.market-identity{display:flex;gap:24px;align-items:flex-start}.market-photo{width:88px;height:88px;border-radius:50%;object-fit:cover}.market-identity-copy{flex:1;min-width:0}.market-identity h1{font-size:30px;margin:4px 0 8px}.market-identity h2{font-size:18px;color:#71809a;margin:0 0 14px}.market-availability{display:inline-block;color:#078457;background:#e7f7ef;border-radius:18px;padding:5px 10px;font-size:13px}.market-facts{display:flex;flex-wrap:wrap;gap:18px;margin-top:16px;color:#71809a;font-size:14px}.market-facts span{display:flex;gap:7px;align-items:center}.market-facts ::deep svg{width:17px;height:17px}.market-primary-actions{display:grid;gap:10px}.market-primary-actions button{display:flex;align-items:center;justify-content:center;gap:8px}.market-columns{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:24px}.market-tabs{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px}.market-tabs button{color:#52617a;background:white;border:1px solid #dfe6f2}.market-tabs button.chosen{color:white;background:linear-gradient(120deg,#175aff,#45409a)}.market-chips{display:flex;flex-wrap:wrap;gap:8px}.market-chips span{padding:8px 12px;background:#edf3ff;color:#294eb3;border:1px solid #d8e5ff;border-radius:8px;font-size:14px}.market-rail .panel{padding:24px}.market-rail h2{font-size:21px}.market-rail dl{display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:14px}.market-rail dt{color:#71809a}.market-rail dd{margin:0;text-align:right;overflow-wrap:anywhere}.market-rail button{width:100%;margin-top:10px}.preserve{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.8}@media(max-width:1000px){.market-columns{grid-template-columns:1fr}.market-rail{display:grid;grid-template-columns:1fr 1fr;gap:20px}}@media(max-width:700px){.market-identity{flex-wrap:wrap}.market-primary-actions{width:100%}.market-rail{display:block}.market-identity h1{font-size:24px}}
+
+.market-columns{grid-template-columns:minmax(0,1fr) minmax(370px,410px);align-items:start}
+.market-rail .panel{padding:22px}
+.market-rail dl{grid-template-columns:minmax(125px,.9fr) minmax(0,1.1fr);column-gap:16px;row-gap:14px;align-items:start}
+.market-rail dt,.market-rail dd{min-width:0;line-height:1.45;word-break:normal;hyphens:none}
+.market-rail dd{text-align:left;overflow-wrap:break-word}
+@media(max-width:1100px){.market-columns{grid-template-columns:minmax(0,1fr)}.market-rail{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:18px}}
+@media(max-width:700px){.market-rail{display:block}.market-rail .panel{padding:18px}.market-rail dl{grid-template-columns:minmax(105px,.85fr) minmax(0,1.15fr);column-gap:12px}}
+/* Keep profile information in normal document flow, independent of the application sidebar. */
+.market-rail{position:static;inset:auto;width:100%;min-width:0;padding:0;border:0;z-index:auto;display:block}
+.market-rail dl{display:block;margin:0 0 22px}
+.market-rail dt{font-size:12px;line-height:1.5;margin:16px 0 4px;color:#71809a}
+.market-rail dd{font-size:14px;line-height:1.6;margin:0;padding:0 0 12px;border-bottom:1px solid #edf0f6;text-align:left;word-break:normal;overflow-wrap:break-word}
+.market-rail h2{margin-top:0}
+@media(max-width:1100px){.market-rail{display:block}}

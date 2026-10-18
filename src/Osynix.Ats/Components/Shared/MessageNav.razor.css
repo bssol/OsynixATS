@@ -1,0 +1,1 @@
+::deep .message-nav-badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;margin-left:10px;padding:0 6px;border-radius:12px;background:#175aff;color:#fff;font-size:11px;font-weight:600}::deep a.active .message-nav-badge{background:#fff;color:#175aff}

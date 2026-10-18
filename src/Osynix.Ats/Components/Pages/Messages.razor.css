@@ -1,0 +1,67 @@
+.messages-page{width:100%;max-width:1600px;margin:0 auto}
+.messages-shell{display:grid;width:100%;grid-template-columns:minmax(250px,300px) minmax(0,1fr);align-items:stretch;background:#fff;border:1px solid #dfe6f2;border-radius:16px;overflow:hidden;min-height:650px}
+.conversation-list{grid-column:1;min-width:0;width:100%;border-right:1px solid #dfe6f2;padding:20px 14px}
+.inbox-heading{display:flex;align-items:center;justify-content:space-between;padding:0 7px}
+.inbox-heading h2{font-size:21px;margin:0 0 14px}
+.inbox-total{font-size:12px;color:#71809a}
+.conversation-search{width:100%;min-width:0!important}
+.inbox-filters{display:flex;gap:6px;margin:12px 0}
+.inbox-filters button{padding:7px 13px;font-size:13px;color:#52617a;background:#fff;border:1px solid #dfe6f2}
+.inbox-filters button.selected{color:#175aff;background:#edf3ff;border-color:#b9ccff}
+.conversation-item{display:flex!important;text-align:left;width:100%;padding:14px 9px!important;gap:10px;margin:5px 0!important;background:#fff!important;border:1px solid transparent!important;border-radius:10px!important;color:#253754!important;box-shadow:none!important}
+.conversation-item.current{background:#f0f4ff!important;border-color:#d5e1fc!important}
+.conversation-avatar{display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:#e9edff;color:#45409a;font-size:17px;font-weight:600;flex-shrink:0}
+.conversation-copy{min-width:0;flex:1}
+.conversation-meta{display:flex;gap:6px;justify-content:space-between;align-items:center}
+.conversation-meta b{font-size:13px}
+.conversation-meta time{font-size:10px;white-space:nowrap;color:#71809a}
+.conversation-context,.conversation-preview,.conversation-invite-status{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:#71809a;margin-top:4px}
+.conversation-context{color:#52617a}
+.conversation-invite-status{font-size:10px;color:#45409a}
+.unread-badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 5px;background:#175aff;color:white;font-size:11px;border-radius:12px}
+.message-thread{grid-column:2;min-width:0;width:100%;display:flex;flex-direction:column}
+.message-thread-heading{display:flex;align-items:center;gap:12px;border-bottom:1px solid #dfe6f2;padding:19px 23px;flex-wrap:wrap;width:100%;min-width:0}
+.message-thread-heading>div{flex:1;min-width:100px}
+.message-thread-heading h2{font-size:17px;margin:0}
+.message-thread-heading p{font-size:12px;color:#71809a;margin:4px 0 0}
+.message-thread-heading button,.message-thread-heading .button{font-size:12px;padding:8px 12px}
+.message-history{padding:24px;flex:1;max-height:650px;overflow:auto;width:100%;min-width:0}
+.message-row{margin-bottom:20px;max-width:90%;overflow-wrap:anywhere}
+.message-row.mine{margin-left:auto}
+.message-author{color:#71809a;font-size:11px;margin-bottom:6px}
+.message-author time{margin-left:8px}
+.message-bubble{padding:13px 16px;border-radius:12px;background:#f5f7fc;line-height:1.7;font-size:14px}
+.mine .message-bubble{background:#edf2ff;color:#253754}
+.preserve{white-space:pre-wrap;overflow-wrap:anywhere}
+.project-invitation{border:1px solid #bccfff;border-radius:12px;background:#f7f9ff;padding:20px;margin-top:12px}
+.project-invite-title{display:flex;gap:12px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap}
+.project-invite-title h3{font-size:17px;margin:7px 0}
+.project-invite-title .eyebrow{font-size:10px}
+.project-invitation>p{font-size:14px;line-height:1.7}
+.invitation-status{font-size:11px;border-radius:20px;padding:5px 9px;color:#966100;background:#fff1cf}
+.invitation-status.accepted{color:#078457;background:#e7f7ef}
+.invitation-status.declined,.invitation-status.cancelled{color:#a14652;background:#ffedf0}
+.project-invitation dl{display:grid;grid-template-columns:1fr 2fr;gap:9px;border-block:1px solid #dfe6f2;padding:13px 0;font-size:13px}
+.project-invitation dt{color:#71809a}
+.project-invitation dd{margin:0}
+.invitation-actions{display:flex;gap:8px;flex-wrap:wrap}
+.invitation-actions button{padding:9px 13px;font-size:12px}
+.invitation-email{display:block;color:#71809a;font-size:11px;margin-top:15px}
+.invitation-success{color:#078457}
+.message-compose{border-top:1px solid #dfe6f2;padding:18px 23px;width:100%;min-width:0}
+.message-compose textarea{display:block;box-sizing:border-box;width:100%;max-width:100%;resize:vertical;min-height:76px;font-size:14px}
+.composer-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.composer-actions button{margin-left:auto;font-size:13px}
+.attach-file{position:relative;display:flex;align-items:center;gap:5px;overflow:hidden;cursor:pointer;padding:8px 12px;border:1px solid #dfe6f2;border-radius:8px;font-size:13px;color:#52617a}
+.attach-file ::deep input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.attach-file ::deep svg,.message-file ::deep svg{width:16px;height:16px}
+.message-file{display:flex;align-items:center;gap:7px;padding:9px 0;font-size:13px}
+.pending-attachment{display:flex;gap:8px;align-items:center;font-size:12px;color:#52617a}
+.pending-attachment button{padding:4px 9px}
+.inbox-empty{text-align:center;margin:auto;padding:55px 20px;color:#71809a}
+.inbox-empty ::deep svg{width:44px;height:44px;color:#175aff}
+.inbox-empty h2{font-size:24px;color:#253754}
+.small{font-size:12px}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+@media(max-width:1100px){.messages-shell{grid-template-columns:245px minmax(0,1fr)}.message-row{max-width:100%}.message-history{padding:18px}.message-thread-heading{padding:15px}}
+@media(max-width:700px){.messages-shell{grid-template-columns:minmax(0,1fr)}.conversation-list{grid-column:1;border-right:0;border-bottom:1px solid #dfe6f2}.message-thread{grid-column:1;min-height:520px}.conversation-list .conversation-item{max-width:100%}.message-history{max-height:none}.composer-actions small{display:none}.project-invitation{padding:14px}.message-compose{padding:14px}}

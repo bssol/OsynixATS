@@ -1,18 +1,22 @@
 @inject RecruiterWorkService Work
 @inject RecruiterActionService Actions
 @inject RecruitmentUpdates Updates
+@inject MarketplaceMessages Inbox
 @implements IDisposable
 
 <details class="header-menu notification-menu">
     <summary aria-label="Notifications" title="Invitations And Work Updates">
         <svg width="23" height="23" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
-        @if (data.Invitations.Count + data.Assignments.Count + actions.Count > 0)
+        @if (data.Invitations.Count + data.Assignments.Count + actions.Count + messages.Sum(m=>m.Unread) > 0)
         {
-            <span class="work-notification-count">@(data.Invitations.Count + data.Assignments.Count + actions.Count)</span>
+            <span class="work-notification-count">@(data.Invitations.Count + data.Assignments.Count + actions.Count + messages.Sum(m=>m.Unread))</span>
         }
     </summary>
     <div class="header-popover work-notifications">
         <h2>Invitations &amp; Work Updates</h2>
+        @foreach(var conversation in messages.Where(m=>m.Unread>0).Take(5)){
+            <a class="work-notification-item" href="@($"/messages?conversation={conversation.Id}")"><b>@conversation.Unread New Message(s) · @conversation.Name</b><small>@conversation.Context</small></a>
+        }
         @foreach (var action in actions.Take(5))
         {
             <div class="work-notification-item">
@@ -40,7 +44,7 @@
         {
             <div class="work-notification-item"><b>@assignment.Title</b><small>Assigned By @assignment.Employer</small><WorkOpenButton WorkspaceId="assignment.WorkspaceId" Path="@($"/positions?ref={Uri.EscapeDataString(assignment.Reference)}")" Text="View Assignment" /></div>
         }
-        @if (data.Invitations.Count == 0 && data.Assignments.Count == 0 && actions.Count == 0)
+        @if (data.Invitations.Count == 0 && data.Assignments.Count == 0 && actions.Count == 0 && messages.All(m=>m.Unread==0))
         {
             <p class="muted">No Pending Invitations Or Assigned Work Updates.</p>
         }
@@ -50,6 +54,7 @@
 
 @code {
     List<RecruiterActionItem> actions = [];
+    List<ConversationSummary> messages = [];
     WorkNotifications data = new([], []);
 
     protected override async Task OnInitializedAsync()
@@ -60,6 +65,7 @@
 
     async Task Load()
     {
+        try{messages=await Inbox.Inbox();}catch(UnauthorizedAccessException){messages=[];}
         try
         {
             data = await Work.Notifications();

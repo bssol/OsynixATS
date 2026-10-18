@@ -1,0 +1,22 @@
+.employer-team-tabs button:not(.active) {
+    background: #fff !important;
+    color: #34456b !important;
+    border-color: #d9e2f3 !important;
+    box-shadow: none !important;
+    filter: none !important;
+}
+
+.employer-team-tabs button:not(.active):hover {
+    background: #f4f7ff !important;
+    color: #233b72 !important;
+    border-color: #b9cbf1 !important;
+}
+
+.employer-team-tabs button.active {
+    background: linear-gradient(120deg, #175aff, #45409a) !important;
+    color: #fff !important;
+    border-color: transparent !important;
+    box-shadow: 0 7px 18px #34489a24 !important;
+}
+
+.recruiter-profile-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}.recruiter-profile-actions .button,.recruiter-profile-actions button{font-size:14px;padding:10px 15px}

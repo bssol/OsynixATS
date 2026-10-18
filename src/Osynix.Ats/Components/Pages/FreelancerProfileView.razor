@@ -1,0 +1,35 @@
+@page "/employer/recruiters/{Id}"
+@attribute [Authorize(Roles="Employer")]
+@inherits PageBase
+@inject FreelancerDirectory Directory
+@inject MarketplaceMessages Messages
+@inject NavigationManager Navigation
+<PageTitle>Freelancer Profile · Osynix ATS</PageTitle>
+<div class="market-profile">
+<a class="market-back" href="/employer/team?view=directory">← Back To Freelance Recruiters</a>
+<Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
+@if(person is not null){var p=person.Profile;
+    <section class="panel market-identity"><img src="@person.Image" alt="@person.Name" class="market-photo" /><div class="market-identity-copy"><div class="eyebrow">FREELANCE RECRUITER</div><h1>@person.Name</h1><h2>@p.Headline</h2><span class="market-availability">● @p.Availability</span><div class="market-facts"><span><NavIcon Name="pin" />@Value(p.Location)</span><span><NavIcon Name="positions" />@p.YearsExperience Years In Recruitment</span>@if(p.Languages.Length>0){<span>@p.Languages</span>}</div></div><div class="market-primary-actions"><button disabled="@Busy" @onclick="()=>inviteOpen=true">Invite To Project</button><button class="secondary" disabled="@Busy" @onclick="Message"><NavIcon Name="message" /> Send A Message</button></div></section>
+    <div class="market-columns"><div>
+        <nav class="market-tabs" aria-label="Profile Sections">@foreach(var item in tabs){<button class="secondary @(tab==item?"chosen":"")" aria-pressed="@(tab==item)" @onclick="()=>tab=item">@item</button>}</nav>
+        @if(tab=="Overview"){
+            <section class="panel"><h2>Professional Overview</h2><p class="preserve">@Value(p.Bio)</p></section>
+            <section class="panel"><h2>Skills &amp; Specialisms</h2><div class="market-chips">@foreach(var s in Tags(p.Skills)){<span>@s</span>}</div><h3>Tools &amp; Technologies</h3><div class="market-chips">@foreach(var s in Tags(p.Technologies)){<span>@s</span>}@if(!Tags(p.Technologies).Any()){<p class="muted">Not provided.</p>}</div><h3>Industry Experience</h3><div class="market-chips">@foreach(var s in Tags(p.Industries)){<span>@s</span>}@if(!Tags(p.Industries).Any()){<p class="muted">Not provided.</p>}</div></section>
+        }else if(tab=="Experience"){
+            <section class="panel"><h2>Work Experience</h2><div class="preserve">@Value(p.Experience)</div></section><section class="panel"><h2>Education &amp; Certifications</h2><div class="preserve">@Value(p.Education)</div></section>
+        }else if(tab=="Case Studies"){
+            <section class="panel"><h2>Professional Case Studies</h2><div class="preserve">@Value(p.CaseStudies)</div></section>
+        }else{<section class="panel"><h2>Employer Reviews</h2><p class="muted">No verified reviews yet.</p></section>}
+    </div><div class="market-rail" role="complementary" aria-label="Working Together"><section class="panel"><h2>Working Together</h2><dl><dt>Availability</dt><dd>@p.Availability</dd><dt>Weekly Availability</dt><dd>@Value(p.WeeklyAvailability)</dd><dt>Working Style</dt><dd>@Value(p.WorkingStyle)</dd><dt>Seniority</dt><dd>@Value(p.SeniorityLevels)</dd><dt>Hiring Markets</dt><dd>@Value(p.HiringMarkets)</dd><dt>Time Zone</dt><dd>@Value(p.TimeZone)</dd></dl><button disabled="@Busy" @onclick="()=>inviteOpen=true">Invite To Project</button><button class="secondary" disabled="@Busy" @onclick="Message">Send A Message</button></section><section class="panel"><h3>A Shared Conversation</h3><p class="muted">Discuss scope and working arrangements in Messages. Once accepted, position invitations add the freelancer to your external team and assign the selected position.</p></section></div></div>
+    @if(inviteOpen){<ProjectInviteDialog FreelancerId="person.Id" FreelancerName="person.Name" Close="()=>inviteOpen=false" Sent="InvitationSent" />}
+}
+</div>
+@code{
+    [Parameter] public string Id{get;set;}="";
+    RecruiterDetail? person;string tab="Overview";bool inviteOpen;readonly string[] tabs=["Overview","Experience","Case Studies","Reviews"];
+    protected override Task OnParametersSetAsync()=>Run(async()=>{person=await Directory.Details(Id);});
+    static string Value(string value)=>string.IsNullOrWhiteSpace(value)?"Not provided.":value;
+    static IEnumerable<string> Tags(string value)=>value.Split([',',';','\n','|'],StringSplitOptions.TrimEntries|StringSplitOptions.RemoveEmptyEntries).Distinct(StringComparer.OrdinalIgnoreCase);
+    Task Message()=>Run(async()=>{var id=await Messages.Start(Id);Navigation.NavigateTo($"/messages?conversation={id}");});
+    void InvitationSent(Guid id){inviteOpen=false;Navigation.NavigateTo($"/messages?conversation={id}");}
+}

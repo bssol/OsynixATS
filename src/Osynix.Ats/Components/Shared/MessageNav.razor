@@ -1,0 +1,11 @@
+@inject MarketplaceMessages Inbox
+@inject RecruitmentUpdates Updates
+@implements IDisposable
+<NavLink href="/messages" title="Messages"><NavIcon Name="message" /><span>Messages @if(unread>0){<span class="message-nav-badge">@unread</span>}</span></NavLink>
+@code{
+    int unread;
+    protected override async Task OnInitializedAsync(){Updates.Changed+=Changed;await Load();}
+    async Task Load(){try{unread=await Inbox.Unread();}catch(UnauthorizedAccessException){unread=0;}}
+    void Changed()=>_=InvokeAsync(async()=>{await Load();StateHasChanged();});
+    public void Dispose()=>Updates.Changed-=Changed;
+}

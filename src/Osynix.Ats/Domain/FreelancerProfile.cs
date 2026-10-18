@@ -5,6 +5,7 @@ public class FreelancerProfile:Record {
  public string HiringMarkets{get;set;}="";
  public string WeeklyAvailability{get;set;}="";
  public string Industries{get;set;}="";
+ public string Technologies{get;set;}="";
  public string SeniorityLevels{get;set;}="";
  public string WorkingStyle{get;set;}="";
  public string Experience{get;set;}="";

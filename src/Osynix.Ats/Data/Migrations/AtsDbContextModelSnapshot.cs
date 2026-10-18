@@ -1528,6 +1528,10 @@ namespace Osynix.Ats.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Technologies")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("TimeZone")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -1895,6 +1899,101 @@ namespace Osynix.Ats.Data.Migrations
                     b.ToTable("InterviewDeliveries");
                 });
 
+            modelBuilder.Entity("Osynix.Ats.Domain.MarketplaceConversation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Agency")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("EmployerReadUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FreelancerId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("FreelancerReadUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("LastMessageUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FreelancerId");
+
+                    b.HasIndex("WorkspaceId", "FreelancerId", "Agency")
+                        .IsUnique();
+
+                    b.ToTable("MarketplaceConversations");
+                });
+
+            modelBuilder.Entity("Osynix.Ats.Domain.MarketplaceMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("AttachmentContent")
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("AttachmentName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AttachmentType")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("InvitationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SenderId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvitationId");
+
+                    b.HasIndex("ConversationId", "CreatedUtc");
+
+                    b.ToTable("MarketplaceMessages");
+                });
+
             modelBuilder.Entity("Osynix.Ats.Domain.Position", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2114,6 +2213,64 @@ namespace Osynix.Ats.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("PositionRecruiterAssignments");
+                });
+
+            modelBuilder.Entity("Osynix.Ats.Domain.ProjectInvitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Duration")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EmailDelivery")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("PositionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("RespondedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Start")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PositionId");
+
+                    b.HasIndex("ConversationId", "Status");
+
+                    b.ToTable("ProjectInvitations");
                 });
 
             modelBuilder.Entity("Osynix.Ats.Domain.RecruiterAction", b =>
@@ -2644,6 +2801,35 @@ namespace Osynix.Ats.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Osynix.Ats.Domain.MarketplaceConversation", b =>
+                {
+                    b.HasOne("Osynix.Ats.Data.AtsUser", null)
+                        .WithMany()
+                        .HasForeignKey("FreelancerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Osynix.Ats.Domain.EmployerWorkspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Osynix.Ats.Domain.MarketplaceMessage", b =>
+                {
+                    b.HasOne("Osynix.Ats.Domain.MarketplaceConversation", null)
+                        .WithMany()
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Osynix.Ats.Domain.ProjectInvitation", null)
+                        .WithMany()
+                        .HasForeignKey("InvitationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("Osynix.Ats.Domain.Position", b =>
                 {
                     b.HasOne("Osynix.Ats.Domain.Client", "ClientRecord")
@@ -2677,6 +2863,20 @@ namespace Osynix.Ats.Data.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Osynix.Ats.Domain.ProjectInvitation", b =>
+                {
+                    b.HasOne("Osynix.Ats.Domain.MarketplaceConversation", null)
+                        .WithMany()
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Osynix.Ats.Domain.Position", null)
+                        .WithMany()
+                        .HasForeignKey("PositionId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Osynix.Ats.Domain.RecruiterAction", b =>

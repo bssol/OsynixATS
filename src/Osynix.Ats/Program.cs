@@ -65,6 +65,7 @@ builder.Services.AddScoped<RecruitmentAttributionService>();
 builder.Services.AddScoped<TalentAdministration>();
 builder.Services.AddScoped<EmployerTeamService>();
 builder.Services.AddScoped<FreelancerDirectory>();
+builder.Services.AddScoped<MarketplaceMessages>();
 builder.Services.AddScoped<SelfProfileService>();
 builder.Services.AddScoped<ProfessionalProfileService>();
 builder.Services.AddScoped<RecruiterActionService>();
@@ -96,6 +97,14 @@ using(var scope=app.Services.CreateScope()) {
 if(!app.Environment.IsDevelopment()) {app.UseExceptionHandler("/error");app.UseHsts();app.UseHttpsRedirection();}
 app.UseStaticFiles();app.UseRouting();app.UseAuthentication();app.UseAuthorization();app.UseRateLimiter();app.UseAntiforgery();
 app.MapRazorPages();app.MapHiringReview();app.MapInterviews();
+app.MapGet("/messages/attachments/{id:guid}", async Task<IResult>(Guid id, IDbContextFactory<AtsDbContext> factory, HttpContext context) => {
+    await using var db = await factory.CreateDbContextAsync();
+    var file = await MarketplaceMessages.Download(db, context.User, id);
+    if (file?.AttachmentContent is not { Length: > 0 }) return Results.NotFound();
+    context.Response.Headers.CacheControl = "no-store";
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    return Results.File(file.AttachmentContent, file.AttachmentType, file.AttachmentName);
+}).RequireAuthorization();
 app.MapGet("/careers/{id:guid}/cover",async Task<IResult>(Guid id,EmployerService employers,HttpContext context)=>{
     var company=await employers.PublicCompany(id);
     if(company is null||company.CareersCoverMode!="Upload"||company.CareersCoverContent is not {Length:>0})return Results.NotFound();

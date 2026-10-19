@@ -7,7 +7,7 @@ namespace Osynix.Ats.Data.Migrations;
 
 [DbContext(typeof(AtsDbContext))]
 [Migration("20261019010000_PublicApplicationAutomaticAssessment")]
-public class PublicApplicationAutomaticAssessment : Migration
+public partial class PublicApplicationAutomaticAssessment : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {

@@ -2,19 +2,23 @@
 @inject Access Access
 @if(!Enabled){@ChildContent}else{
 <div class="settings-page">
-    <header class="settings-heading"><div class="eyebrow">ACCOUNT PREFERENCES</div><h1>Settings</h1><p class="muted">Manage your profile, account preferences and available services.</p></header>
+    <header class="settings-heading"><div class="eyebrow">ACCOUNT PREFERENCES</div><h1>Settings</h1><p class="muted">Your workspace, preferences and subscription.</p></header>
     <div class="settings-frame">
-        <nav class="settings-sections" aria-label="Settings sections">
-            <a href="/profile" class="@(Selected=="profile"?"selected":"")"><NavIcon Name="talent" /> My Profile</a>
-            @if(owner){
-                <a href="/employer/company" class="@(Selected=="company"?"selected":"")"><NavIcon Name="clients" /> Business Settings</a>
-                <a href="/employer/company/careers" class="nested @(Selected=="careers"?"selected":"")">↳ Careers Page</a>
-                <a href="/employer/subscriptions" class="@(Selected=="subscriptions"?"selected":"")"><NavIcon Name="positions" /> Subscription</a>
+        @if(!platform){
+            <nav class="settings-sections" aria-label="Settings sections">
+                <a href="/profile" class="@(Selected=="profile"?"selected":"")">My Profile</a>
+                @if(owner){<a href="/employer/company" class="@(Selected is "company" or "careers"?"selected":"")">Business Settings</a>}
+                @if(owner){<a href="/employer/subscriptions" class="@(Selected=="subscriptions"?"selected":"")">Subscriptions</a>}
+                @if(!candidate){<a href="/settings/email-templates" class="@(Selected=="templates"?"selected":"")">Email Templates</a>}
+                @if(owner){<span class="settings-tab-disabled" aria-disabled="true" title="Integration setup is coming soon">Integrations</span>}
+            </nav>
+            @if(owner && Selected is "company" or "careers"){
+                <nav class="settings-subsections" aria-label="Business settings sections">
+                    <a href="/employer/company" class="@(Selected=="company"?"selected":"")">Company Information</a>
+                    <a href="/employer/company/careers" class="@(Selected=="careers"?"selected":"")">Careers Page</a>
+                </nav>
             }
-            <a href="/profile#sign-in-options"><NavIcon Name="settings" /> Sign-In &amp; Security</a>
-            @if(!candidate){<a href="/settings/email-templates" class="@(Selected=="templates"?"selected":"")"><NavIcon Name="assessment" /> Email Templates</a>}
-            @if(platform){<a href="/settings" class="@(Selected=="administration"?"selected":"")"><NavIcon Name="settings" /> Platform Settings</a>}
-        </nav>
+        }
         <div class="settings-detail">@ChildContent</div>
     </div>
 </div>

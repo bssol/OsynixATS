@@ -17,7 +17,7 @@ public class WorkspaceAccountTests {
  public async Task ProfessionalProfilesAreEditableForEveryAccountAndRemainPrivateByDefault(string kind){
   await using var f=new Fixture();await f.Init();await using(var db=f.Factory.CreateDbContext()){db.Users.Add(new(){Id="profile-owner",UserName="profile-owner",FullName="Profile Owner",AccountType=kind,Status="Active",EmailConfirmed=true});await db.SaveChangesAsync();}
   var service=new ProfessionalProfileService(new State("profile-owner",kind),f.Factory);var p=await service.Get();Assert.False(p.Published);p.Headline="Professional Headline";p.Bio="My professional background.";p.Languages="English — Fluent";p.Skills="Research, Communication";p.Experience="Relevant Work Experience";p.Education="Professional Qualification";p.CaseStudies="Anonymised Project";await service.Save(p);var saved=await service.Get();Assert.Equal(p.Experience,saved.Experience);Assert.Equal(p.Languages,saved.Languages);Assert.Equal(p.CaseStudies,saved.CaseStudies);Assert.False(saved.Published);
-  saved.UserId="first";await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>service.Save(saved));saved.UserId="profile-owner";saved.Published=true;if(kind!="Freelance Recruiter"){await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>service.Save(saved));}else{await service.Save(saved);Assert.True((await service.Get()).Published);await Assert.ThrowsAsync<InvalidOperationException>(()=>service.Save(saved));}
+  saved.UserId="first";await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>service.Save(saved));saved.UserId="profile-owner";saved.Published=true;if(kind!="Freelance Recruiter"){await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>service.Save(saved));}else{saved.Published=false;await using(var db=f.Factory.CreateDbContext())await SubscriptionTestPlans.Marketplace(db,"profile-owner");Assert.True((await service.Get()).Published);await service.Save(saved);Assert.True((await service.Get()).Published);await Assert.ThrowsAsync<InvalidOperationException>(()=>service.Save(saved));}
  }
  sealed class State(string id,string role,Guid? workspace=null,string? mode=null):AuthenticationStateProvider{public override Task<AuthenticationState> GetAuthenticationStateAsync(){var claims=new List<Claim>{new(ClaimTypes.NameIdentifier,id),new(ClaimTypes.Name,id),new(ClaimTypes.Role,role)};if(mode is not null)claims.Add(new(ProfileModes.Claim,mode));if(workspace is Guid selected)claims.Add(new(WorkspaceContext.Claim,selected.ToString()));return Task.FromResult(new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity(claims,"Test"))));}}
  sealed class Factory(DbContextOptions<AtsDbContext> options):IDbContextFactory<AtsDbContext>{public AtsDbContext CreateDbContext()=>new(options);}
@@ -58,8 +58,64 @@ public class WorkspaceAccountTests {
  await f.Team("first").AssignPositions("free",new[]{two});await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>f.Access("free",workspace).RequirePosition(one));await f.Access("second",workspace).RequirePosition(one);Assert.Equal(1,(await f.Owner("first").Usage()).ActiveRecruiters);
  var member=(await f.Team("first").Team()).Members.Single(m=>m.Id=="free");await f.Team("first").Update(member with{Status="Inactive"});member=(await f.Team("first").Team()).Members.Single(m=>m.Id=="free");await f.Team("first").Update(member with{Status="Active"});Assert.Equal(1,(await f.Owner("first").Usage()).ActiveRecruiters);
  }
- [Fact]public async Task FreelancerDirectoryRequiresOptInAndOwnerAccessAndDoesNotReturnEmails(){
- await using var f=new Fixture();await f.Init();var owner=new FreelancerDirectory(f.Access("first"),f.Team("first"),f.Factory);var free=new FreelancerDirectory(f.Access("free"),f.Team("free"),f.Factory);Assert.Empty(await owner.Search());var profile=(await free.MyProfile())!;profile.Headline="Healthcare Recruitment";profile.Skills="Nursing, Hospitals";profile.Bio="Recruitment Specialist";await free.Save(profile);Assert.Empty(await owner.Search());profile=(await free.MyProfile())!;profile.Published=true;await free.Save(profile);var listing=Assert.Single(await owner.Search());Assert.Equal("free",listing.Id);Assert.DoesNotContain("example.test",JsonSerializer.Serialize(listing));await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>free.Search());var invitation=await owner.Invite("free");Assert.Contains("TeamInvitation",invitation.Link);profile=(await free.MyProfile())!;profile.Published=false;await free.Save(profile);Assert.Empty(await owner.Search());await Assert.ThrowsAsync<InvalidOperationException>(()=>owner.Invite("free"));
+ [Fact]public async Task FreelancerDirectoryAutomaticallyListsStarterWithoutOptInAndRemovesFreeAccounts(){
+     await using var f=new Fixture();await f.Init();
+     var owner=new FreelancerDirectory(f.Access("first"),f.Team("first"),f.Factory);
+     var freelancer=new FreelancerDirectory(f.Access("free"),f.Team("free"),f.Factory);
+     Assert.Empty(await owner.Search());
+     var profile=(await freelancer.MyProfile())!;
+     profile.Headline="Healthcare Recruitment";profile.Skills="Nursing, Hospitals";profile.Bio="Recruitment Specialist";
+     await freelancer.Save(profile);Assert.Empty(await owner.Search());
+     profile=(await freelancer.MyProfile())!;profile.Published=true;
+     await freelancer.Save(profile);Assert.Empty(await owner.Search()); // A forged legacy switch cannot bypass Free.
+     await using(var db=f.Factory.CreateDbContext()){
+         await SubscriptionTestPlans.Marketplace(db,"free");
+         var workspace=await db.EmployerWorkspaces.SingleAsync(w=>w.OwnerId=="free");
+         workspace.SubscriptionTermsJson=JsonSerializer.Serialize(SubscriptionRules.Terms(workspace),new JsonSerializerOptions{WriteIndented=true});
+         await db.SaveChangesAsync();
+         Assert.False((await db.FreelancerProfiles.SingleAsync()).Published); // Reproduce the live account's old flag.
+     }
+     var listing=Assert.Single(await owner.Search());Assert.Equal("free",listing.Id);
+     Assert.DoesNotContain("example.test",JsonSerializer.Serialize(listing));
+     Assert.True((await owner.Details("free")).Profile.Published);
+     await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>freelancer.Search());
+     var invitation=await owner.Invite("free");Assert.Contains("TeamInvitation",invitation.Link);
+     profile=(await freelancer.MyProfile())!;profile.Published=false;await freelancer.Save(profile);
+     Assert.Single(await owner.Search()); // Visibility follows the plan even if a stale client sends false.
+     await using(var db=f.Factory.CreateDbContext()){
+         var workspace=await db.EmployerWorkspaces.SingleAsync(w=>w.OwnerId=="free");
+         var freePlan=await db.SubscriptionPlans.SingleAsync(p=>p.AccountCategory=="Freelancer"&&p.Code=="free");
+         SubscriptionRules.Apply(workspace,freePlan);await db.SaveChangesAsync();
+     }
+     Assert.Empty(await owner.Search());
+     await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>owner.Details("free"));
+     await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>owner.Invite("free"));
+ }
+ [Theory][InlineData(false,true)][InlineData(true,false)]
+ public async Task DirectoryHidesUnverifiedOrInactiveStarterAccounts(bool verified,bool active){
+     await using var f=new Fixture();await f.Init();
+     var owner=new FreelancerDirectory(f.Access("first"),f.Team("first"),f.Factory);
+     await using(var db=f.Factory.CreateDbContext()){
+         await SubscriptionTestPlans.Marketplace(db,"free");
+         var user=await db.Users.SingleAsync(u=>u.Id=="free");user.EmailConfirmed=verified;user.Status=active?"Active":"Inactive";await db.SaveChangesAsync();
+     }
+     Assert.Empty(await owner.Search());
+     await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>owner.Details("free"));
+     await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>owner.Invite("free"));
+ }
+ [Fact]public async Task StarterApprovalImmediatelyEnablesSearchDetailsAndMessagingEvenWithoutSavedProfile(){
+     await using var f=new Fixture();await f.Init();
+     var subscriptions=new SubscriptionService(f.Owner("free"),f.Access("free"),f.Factory,new());
+     var current=await subscriptions.Overview();var starter=current.Plans.Single(p=>p.Code=="starter");
+     await subscriptions.Request(starter.Id,starter.Revision,"Monthly","PKR","");
+     var request=(await subscriptions.Overview()).Requests.Single();request.Status="Granted";request.PaymentConfirmed=true;request.AdminResponse="Payment confirmed";
+     await f.Owner("admin").Respond(request);
+     var owner=new FreelancerDirectory(f.Access("first"),f.Team("first"),f.Factory);
+     Assert.Equal("free",Assert.Single(await owner.Search()).Id);
+     Assert.True((await owner.Details("free")).Profile.Published);
+     var messaging=new MarketplaceMessages(f.Auth("first"),f.Factory,new(),new Mail(),new ConfigurationBuilder().Build());
+     var id=await messaging.Start("free");Assert.Equal(id,(await messaging.Open(id)).Id);
+     await using var check=f.Factory.CreateDbContext();Assert.Empty(await check.FreelancerProfiles.ToListAsync());
  }
  [Fact]public async Task FreelancePoolCombinesAssignedTeamProfilesButEmployerPoolOnlyShowsOpenAssignedWork(){
  await using var f=new Fixture();await f.Init();var own=(await f.Owner("free").Overview()).Workspace;var team=await f.Join("first","free");Guid closedId,otherId,openId;

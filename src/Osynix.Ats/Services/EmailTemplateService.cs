@@ -69,7 +69,7 @@ public class EmailTemplateService(IDbContextFactory<AtsDbContext> factory,Authen
     public static async Task Send(IDbContextFactory<AtsDbContext> factory,IAccountEmail mail,Guid? workspace,string key,string address,string subject,string body,Dictionary<string,string> fields)
     {
         await using var db=await factory.CreateDbContextAsync();
-        if(workspace is Guid id&&!await db.EmployerWorkspaces.AnyAsync(w=>w.Id==id&&w.EmailTemplatesEnabled)){await mail.Send(address,subject,body);return;}
+        if(workspace is Guid id){var workspaceAccess=await db.EmployerWorkspaces.AsNoTracking().SingleOrDefaultAsync(w=>w.Id==id);if(workspaceAccess is null||(!workspaceAccess.EmailTemplatesEnabled&&SubscriptionRules.Terms(workspaceAccess)?.EmailTemplates!=true)){await mail.Send(address,subject,body);return;}}
         // Recommended templates are available for composing; only existing send actions invoke this method.
         var template=(await Library(db,workspace,true)).SingleOrDefault(t=>t.Key==key);
         if(template is null){await mail.Send(address,subject,body);return;}

@@ -15,6 +15,7 @@ else if(Selected is { } selected){
 <AdminWorkspaceDetails @key="selected.Workspace.Id" Item="selected" Owner="@Owner(selected)" CanManageAccounts="canManageAccounts" CanManageEntitlements="canManageEntitlements" CanReviewRequests="canReviewRequests" CanViewAudit="canViewAudit" OnBack="Back" OnChanged="Load" />
 }else{
 <div class="page-heading"><div><div class="eyebrow">PLATFORM ADMINISTRATION</div><h1>Workspaces &amp; Subscriptions</h1><p class="muted">Manage Account Access, Workspace Capacity And Subscription Requests.</p></div><button class="secondary" disabled="@Busy" @onclick="()=>Run(Load)">Refresh</button></div>
+@if(canManageEntitlements){<div class="toolbar"><a class="button secondary" href="/settings/subscription-plans">Manage subscription plans &amp; pricing</a></div>}
 <div class="account-categories" role="group" aria-label="Account Type">
 @foreach(var type in Types){var items=workspaces.Where(i=>Kind(i)==type).ToList();
 <button type="button" class="category secondary @(accountType==type?"selected":"")" aria-pressed="@(accountType==type)" @onclick="()=>SelectType(type)"><span class="category-icon"><NavIcon Name="@(type=="Freelance Recruiter"?"candidates":"clients")" /></span><span><b>@TypeTitle(type)</b><small>@items.Sum(Pending) Requests Need Review</small></span><strong>@items.Count</strong></button>
@@ -32,7 +33,7 @@ else if(Selected is { } selected){
 else if(view=="list"){
 <div class="directory-table"><table><thead><tr><th>Account / Owner</th><th>Status</th><th>Subscription Access</th><th>Capacity</th><th>Requests</th><th>Updated</th><th>Account</th></tr></thead><tbody>
 @foreach(var item in PageItems){var w=item.Workspace;var owner=Owner(item);
-<tr @key="w.Id"><td><div class="account-name"><span class="account-avatar">@Initials(w.CompanyName)</span><div><b>@w.CompanyName</b><small>@OwnerName(item)</small><small>@owner?.Email</small></div></div></td><td><span class="account-status @(owner?.Status=="Active"?"enabled":"neutral")">@(owner?.Status??"Unavailable")</span></td><td><b>@AccessLabel(item)</b><small>Master Pool: @(w.MasterTalentPoolEnabled?"Enabled":"Disabled")</small></td><td><b>@item.UsedPositionSlots / @Slots(w) Slots</b>@if(w.Kind!=AccountTypes.Freelance){<small>@item.ActiveInternalMembers / @Seats(w) Internal Seats</small>}</td><td><span class="account-status @(Pending(item)>0?"pending":"neutral")">@Pending(item) Pending</span></td><td>@w.UpdatedUtc.ToString("dd MMM yyyy")<small>UTC</small></td><td><button class="secondary open-account" @onclick="()=>Open(w.Id)">View →</button></td></tr>
+<tr @key="w.Id"><td><div class="account-name"><span class="account-avatar">@Initials(w.CompanyName)</span><div><b>@w.CompanyName</b><small>@OwnerName(item)</small><small>@owner?.Email</small></div></div></td><td><span class="account-status @(owner?.Status=="Active"?"enabled":"neutral")">@(owner?.Status??"Unavailable")</span></td><td><b>@AccessLabel(item)</b><small>Master Pool: @(w.MasterTalentPoolEnabled||SubscriptionRules.Terms(w)?.MasterPool==true?"Enabled":"Disabled")</small></td><td><b>@item.UsedPositionSlots / @Slots(w) Slots</b>@if(w.Kind!=AccountTypes.Freelance){<small>@item.ActiveInternalMembers / @Seats(w) Internal Seats</small>}</td><td><span class="account-status @(Pending(item)>0?"pending":"neutral")">@Pending(item) Pending</span></td><td>@w.UpdatedUtc.ToString("dd MMM yyyy")<small>UTC</small></td><td><button class="secondary open-account" @onclick="()=>Open(w.Id)">View →</button></td></tr>
 }
 </tbody></table></div>
 }else{
@@ -62,7 +63,7 @@ static string TypeTitle(string type)=>type=="Freelance Recruiter"?"Freelance Rec
 static int Pending(EmployerOverview i)=>i.Requests.Count(r=>r.Status is "Submitted" or "Under Review" or "Needs Information");
 static int Slots(EmployerWorkspace w)=>w.FreePositionSlots+w.AdditionalPositionSlots;
 static int Seats(EmployerWorkspace w)=>w.FreeRecruiterSeats+w.AdditionalRecruiterSeats;
-static string AccessLabel(EmployerOverview i)=>i.Workspace.AdditionalPositionSlots>0||i.Workspace.AdditionalRecruiterSeats>0||i.Workspace.MasterTalentPoolEnabled||i.Workspace.AgencyEnabled?"Admin Granted Access":"Free Allowance";
+static string AccessLabel(EmployerOverview i)=>i.Workspace.SubscriptionName+" plan";
 static string Initials(string name)=>string.Concat(name.Split(' ',StringSplitOptions.RemoveEmptyEntries).Take(2).Select(p=>char.ToUpperInvariant(p[0])));
 List<EmployerOverview> Filtered{get{
 var q=query.Trim();var items=workspaces.Where(i=>Kind(i)==accountType&&(status=="All"||Owner(i)?.Status==status)&&(requestFilter=="All"||requestFilter=="Pending"&&Pending(i)>0||requestFilter=="None"&&Pending(i)==0));

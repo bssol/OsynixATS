@@ -53,6 +53,7 @@ public class MarketplaceMessages(AuthenticationStateProvider auth, IDbContextFac
                           join w in db.EmployerWorkspaces.AsNoTracking() on c.WorkspaceId equals w.Id
                           join f in db.Users.AsNoTracking() on c.FreelancerId equals f.Id
                           where (c.FreelancerId == user.Id || w.OwnerId == user.Id)
+                          && !db.ChatInboxDeletions.Any(d=>d.UserId==user.Id&&d.Kind=="Project"&&d.ConversationId==c.Id&&d.DeletedThroughUtc>=c.LastMessageUtc)
                           && (w.OwnerId == user.Id || db.MarketplaceMessages.Any(m => m.ConversationId == c.Id))
                           && db.Users.Any(o => o.Id == w.OwnerId && o.Status == "Active")
                           orderby c.LastMessageUtc descending
@@ -67,6 +68,17 @@ public class MarketplaceMessages(AuthenticationStateProvider auth, IDbContextFac
     }
 
     public async Task<int> Unread() => (await Inbox()).Sum(c => c.Unread);
+
+    public async Task DeleteChat(Guid id)
+    {
+        await using var db=await factory.CreateDbContextAsync();
+        var(c,_,user)=await Participant(db,id);
+        var deletion=await db.ChatInboxDeletions.FindAsync(user.Id,"Project",id);
+        if(deletion is null){deletion=new(){UserId=user.Id,Kind="Project",ConversationId=id};db.ChatInboxDeletions.Add(deletion);}
+        deletion.DeletedThroughUtc=c.LastMessageUtc;
+        AtsService.Audit(db,user.Id,"Project chat deleted from inbox",id.ToString());
+        await db.SaveChangesAsync();updates.Publish();
+    }
 
     public async Task<ConversationDetail> Open(Guid id)
     {
@@ -91,10 +103,11 @@ public class MarketplaceMessages(AuthenticationStateProvider auth, IDbContextFac
     {
         await using var db = await factory.CreateDbContextAsync();
         var (user, workspace, agency) = await Owner(db);
+        await SubscriptionRules.RequireMarketplace(db,freelancerId);
         if (!await db.Users.AnyAsync(u => u.Id == freelancerId && u.AccountType == AccountTypes.Freelance && u.EmailConfirmed && u.Status == "Active")) throw new InvalidOperationException("This freelancer is no longer available.");
         var existing = await db.MarketplaceConversations.SingleOrDefaultAsync(c => c.WorkspaceId == workspace.Id && c.FreelancerId == freelancerId && c.Agency == agency);
         if (existing is not null) return existing.Id;
-        if (!await db.FreelancerProfiles.AnyAsync(p => p.UserId == freelancerId && p.Published)) throw new InvalidOperationException("This freelancer is no longer available in the directory.");
+
         var conversation = new MarketplaceConversation { WorkspaceId = workspace.Id, FreelancerId = freelancerId, Agency = agency, EmployerReadUtc = DateTime.UtcNow };
         db.Add(conversation);
         try { await db.SaveChangesAsync(); }

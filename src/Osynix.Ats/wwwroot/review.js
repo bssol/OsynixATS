@@ -5,7 +5,7 @@
  function when(value,zone){if(!value)return "Not Provided";try{return new Intl.DateTimeFormat(undefined,{dateStyle:"full",timeStyle:"short",timeZone:zone||"UTC"}).format(new Date(value.endsWith("Z")?value:value+"Z"))+" · "+(zone||"UTC");}catch{return value+" UTC";}}
  function localValue(value,zone){if(!value)return "";const parts=new Intl.DateTimeFormat("en-CA",{timeZone:zone||"UTC",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date(value.endsWith("Z")?value:value+"Z"));const p=Object.fromEntries(parts.map(x=>[x.type,x.value]));return p.year+"-"+p.month+"-"+p.day+"T"+p.hour+":"+p.minute;}
  function render(){
-  const pid=$("position").value;const selected=rows.filter(r=>r.positionId===pid);$("profiles").replaceChildren();$("interviews").replaceChildren();
+  const pid=$("position").value;const selected=rows.filter(r=>r.positionId===pid);const position=[...$("position").options].find(o=>o.value===pid);$("position-context").textContent=position&&pid?"Position: "+position.textContent:"Choose a position to review shared profiles.";$("profiles").replaceChildren();$("interviews").replaceChildren();
   $("count").textContent=selected.length+" Submitted Profiles";
   $("empty").textContent=selected.length?"":"No active profiles have been shared for this position.";
   for(const r of selected){
@@ -24,14 +24,14 @@
   if(pid&&selected.length){$("comparison").href="/review/comparison?position="+encodeURIComponent(pid);$("pdf").href="/review/report?position="+encodeURIComponent(pid)+"&format=pdf";}else{$("comparison").removeAttribute("href");$("pdf").removeAttribute("href");}
  }
  async function load(){
-  if(stopped)return;try{const res=await fetch("/review/data",{cache:"no-store"});if(res.status===401){stopped=true;rows=[];render();message("Your link is invalid, expired, or revoked. Ask your Recruiter for a new review link.",true);return;}if(!res.ok)throw Error("Review updates are temporarily unavailable.");
-   const data=await res.json();const stamp=JSON.stringify(data);if(stamp===lastPayload)return;lastPayload=stamp;rows=data.rows;const old=$("position").value||new URLSearchParams(location.search).get("position");const positions=[...new Map(rows.map(r=>[r.positionId,r])).values()];$("position").replaceChildren(text("option","Choose Position"));$("position").firstChild.value="";
-   positions.forEach(r=>{const o=text("option","#"+r.reference+" — "+r.positionTitle);o.value=r.positionId;$("position").append(o);});
-   $("position").value=positions.some(r=>r.positionId===old)?old:positions.length===1?positions[0].positionId:"";
+  if(stopped)return;try{const requested=new URLSearchParams(location.search).get("position");const endpoint="/review/data"+(requested?"?position="+encodeURIComponent(requested):"");const res=await fetch(endpoint,{cache:"no-store"});if(res.status===401){stopped=true;rows=[];render();message("Your link is invalid, expired, or revoked. Ask your Recruiter for a new review link.",true);return;}if(!res.ok)throw Error("Review updates are temporarily unavailable.");
+   const data=await res.json();const stamp=JSON.stringify(data);if(stamp===lastPayload)return;lastPayload=stamp;rows=data.rows;const old=$("position").value||requested;const positions=data.positions||[];$("position").replaceChildren(text("option","Choose Position"));$("position").firstChild.value="";
+   positions.forEach(p=>{const o=text("option","#"+p.reference+" — "+p.title);o.value=p.id;$("position").append(o);});
+   $("position").value=positions.some(p=>p.id===old)?old:positions.length===1?positions[0].id:"";
    $("welcome").textContent=data.name?data.name+" — Profile Review":"Review Submitted Profiles";render();
    if(opened){const current=rows.find(r=>r.id===opened.id);if(!current||current.revision!==opened.revision||current.applicationRevision!==opened.applicationRevision||current.interview?.revision!==opened.interview?.revision){$('submit').disabled=true;$('form-notice').textContent='This Candidate Or Interview Changed. Close And Reopen The Profile Before Evaluating.';}}
-   const requested=new URLSearchParams(location.search).get("profile");
-   if(requested&&!opened){const row=rows.find(r=>r.id===requested);if(row){history.replaceState(null,"","/review?position="+encodeURIComponent(row.positionId));open(row);}}
+   const requestedProfile=new URLSearchParams(location.search).get("profile");
+   if(requestedProfile&&!opened){const row=rows.find(r=>r.id===requestedProfile);if(row){history.replaceState(null,"","/review?position="+encodeURIComponent(row.positionId));open(row);}}
   }catch(e){message(e.message,true);}
  }
  function open(r){

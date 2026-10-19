@@ -12,8 +12,8 @@ public static class HiringReviewEndpoints {
    c.Response.Cookies.Append(HiringReviewService.CookieName,exchange.Value.Cookie,new(){HttpOnly=true,Secure=c.Request.IsHttps,SameSite=SameSiteMode.Strict,Path="/review",Expires=new DateTimeOffset(exchange.Value.Expires,TimeSpan.Zero)});
    return Results.Redirect(position is Guid pid?"/review?position="+pid:"/review");
   }).AllowAnonymous().RequireRateLimiting("review");
-  app.MapGet("/review/data",async Task<IResult>(HiringReviewService review,HttpContext c)=>{
-   Private(c);try{var data=await review.Read(c.Request.Cookies[HiringReviewService.CookieName]);return Results.Json(new{name=data.Name,rows=data.Rows});}catch(UnauthorizedAccessException){return Results.Unauthorized();}
+  app.MapGet("/review/data",async Task<IResult>(Guid? position,HiringReviewService review,HttpContext c)=>{
+   Private(c);try{var data=await review.Read(c.Request.Cookies[HiringReviewService.CookieName],position);return Results.Json(new{name=data.Name,rows=data.Rows,positions=data.Positions});}catch(UnauthorizedAccessException){return Results.Unauthorized();}
   }).AllowAnonymous().RequireRateLimiting("review");
   app.MapPost("/review/feedback",async Task<IResult>(HiringFeedback input,HiringReviewService review,IAntiforgery csrf,HttpContext c)=>{
    Private(c);try{await csrf.ValidateRequestAsync(c);await review.Reply(c.Request.Cookies[HiringReviewService.CookieName],input);return Results.Ok(new{message="Feedback saved. Your Recruiter has been updated."});}

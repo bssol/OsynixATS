@@ -2,6 +2,8 @@
 @using Osynix.Ats.Data
 @inject ProfessionalProfileService Profiles
 @inject SelfProfileService Identity
+@inject RecruitmentUpdates Updates
+@implements IDisposable
 @if(profile is not null&&identity is not null){
 <div class="portfolio-page">
     <div class="portfolio-heading"><div><div class="eyebrow">@(preview?"PROFILE PREVIEW":"MY PROFILE")</div><h1>Professional Profile</h1><p class="muted">@(preview?"This view excludes private contact, account and sign-in information.":"Present your experience, expertise and professional background.")</p></div><button class="secondary" @onclick="TogglePreview">@(preview?"← Back To My Profile":Freelance?"Marketplace Preview":"Profile Preview")</button></div>
@@ -10,12 +12,12 @@
         <aside class="portfolio-identity">
             @if(preview){<img class="portfolio-avatar" src="@identity.Image" alt="Profile photo" /><h2>@identity.Name</h2>}else{<ProfileIdentity Changed="RefreshIdentity" />}
             <p class="portfolio-account-type">@Role</p>
-            <span class="portfolio-availability @(profile.Availability=="Not Available"?"unavailable":"")">@profile.Availability</span>
+            @if(!Freelance||marketplaceIncluded){<span class="portfolio-availability @(profile.Availability=="Not Available"?"unavailable":"")">@profile.Availability</span>}
             <dl>
                 <dt><NavIcon Name="clients" />Location</dt><dd>@Value(profile.Location,"Not Added")</dd>
                 <dt><NavIcon Name="clock" />Time Zone</dt><dd>@profile.TimeZone</dd>
                 <dt><NavIcon Name="talent" />Languages</dt><dd class="preserve">@Value(profile.Languages,"Not Added")</dd>
-                <dt><NavIcon Name="clock" />Availability</dt><dd>@Value(profile.WeeklyAvailability,"Not Added")</dd>
+                @if(!Freelance||marketplaceIncluded){<dt><NavIcon Name="clock" />Availability</dt><dd>@Value(profile.WeeklyAvailability,"Not Added")</dd>}
                 @if(!Platform){<dt><NavIcon Name="positions" />@(Candidate?"Preferred Markets":"Hiring Markets")</dt><dd>@Value(profile.HiringMarkets,"Not Added")</dd>}
             </dl>
             @if(!preview){<button class="secondary portfolio-edit-details" @onclick='()=>Edit("details")'>✎ Edit Details</button><p class="portfolio-private-note">Your email, phone and sign-in settings stay private.</p>}
@@ -40,14 +42,14 @@
         </section>
     </div>
     @if(!preview){
-        @if(Freelance){<section class="panel portfolio-publication"><div><h3>Employer Directory Visibility</h3><p class="muted">@(profile.Published?"Your recruiter profile is discoverable by employers.":"Your recruiter profile is not listed in the employer directory.")</p></div><button class="secondary" disabled="@Busy" @onclick='()=>Edit("publication")'>Manage Visibility</button></section>}
+        @if(Freelance){<section class="panel portfolio-publication"><div><h3>Employer Directory Visibility</h3><p class="muted">@(profile.Published?"Your profile is automatically visible to Employers and Agencies through your active plan. No separate publishing step is needed.":!Account.EmailConfirmed?"Verify your account email to appear in the Employer directory.":"Your current plan does not include Employer directory visibility.")</p>@if(!marketplaceIncluded&&Account.EmailConfirmed){<a href="/employer/subscriptions">Explore Starter and higher plans</a>}<p class="muted small">Only your professional profile is listed. Account contact details, client records and candidate data stay private.</p></div><span class="badge">@(profile.Published?"Visible automatically":"Not listed")</span></section>}
         @PrivateContent
     }
     @if(draft is not null&&!preview){<div class="overlay" @onkeydown="HandleKey"><section class="drawer portfolio-editor" role="dialog" aria-modal="true" aria-label="Edit Professional Profile"><div class="drawer-head"><h2>@EditorTitle</h2><button class="secondary" disabled="@Busy" @onclick="Cancel">Close</button></div><Feedback Error="@Error" Busy="Busy" />
         @if(section=="overview"){
             <label>Professional Headline<input maxlength="160" @bind="draft.Headline" @bind:event="oninput" /></label><label>Experience (Years)<input type="number" min="0" max="70" @bind="draft.YearsExperience" /></label><label>About Me<textarea rows="9" maxlength="3000" @bind="draft.Bio" @bind:event="oninput"></textarea></label>
         }else if(section=="details"){
-            <label>City / Country<input maxlength="150" @bind="draft.Location" @bind:event="oninput" /></label><label>Time Zone<input maxlength="100" @bind="draft.TimeZone" @bind:event="oninput" placeholder="Asia/Karachi" /></label><label>Languages & Proficiency<textarea rows="3" maxlength="500" @bind="draft.Languages" @bind:event="oninput" placeholder="English — Fluent&#10;Urdu — Native"></textarea></label><label>Availability<select @bind="draft.Availability"><option>Available</option><option>Limited Availability</option><option>Not Available</option></select></label><label>Weekly Availability<input maxlength="200" @bind="draft.WeeklyAvailability" @bind:event="oninput" placeholder="20–30 hours per week" /></label>@if(!Platform){<label>@(Candidate?"Preferred Markets":"Hiring Markets")<input maxlength="500" @bind="draft.HiringMarkets" @bind:event="oninput" /></label>}
+            <label>City / Country<input maxlength="150" @bind="draft.Location" @bind:event="oninput" /></label><label>Time Zone<input maxlength="100" @bind="draft.TimeZone" @bind:event="oninput" placeholder="Asia/Karachi" /></label><label>Languages & Proficiency<textarea rows="3" maxlength="500" @bind="draft.Languages" @bind:event="oninput" placeholder="English — Fluent&#10;Urdu — Native"></textarea></label><label>Availability<select disabled="@(Freelance&&!marketplaceIncluded)" @bind="draft.Availability"><option>Available</option><option>Limited Availability</option><option>Not Available</option></select></label><label>Weekly Availability<input maxlength="200" @bind="draft.WeeklyAvailability" @bind:event="oninput" placeholder="20–30 hours per week" /></label>@if(!Platform){<label>@(Candidate?"Preferred Markets":"Hiring Markets")<input maxlength="500" @bind="draft.HiringMarkets" @bind:event="oninput" /></label>}
         }else if(section=="expertise"){
             <div class="portfolio-token-field"><label>Skills / Specialisms</label><div class="portfolio-selected-tokens">@foreach(var item in selectedSkills){<button type="button" class="secondary portfolio-token selected" @onclick="()=>RemoveSkill(item)"><span>@item</span><span aria-hidden="true">×</span></button>}</div><div class="portfolio-token-entry"><input aria-label="Add skill or specialism" maxlength="100" @bind="skillSearch" @bind:event="oninput" @onkeydown="HandleSkillKey" placeholder="Search or add a skill" /><button type="button" class="secondary" @onclick="()=>AddSkill(skillSearch)">Add</button></div><small>Suggestions based on “@HeadlineForSuggestions”</small><div class="portfolio-suggestions">@foreach(var item in SkillSuggestions.Where(x=>!Contains(selectedSkills,x))){<button type="button" class="secondary portfolio-token recommendation" @onclick="()=>AddSkill(item)">+ @item</button>}</div></div>
             <div class="portfolio-token-field"><label>Tools & Technologies</label><div class="portfolio-selected-tokens">@foreach(var item in selectedTechnologies){<button type="button" class="secondary portfolio-token selected" @onclick="()=>RemoveTechnology(item)"><span>@item</span><span aria-hidden="true">×</span></button>}</div><div class="portfolio-token-entry"><input aria-label="Add technology" maxlength="100" @bind="technologySearch" @bind:event="oninput" @onkeydown="HandleTechnologyKey" placeholder="Search or add a tool or technology" /><button type="button" class="secondary" @onclick="()=>AddTechnology(technologySearch)">Add</button></div><small>Recommended tools based on your headline</small><div class="portfolio-suggestions">@foreach(var item in TechnologySuggestions.Where(x=>!Contains(selectedTechnologies,x))){<button type="button" class="secondary portfolio-token recommendation" @onclick="()=>AddTechnology(item)">+ @item</button>}</div></div>
@@ -59,8 +61,6 @@
             <label>Education & Certifications<textarea rows="12" maxlength="10000" @bind="draft.Education" @bind:event="oninput" placeholder="Qualification · Institution · Year&#10;Professional training and certifications"></textarea></label>
         }else if(section=="cases"){
             <label>Case Studies / Projects<textarea rows="14" maxlength="20000" @bind="draft.CaseStudies" @bind:event="oninput" placeholder="Project title&#10;Objective, approach and outcome"></textarea></label>
-        }else if(section=="publication"){
-            <label class="check"><input type="checkbox" @bind="draft.Published" /> Make My Recruiter Profile Discoverable To Employers</label><p class="muted">A headline, skills and introduction are required. Your account email, phone, client records and candidate records are excluded from the listing.</p>
         }
         <div class="toolbar"><button disabled="@Busy" @onclick="Save">Save Changes</button><button class="secondary" disabled="@Busy" @onclick="Cancel">Cancel</button></div>
     </section></div>}
@@ -79,7 +79,7 @@
     bool Freelance=>Account.AccountType==AccountTypes.Freelance;
     string[] Tabs=>Platform?["Overview","Experience"]:Candidate?["Overview","Experience","Projects"]:Freelance?["Overview","Experience","Case Studies","Reviews"]:["Overview","Experience","Case Studies"];
     string DefaultHeadline=>Platform?"Platform Administration":Candidate?"My Professional Background":Freelance?"Freelance Recruitment Professional":"Professional Background";
-    string EditorTitle=>section switch{"overview"=>"Professional Introduction","details"=>"Profile Details","expertise"=>"Skills & Expertise","experience"=>"Work Experience","education"=>"Education & Certifications","cases"=>"Case Studies","publication"=>"Directory Visibility",_=>"Edit Profile"};
+    string EditorTitle=>section switch{"overview"=>"Professional Introduction","details"=>"Profile Details","expertise"=>"Skills & Expertise","experience"=>"Work Experience","education"=>"Education & Certifications","cases"=>"Case Studies",_=>"Edit Profile"};
     string HeadlineForSuggestions=>string.IsNullOrWhiteSpace(draft?.Headline)?DefaultHeadline:draft.Headline;
     string HeadlineKey=>HeadlineForSuggestions.ToLowerInvariant();
     bool RecruitmentHeadline=>HeadlineKey.Contains("recruit")||HeadlineKey.Contains("talent")||HeadlineKey.Contains("sourc");
@@ -91,7 +91,10 @@
     static readonly string[] WorkingStyleOptions=["Remote","Hybrid","On-site","Flexible","Project-based / Contract"];
     string SeniorityRecommendation=>HeadlineKey.Contains("chief")||HeadlineKey.Contains("ceo")||HeadlineKey.Contains("c-suite")?"C-Suite":HeadlineKey.Contains("director")||HeadlineKey.Contains("head of")?"Director":HeadlineKey.Contains("manager")?"Manager":(draft?.YearsExperience??0)>=10?"Executive":(draft?.YearsExperience??0)>=5?"Senior":(draft?.YearsExperience??0)>=2?"Mid-Level":"Entry Level";
     string WorkingStyleRecommendation=>HeadlineKey.Contains("freelance")||HeadlineKey.Contains("contract")||HeadlineKey.Contains("consultant")?"Project-based / Contract":HeadlineKey.Contains("remote")?"Remote":HeadlineKey.Contains("on-site")||HeadlineKey.Contains("onsite")?"On-site":"Hybrid";
-    protected override Task OnInitializedAsync()=>Run(async()=>{profile=await Profiles.Get();identity=await Identity.Get();});
+    bool marketplaceIncluded;
+    protected override Task OnInitializedAsync(){Updates.Changed+=VisibilityChanged;return Run(async()=>{marketplaceIncluded=await Profiles.MarketplaceIncluded();profile=await Profiles.Get();if(Freelance&&!marketplaceIncluded)profile.Published=false;identity=await Identity.Get();});}
+    void VisibilityChanged()=>_=InvokeAsync(async()=>{if(!Busy)await Run(async()=>{marketplaceIncluded=await Profiles.MarketplaceIncluded();if(profile is not null)profile.Published=(await Profiles.Get()).Published;});StateHasChanged();});
+    public void Dispose()=>Updates.Changed-=VisibilityChanged;
     async Task RefreshIdentity()=>identity=await Identity.Get();
     static string Value(string value,string fallback)=>string.IsNullOrWhiteSpace(value)?fallback:value;
     static IEnumerable<string> Tags(string text)=>text.Split([',',';','\n'],StringSplitOptions.RemoveEmptyEntries|StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase);

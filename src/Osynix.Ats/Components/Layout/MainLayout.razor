@@ -20,12 +20,14 @@
             @if(isAdmin){
                 <NavLink href="/" Match="NavLinkMatch.All" title="Admin Overview"><NavIcon Name="dashboard" /><span>Admin Overview</span></NavLink>
                 <NavLink href="/settings/employers" title="Workspaces & Subscriptions"><NavIcon Name="clients" /><span>Workspaces &amp; Subscriptions</span></NavLink>
+                <MessageNav />
                 <NavLink href="/master-talent" title="Osynix Master Talent Pool"><NavIcon Name="talent" /><span>Master Talent Pool</span></NavLink>
                 <NavLink href="/activity" title="Platform Activity"><NavIcon Name="clock" /><span>Platform Activity</span></NavLink>
                 <NavLink href="/import" title="Import Workbook"><NavIcon Name="import" /><span>Import Workbook</span></NavLink>
                 <NavLink href="/settings" class="@(SettingsRoute?"active":"")" Match="NavLinkMatch.All" title="Settings"><NavIcon Name="settings" /><span>Settings</span></NavLink>
             }else if(isSubAdmin){
                 @if(canAdminWorkspaces){<NavLink href="/settings/employers" title="Workspaces & Subscriptions"><NavIcon Name="clients" /><span>Workspaces &amp; Subscriptions</span></NavLink>}
+                @if(canAdminMessages){<MessageNav />}
                 <NavLink href="/settings" class="@(SettingsRoute?"active":"")" Match="NavLinkMatch.All" title="Settings"><NavIcon Name="settings" /><span>Settings</span></NavLink>
             }else{
                 <AuthorizeView Roles="Recruiter,Employer" Context="workspaceAuth">
@@ -56,7 +58,7 @@
                     <NavLink href="/settings" class="@(SettingsRoute?"active":"")" Match="NavLinkMatch.All" title="Settings"><NavIcon Name="settings" /><span>Settings</span></NavLink>
                 </AuthorizeView>
             }
-            <AuthorizeView Roles="Candidate"><NavLink href="/Account/Portal">My Account</NavLink><NavLink href="/settings" class="@(SettingsRoute?"active":"")" Match="NavLinkMatch.All"><NavIcon Name="settings" /><span>Settings</span></NavLink></AuthorizeView>
+        <AuthorizeView Roles="Candidate"><NavLink href="/Account/Portal">My Account</NavLink><MessageNav /><NavLink href="/settings" class="@(SettingsRoute?"active":"")" Match="NavLinkMatch.All"><NavIcon Name="settings" /><span>Settings</span></NavLink></AuthorizeView>
         </nav>
         <div class="side-footer">Building scalable organizations<br />through strategic people operations.</div>
     </aside>
@@ -66,10 +68,10 @@
 @code {
     bool SettingsRoute{get{var path=new Uri(Navigation.Uri).AbsolutePath;return path is "/settings" or "/profile" or "/employer/subscriptions"||path.StartsWith("/employer/company",StringComparison.Ordinal)||path.StartsWith("/settings/email-templates",StringComparison.Ordinal);}}
     string sidebarLogo="",sidebarCompany="";
-    bool employerMember,collapsed,owner,employerAccount,isAdmin,isSubAdmin,canAdminWorkspaces,masterGranted,showClients;
-    protected override async Task OnInitializedAsync(){Updates.Changed+=AccessChanged;var user=(await Auth.GetAuthenticationStateAsync()).User;isAdmin=user.IsInRole("Admin");isSubAdmin=user.IsInRole("SubAdmin");canAdminWorkspaces=isSubAdmin&&await Access.CanAdmin("admin.workspaces.view");showClients=isAdmin||await Access.Can("Clients.View");masterGranted=isAdmin||await Access.Can("Talent.Master");if(!isAdmin&&!isSubAdmin&&user.Identity?.IsAuthenticated==true&&(user.IsInRole("Employer")||user.IsInRole("Recruiter"))){try{var active=await Access.Context();owner=active?.Owner==true;employerMember=active?.Membership is not null;if(owner){await using var db=await Factory.CreateDbContextAsync();var kind=(await db.EmployerWorkspaces.FindAsync(active!.Id))?.Kind;employerAccount=kind!=AccountTypes.Freelance;showClients=await Access.Can("Clients.View");}}catch(UnauthorizedAccessException){}}await LoadBrand();}
+    bool employerMember,collapsed,owner,employerAccount,isAdmin,isSubAdmin,canAdminWorkspaces,canAdminMessages,masterGranted,showClients;
+    protected override async Task OnInitializedAsync(){Updates.Changed+=AccessChanged;var user=(await Auth.GetAuthenticationStateAsync()).User;isAdmin=user.IsInRole("Admin");isSubAdmin=user.IsInRole("SubAdmin");canAdminWorkspaces=isSubAdmin&&await Access.CanAdmin("admin.workspaces.view");canAdminMessages=isAdmin||isSubAdmin&&await Access.CanAdmin("admin.requests.review");showClients=isAdmin||await Access.Can("Clients.View");masterGranted=isAdmin||await Access.Can("Talent.Master");if(!isAdmin&&!isSubAdmin&&user.Identity?.IsAuthenticated==true&&(user.IsInRole("Employer")||user.IsInRole("Recruiter"))){try{var active=await Access.Context();owner=active?.Owner==true;employerMember=active?.Membership is not null;if(owner){await using var db=await Factory.CreateDbContextAsync();var kind=(await db.EmployerWorkspaces.FindAsync(active!.Id))?.Kind;employerAccount=kind!=AccountTypes.Freelance;showClients=await Access.Can("Clients.View");}}catch(UnauthorizedAccessException){}}await LoadBrand();}
 
-    void AccessChanged()=>_=InvokeAsync(async()=>{canAdminWorkspaces=isSubAdmin&&await Access.CanAdmin("admin.workspaces.view");masterGranted=await Access.Can("Talent.Master");showClients=await Access.Can("Clients.View");await LoadBrand();StateHasChanged();});
+    void AccessChanged()=>_=InvokeAsync(async()=>{canAdminWorkspaces=isSubAdmin&&await Access.CanAdmin("admin.workspaces.view");canAdminMessages=isAdmin||isSubAdmin&&await Access.CanAdmin("admin.requests.review");masterGranted=await Access.Can("Talent.Master");showClients=await Access.Can("Clients.View");await LoadBrand();StateHasChanged();});
     async Task LoadBrand(){sidebarLogo=sidebarCompany="";if(isAdmin||isSubAdmin)return;try{var user=(await Auth.GetAuthenticationStateAsync()).User;if(user.Identity?.IsAuthenticated!=true||!(user.IsInRole("Employer")||user.IsInRole("Recruiter")))return;var active=await Access.Context();if(active?.Id is not Guid id)return;await using var db=await Factory.CreateDbContextAsync();var company=await db.EmployerWorkspaces.AsNoTracking().SingleOrDefaultAsync(w=>w.Id==id);if(company?.LogoContent is {Length:>0}&&company.LogoContentType is "image/png" or "image/jpeg"){sidebarCompany=company.CompanyName;sidebarLogo="data:"+company.LogoContentType+";base64,"+Convert.ToBase64String(company.LogoContent);}}catch(UnauthorizedAccessException){}}
     public void Dispose()=>Updates.Changed-=AccessChanged;
     void ToggleSidebar() => collapsed = !collapsed;

@@ -60,12 +60,14 @@ builder.Services.AddScoped<AuthenticationStateProvider,RevalidatingIdentityState
 builder.Services.AddScoped<AdminService>(); builder.Services.AddScoped<Access>(); builder.Services.AddScoped<AtsService>(); builder.Services.AddScoped<WorkbookImport>(); builder.Services.AddScoped<ReportService>();
 builder.Services.AddScoped<WorkspaceService>();
 builder.Services.AddScoped<EmployerService>();
+builder.Services.AddScoped<SubscriptionService>();
 builder.Services.AddScoped<RecruiterWorkService>();
 builder.Services.AddScoped<RecruitmentAttributionService>();
 builder.Services.AddScoped<TalentAdministration>();
 builder.Services.AddScoped<EmployerTeamService>();
 builder.Services.AddScoped<FreelancerDirectory>();
 builder.Services.AddScoped<MarketplaceMessages>();
+builder.Services.AddScoped<SupportInboxService>();
 builder.Services.AddScoped<SelfProfileService>();
 builder.Services.AddScoped<ProfessionalProfileService>();
 builder.Services.AddScoped<RecruiterActionService>();
@@ -79,6 +81,8 @@ builder.Services.AddHostedService(sp=>sp.GetRequiredService<CvProfileExtractionQ
 builder.Services.AddSingleton<PublicApplicationAssessmentQueue>();
 builder.Services.AddSingleton<IPublicApplicationAssessmentQueue>(sp=>sp.GetRequiredService<PublicApplicationAssessmentQueue>());
 builder.Services.AddHostedService(sp=>sp.GetRequiredService<PublicApplicationAssessmentQueue>());
+builder.Services.AddHostedService<SubscriptionRenewalReminderService>();
+builder.Services.AddHostedService<SubscriptionLifecycleWorker>();
 var app=builder.Build();
 using(var scope=app.Services.CreateScope()) {
     var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();
@@ -107,6 +111,19 @@ app.MapGet("/messages/attachments/{id:guid}", async Task<IResult>(Guid id, IDbCo
     context.Response.Headers.CacheControl = "no-store";
     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
     return Results.File(file.AttachmentContent, file.AttachmentType, file.AttachmentName);
+}).RequireAuthorization();
+app.MapGet("/messages/support-attachments/{id:guid}", async Task<IResult>(Guid id, IDbContextFactory<AtsDbContext> factory, HttpContext context) => {
+    await using var db = await factory.CreateDbContextAsync();
+    var file = await SupportInboxService.Download(db, context.User, id);
+    if (file?.AttachmentContent is not { Length: > 0 }) return Results.NotFound();
+    context.Response.Headers.CacheControl = "no-store";
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    return Results.File(file.AttachmentContent, file.AttachmentType, file.AttachmentName);
+}).RequireAuthorization();
+app.MapGet("/messages/support-transcript/{id:guid}", async Task<IResult>(Guid id, IDbContextFactory<AtsDbContext> factory, HttpContext context) => {
+    await using var db=await factory.CreateDbContextAsync();var transcript=await SupportInboxService.Transcript(db,context.User,id);
+    if(transcript is null)return Results.NotFound();context.Response.Headers.CacheControl="no-store";context.Response.Headers["X-Content-Type-Options"]="nosniff";
+    return Results.File(transcript.Value.Content,"text/plain; charset=utf-8",transcript.Value.FileName);
 }).RequireAuthorization();
 app.MapGet("/careers/{id:guid}/cover",async Task<IResult>(Guid id,EmployerService employers,HttpContext context)=>{
     var company=await employers.PublicCompany(id);

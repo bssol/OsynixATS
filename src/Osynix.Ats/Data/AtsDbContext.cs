@@ -21,9 +21,15 @@ public class AtsUser : IdentityUser
 }
 public class AtsDbContext(DbContextOptions<AtsDbContext> options) : IdentityDbContext<AtsUser>(options)
 {
+    public DbSet<ChatInboxDeletion> ChatInboxDeletions => Set<ChatInboxDeletion>();
+    public DbSet<SubscriptionPlan> SubscriptionPlans => Set<SubscriptionPlan>();
+    public DbSet<SubscriptionUsage> SubscriptionUsage => Set<SubscriptionUsage>();
+    public DbSet<SubscriptionChange> SubscriptionChanges => Set<SubscriptionChange>();
     public DbSet<MarketplaceConversation> MarketplaceConversations => Set<MarketplaceConversation>();
     public DbSet<MarketplaceMessage> MarketplaceMessages => Set<MarketplaceMessage>();
     public DbSet<ProjectInvitation> ProjectInvitations => Set<ProjectInvitation>();
+    public DbSet<SupportConversation> SupportConversations => Set<SupportConversation>();
+    public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
     public DbSet<EmailTemplate> EmailTemplates => Set<EmailTemplate>();
     public DbSet<InterviewBooking> InterviewBookings=>Set<InterviewBooking>();
     public DbSet<InterviewDelivery> InterviewDeliveries=>Set<InterviewDelivery>();
@@ -59,6 +65,17 @@ public class AtsDbContext(DbContextOptions<AtsDbContext> options) : IdentityDbCo
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<ChatInboxDeletion>().HasKey(x=>new{x.UserId,x.Kind,x.ConversationId});
+        b.Entity<ChatInboxDeletion>().HasOne<AtsUser>().WithMany().HasForeignKey(x=>x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SubscriptionPlan>().HasIndex(p=>new{p.AccountCategory,p.Code}).IsUnique();
+        b.Entity<SubscriptionChange>().HasIndex(x=>x.WorkspaceId).IsUnique().HasFilter("Status = 'Scheduled'");
+        b.Entity<SubscriptionChange>().HasOne<EmployerWorkspace>().WithMany().HasForeignKey(x=>x.WorkspaceId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SubscriptionChange>().HasOne<SubscriptionPlan>().WithMany().HasForeignKey(x=>x.PlanId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SubscriptionUsage>().HasIndex(u=>new{u.WorkspaceId,u.Kind,u.MonthUtc});
+        b.Entity<SubscriptionUsage>().HasIndex(u=>new{u.ApplicationId,u.Kind}).IsUnique().HasFilter("ApplicationId IS NOT NULL");
+        b.Entity<SubscriptionUsage>().HasOne<EmployerWorkspace>().WithMany().HasForeignKey(u=>u.WorkspaceId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EmployerWorkspace>().HasOne<SubscriptionPlan>().WithMany().HasForeignKey(w=>w.SubscriptionPlanId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EmployerAccessRequest>().HasOne<SubscriptionPlan>().WithMany().HasForeignKey(r=>r.SubscriptionPlanId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<MarketplaceConversation>().HasIndex(c => new { c.WorkspaceId, c.FreelancerId, c.Agency }).IsUnique();
         b.Entity<MarketplaceConversation>().HasOne<EmployerWorkspace>().WithMany().HasForeignKey(c => c.WorkspaceId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<MarketplaceConversation>().HasOne<AtsUser>().WithMany().HasForeignKey(c => c.FreelancerId).OnDelete(DeleteBehavior.Restrict);
@@ -68,6 +85,14 @@ public class AtsDbContext(DbContextOptions<AtsDbContext> options) : IdentityDbCo
         b.Entity<ProjectInvitation>().HasOne<MarketplaceConversation>().WithMany().HasForeignKey(i => i.ConversationId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<ProjectInvitation>().HasOne<Position>().WithMany().HasForeignKey(i => i.PositionId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<MarketplaceMessage>().HasOne<ProjectInvitation>().WithMany().HasForeignKey(m => m.InvitationId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SupportConversation>().HasIndex(c=>c.EmployerAccessRequestId).IsUnique().HasFilter("EmployerAccessRequestId IS NOT NULL AND Status = 'Open'");
+        b.Entity<SupportConversation>().HasIndex(c=>c.UserId).IsUnique().HasFilter("EmployerAccessRequestId IS NULL AND Subject = 'Osynix Support' AND Status = 'Open'");
+        b.Entity<SupportConversation>().HasOne<AtsUser>().WithMany().HasForeignKey(c=>c.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SupportConversation>().HasOne<EmployerWorkspace>().WithMany().HasForeignKey(c=>c.WorkspaceId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SupportConversation>().HasOne<EmployerAccessRequest>().WithMany().HasForeignKey(c=>c.EmployerAccessRequestId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SupportMessage>().HasIndex(m=>new{m.ConversationId,m.CreatedUtc});
+        b.Entity<SupportMessage>().HasOne<SupportConversation>().WithMany().HasForeignKey(m=>m.ConversationId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SupportMessage>().HasOne<AtsUser>().WithMany().HasForeignKey(m=>m.SenderId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<EmailTemplate>().HasIndex(t=>new{t.WorkspaceId,t.Key}).IsUnique();
         b.Entity<EmailTemplate>().HasIndex(t=>t.Key).IsUnique().HasFilter("WorkspaceId IS NULL");
         b.Entity<EmailTemplate>().HasOne<EmployerWorkspace>().WithMany().HasForeignKey(t=>t.WorkspaceId).OnDelete(DeleteBehavior.Restrict);

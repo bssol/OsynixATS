@@ -35,7 +35,6 @@ public static class Lifecycle
     public static LifecycleState UpgradeLegacy(string stage, string interview, string client)
     {
         stage=stage switch { "Screened"=>"HR Screening", "Interview Scheduled" or "Interviewed"=>"Technical Interview", "Submitted to Client"=>"HR Screening", "Offer"=>"Offer Sent", _=>stage };
-        if (interview=="Cancelled") interview="Reschedule Required";
         client=client switch { "Not Shared"=>"Not Submitted", "Shared"=>"Submitted", "Selected"=>"Hired", "Rejected"=>"Client Rejected", "On Hold"=>"Under Review", _=>client };
         return new(stage,interview,client);
     }

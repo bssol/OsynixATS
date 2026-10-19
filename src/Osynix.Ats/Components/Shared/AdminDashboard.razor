@@ -1,6 +1,8 @@
 @inherits PageBase
 @inject AdminService Admin
 @inject EmployerService Employers
+@inject RecruitmentUpdates Updates
+@implements IDisposable
 <PageTitle>Admin Overview · Osynix ATS</PageTitle>
 <div class="dashboard-page admin-dashboard">
     <div class="page-heading">
@@ -15,7 +17,7 @@
             <a class="kpi" href="/settings/employers"><span class="kpi-icon icon-violet"><NavIcon Name="positions" /></span><span>Agency Enabled</span><strong>@agencyWorkspaces</strong><small>Employer workspaces with Agency access</small></a>
             <a class="kpi" href="/settings"><span class="kpi-icon icon-amber"><NavIcon Name="clients" /></span><span>Pending Access Requests</span><strong>@pendingAccessRequests</strong><small>Accounts awaiting Admin access review</small></a>
             <a class="kpi" href="/settings/employers"><span class="kpi-icon icon-blue"><NavIcon Name="positions" /></span><span>Pending Subscription Requests</span><strong>@pendingSubscriptionRequests</strong><small>Workspace requests awaiting an Admin response</small></a>
-            <a class="kpi" href="/settings/employers"><span class="kpi-icon icon-teal"><NavIcon Name="settings" /></span><span>Pending Payments</span><strong>@pendingPayments</strong><small>Payment tracking is not connected yet</small></a>
+            <a class="kpi" href="/settings/employers"><span class="kpi-icon icon-teal"><NavIcon Name="settings" /></span><span>Pending Payments</span><strong>@pendingPayments</strong><small>Upgrade requests awaiting offline payment confirmation</small></a>
         </div>
         <div class="two-col admin-overview-columns">
             <section class="panel table-wrap">
@@ -59,7 +61,10 @@
 
     record AdminRequestSummary(string Workspace,string Feature,string Status);
 
-    protected override Task OnInitializedAsync()=>Run(Load);
+    protected override Task OnInitializedAsync(){Updates.Changed+=OnWorkspaceChanged;return Run(Load);}
+
+    void OnWorkspaceChanged()=>_=InvokeAsync(()=>Run(Load));
+    public void Dispose()=>Updates.Changed-=OnWorkspaceChanged;
 
     async Task Load(){
         users=await Admin.Users();
@@ -71,8 +76,8 @@
         agencyWorkspaces=workspaces.Count(x=>x.Workspace.Kind==AccountTypes.Employer&&x.Workspace.AgencyEnabled);
         var requests=workspaces.SelectMany(x=>x.Requests.Where(r=>r.Status is "Submitted" or "Under Review" or "Needs Information").Select(r=>new AdminRequestSummary(x.Workspace.CompanyName,r.Feature,r.Status))).ToList();
         pendingRequests=requests.Count;
-        pendingSubscriptionRequests=requests.Count;
-        pendingPayments=0;
+        pendingSubscriptionRequests=workspaces.SelectMany(w=>w.Requests).Count(r=>r.SubscriptionPlanId is not null&&(r.Status is "Submitted" or "Under Review" or "Needs Information"));
+        pendingPayments=workspaces.SelectMany(w=>w.Requests).Count(r=>r.SubscriptionPlanId!=null&&!r.PaymentConfirmed&&(r.Status is "Submitted" or "Under Review" or "Needs Information"));
         requestSummaries=requests;
         loaded=true;
     }

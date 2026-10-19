@@ -72,7 +72,7 @@ public class Access(AuthenticationStateProvider state, IDbContextFactory<AtsDbCo
         if(active is {Legacy:false}){
             var workspace=await db.EmployerWorkspaces.AsNoTracking().SingleAsync(w=>w.Id==active.Id);
             if(permission=="EmailTemplates.Manage"){
-                if(!workspace.EmailTemplatesEnabled)throw new UnauthorizedAccessException("Email Templates Access Has Not Been Enabled By Admin For This Workspace.");
+                if(!workspace.EmailTemplatesEnabled&&SubscriptionRules.Terms(workspace)?.EmailTemplates!=true)throw new UnauthorizedAccessException("Email Templates Access Has Not Been Enabled By Admin For This Workspace.");
                 return;
             }
             var clientsAllowed=workspace.Kind==AccountTypes.Freelance||(workspace.AgencyEnabled&&(!active.Owner||await PositionMode(db)==true))||account?.AccountType==AccountTypes.Legacy;
@@ -80,7 +80,9 @@ public class Access(AuthenticationStateProvider state, IDbContextFactory<AtsDbCo
               if(!clientsAllowed||(!active.Owner&&!active.Membership!.CanCreateClients))throw new UnauthorizedAccessException("Agency Access And Client Permissions Are Required.");
               if(permission=="Clients.View")return;
             }
-            var master=await db.EmployerWorkspaces.AnyAsync(w=>w.Id==active.Id&&w.MasterTalentPoolEnabled);
+            var terms=SubscriptionRules.Terms(workspace);
+            if(permission=="Reports.Export"&&terms is not null&&!terms.Reports)throw new UnauthorizedAccessException("Report exports require a plan that includes reports.");
+            var master=workspace.MasterTalentPoolEnabled||terms?.MasterPool==true;
             var permit=active.Owner?(permission is "Positions.Create" or "Clients.Create" or "Clients.Delete" or "Reports.Export" or "Talent.View" || permission=="Talent.Master"&&master):permission switch{"Positions.Create"=>active.Membership!.CanCreatePositions,"Clients.Create"=>active.Membership!.CanCreateClients,"Reports.Export"=>active.Membership!.CanExportReports,"Talent.View"=>active.Membership!.CanViewTalentPool,"Talent.Master"=>master&&active.Membership!.CanUseMasterPool,_=>false};
             if(!permit)throw new UnauthorizedAccessException("Your Workspace Does Not Have Access To This Feature.");return;
         }

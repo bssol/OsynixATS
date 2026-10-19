@@ -29,6 +29,7 @@ public class MarketplaceMessagesTests
             await db.SaveChangesAsync();
             var w=await EmployerService.EnsureWorkspace(db,await db.Users.SingleAsync(u=>u.Id=="owner"));Workspace=w.Id;
             var tracked=await db.EmployerWorkspaces.SingleAsync(x=>x.Id==w.Id);tracked.AgencyEnabled=true;
+            foreach(var id in new[]{"free","other-free"})await SubscriptionTestPlans.Marketplace(db,id);
             foreach(var id in new[]{"free","other-free"})db.FreelancerProfiles.Add(new(){UserId=id,Published=true,Headline="Recruiter",Skills="Sourcing",Bio="Recruitment expert"});
             var p=new Position{Reference="A1",Title="Engineer",Client="Employer",WorkspaceId=w.Id,Status="Active"};db.Add(p);Position=p.Id;
             var a=new Position{Reference="A2",Title="Agency Engineer",Client="Client",WorkspaceId=w.Id,Status="Active",IsAgencyPosition=true};db.Add(a);AgencyPosition=a.Id;
@@ -38,6 +39,15 @@ public class MarketplaceMessagesTests
         public ProjectInviteDraft Draft(Guid? position=null)=>new(position??Position,"Project","Source and shortlist candidates","Hello","To be agreed","Short-term project",true);
         public async Task<ProjectInvitation> Invitation(Guid conversation){await using var db=Factory.CreateDbContext();return await db.ProjectInvitations.AsNoTracking().SingleAsync(i=>i.ConversationId==conversation);}
         public ValueTask DisposeAsync()=>connection.DisposeAsync();
+    }
+
+    [Fact] public async Task InboxDeletionIsParticipantOnlyAndKeepsInvitationsAndOtherCopy(){
+        await using var f=new Fixture();await f.Init();var owner=f.Service("owner");var freelancer=f.Service("free");var id=await owner.Invite("free",f.Draft());
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>f.Service("other-free").DeleteChat(id));
+        await owner.DeleteChat(id);Assert.Empty(await owner.Inbox());Assert.Single(await freelancer.Inbox());
+        var invitation=await f.Invitation(id);Assert.Equal("Pending",invitation.Status);
+        await freelancer.Send(id,"What is the start date?");Assert.Contains(await owner.Inbox(),c=>c.Id==id);
+        await freelancer.Respond(invitation.Id,invitation.Revision,"Accepted");Assert.Equal("Accepted",(await f.Invitation(id)).Status);
     }
 
     [Fact] public async Task InvitationAppearsInRecipientInboxAndAcceptAssignsOnlyEmployerPositionWithoutInternalSeats(){

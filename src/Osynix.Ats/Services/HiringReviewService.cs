@@ -22,6 +22,7 @@ public record HiringFeedback(Guid SubmissionId,Guid Revision,Guid ApplicationRev
 
 public record ForwardResult(string Link,string Message);
 public record ClientReviewLink(string? Link,string Status,DateTime? ExpiresUtc,int Profiles);
+public record HiringPosition(Guid Id,string Reference,string Title);
 
 public record HiringRow(Guid Id,Guid PositionId,string Reference,string PositionTitle,string CandidateName,int? MatchPercent,string Decision,string Stage,string InterviewStatus,string ClientStatus,string Feedback,string Remarks,DateTime SubmittedUtc,DateTime? FeedbackUtc,DateTime? AvailabilityStartUtc,int DurationMinutes,string TimeZone,string InterviewMode,string InterviewLocation,Guid Revision,Guid ApplicationRevision,string LifecycleQueue,string MustHaveFit,string RecruiterResponse="",DateTime? RecruiterResponseUtc=null,InterviewSummary? Interview=null){
  public string ReviewAction=>Stage is "Hired" or "Offer Sent"?"View Outcome":Interview?.Status is "Confirmed" or "Declined" or "New Time Proposed" or "Completed"?"Evaluate":"Review";
@@ -174,14 +175,22 @@ public class HiringReviewService(IDbContextFactory<AtsDbContext> factory,Access 
   var contactId=contactBound&&Guid.TryParse(grant.EmailKey["contact:".Length..],out var parsed)?parsed:Guid.Empty;
   return db.HiringSubmissions.Where(s=>s.GrantId==grant.Id&&!s.Revoked&&db.Assessments.Any(a=>a.Id==s.AssessmentId&&a.State=="Saved"&&a.Stage!="Rejected"&&db.ClientContacts.Any(c=>c.Id==s.ContactId&&c.ClientId==a.Position!.ClientId&&((contactBound&&c.Id==contactId)||(!contactBound&&c.Email.Trim().ToLower()==grant.EmailKey)))));
  }
- public async Task<(string Name,List<HiringRow> Rows)> Read(string? cookie){
+ public async Task<(string Name,List<HiringRow> Rows,List<HiringPosition> Positions)> Read(string? cookie,Guid? requestedPositionId=null){
 
   await using var db=await factory.CreateDbContextAsync();var grant=await Grant(db,cookie);
 
   var rows=await (from s in Visible(db,grant) join a in db.Assessments on s.AssessmentId equals a.Id join p in db.Positions on a.PositionId equals p.Id orderby s.SubmittedUtc descending,s.Id select new{s,a,p}).AsNoTracking().ToListAsync();
 
+  var positions=rows.Select(x=>new HiringPosition(x.p.Id,x.p.Reference,x.p.Title)).DistinctBy(p=>p.Id).ToList();
+  if(requestedPositionId is Guid requestedId&&!positions.Any(p=>p.Id==requestedId)){
+   var requested=grant.ClientId is Guid clientId
+    ? await db.Positions.AsNoTracking().Where(p=>p.Id==requestedId&&p.ClientId==clientId).Select(p=>new HiringPosition(p.Id,p.Reference,p.Title)).SingleOrDefaultAsync()
+    : await (from s in Visible(db,grant) join a in db.Assessments on s.AssessmentId equals a.Id join p in db.Positions on a.PositionId equals p.Id where p.Id==requestedId select new HiringPosition(p.Id,p.Reference,p.Title)).AsNoTracking().Select(p=>new HiringPosition(p.Id,p.Reference,p.Title)).FirstOrDefaultAsync();
+   if(requested is not null)positions.Add(requested);
+  }
+
   var interviews=await db.InterviewBookings.AsNoTracking().Where(i=>rows.Select(x=>x.a.Id).Contains(i.AssessmentId)).ToListAsync();
-  return (grant.Name,rows.Select(x=>{var report=JsonSerializer.Deserialize<Assessment>(x.s.SharedReportJson)!;var snap=JsonSerializer.Deserialize<AssessmentSnapshot>(report.SnapshotJson)!;return new HiringRow(x.s.Id,x.p.Id,x.p.Reference,x.p.Title,snap.Profile.Name,report.MatchPercent,report.Decision,x.a.Stage,x.a.InterviewStatus,x.a.ClientStatus,x.s.Feedback,x.s.Remarks,x.s.SubmittedUtc,x.s.FeedbackUtc,x.s.AvailabilityStartUtc,x.s.DurationMinutes,x.s.TimeZone,x.s.InterviewMode,x.s.InterviewLocation,x.s.Revision,x.a.Revision,Lifecycle.Classify(x.a),report.MustHaveFit,x.s.RecruiterResponse,x.s.RecruiterResponseUtc,interviews.Where(i=>i.AssessmentId==x.a.Id).OrderByDescending(i=>i.CreatedUtc).Select(InterviewService.Summary).FirstOrDefault());}).ToList());
+  return (grant.Name,rows.Select(x=>{var report=JsonSerializer.Deserialize<Assessment>(x.s.SharedReportJson)!;var snap=JsonSerializer.Deserialize<AssessmentSnapshot>(report.SnapshotJson)!;return new HiringRow(x.s.Id,x.p.Id,x.p.Reference,x.p.Title,snap.Profile.Name,report.MatchPercent,report.Decision,x.a.Stage,x.a.InterviewStatus,x.a.ClientStatus,x.s.Feedback,x.s.Remarks,x.s.SubmittedUtc,x.s.FeedbackUtc,x.s.AvailabilityStartUtc,x.s.DurationMinutes,x.s.TimeZone,x.s.InterviewMode,x.s.InterviewLocation,x.s.Revision,x.a.Revision,Lifecycle.Classify(x.a),report.MustHaveFit,x.s.RecruiterResponse,x.s.RecruiterResponseUtc,interviews.Where(i=>i.AssessmentId==x.a.Id).OrderByDescending(i=>i.CreatedUtc).Select(InterviewService.Summary).FirstOrDefault());}).ToList(),positions);
 
  }
 

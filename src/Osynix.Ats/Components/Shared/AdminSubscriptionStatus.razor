@@ -1,0 +1,16 @@
+@inherits PageBase
+@inject SubscriptionService Subscriptions
+<section class="admin-subscription-status">
+<Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
+<div><h3>Active subscription</h3><b>@Workspace.SubscriptionName</b> · @SubscriptionRules.Category(Workspace)<p>Billing: @Workspace.SubscriptionBilling · @(Workspace.SubscriptionPrice is decimal price?$"{Workspace.SubscriptionCurrency} {price:N2}":"Price agreed outside ATS")</p><p>Renewal date: <b>@(Workspace.SubscriptionRenewalDate?.ToString("dd MMM yyyy")??"No renewal scheduled")</b> · Pakistan time</p></div>
+@if(scheduled is not null){<p><b>@scheduled.Kind scheduled:</b> Change to @scheduled.PlanName on @scheduled.EffectiveDate.ToString("dd MMM yyyy") (Pakistan time). Current benefits remain active until then.</p>}
+@if(CanManage){<div class="toolbar"><a class="button secondary" href="/settings/subscription-plans">Plan catalogue &amp; pricing</a>@if(Workspace.SubscriptionName!="Free"){<button class="secondary" disabled="@Busy" @onclick="Revoke">Revoke paid access now</button>}</div><small>Changing a catalogue plan affects new subscriptions. Revoking paid access is an immediate Admin override. Users can cancel or downgrade at renewal in Subscriptions.</small>}
+</section>
+@code{
+[Parameter,EditorRequired]public EmployerWorkspace Workspace{get;set;}=default!;
+[Parameter]public bool CanManage{get;set;}
+[Parameter]public EventCallback OnChanged{get;set;}
+SubscriptionChange? scheduled;
+protected override Task OnParametersSetAsync()=>Run(async()=>scheduled=await Subscriptions.AdminScheduledChange(Workspace.Id));
+Task Revoke()=>Run(async()=>{await Subscriptions.ResetFree(Workspace.Id,Workspace.Revision);await OnChanged.InvokeAsync();Notice="Workspace reverted to Free.";});
+}

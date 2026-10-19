@@ -247,10 +247,10 @@ public class AtsService(IDbContextFactory<AtsDbContext> factory, Access access,R
         if(a.Revision!=input.Revision) throw new InvalidOperationException("This record changed. Reload before saving.");
         var state=Lifecycle.Synchronize(input.Stage,input.InterviewStatus,input.ClientStatus,a.ClientStatus);
         if((a.Stage=="Hired"||a.ClientStatus=="Hired") && (state.Stage!=a.Stage||state.Client!=a.ClientStatus||state.Interview!=a.InterviewStatus)) throw new InvalidOperationException("This application is hired. Its final lifecycle cannot be reopened through a progress edit.");
-        var old=JsonSerializer.Serialize(new{a.Stage,a.InterviewStatus,a.ClientStatus,a.ExpectedSalary,a.Availability,a.RecruiterNotes});
+        var old=JsonSerializer.Serialize(new{a.Stage,a.InterviewStatus,a.InterviewDateTimeUtc,a.InterviewTimeZone,a.ClientStatus,a.ExpectedSalary,a.Availability,a.RecruiterNotes});
         a.Stage=state.Stage;a.InterviewStatus=state.Interview;a.ClientStatus=state.Client;
-        a.ExpectedSalary=input.ExpectedSalary;a.CurrentCompensation=input.CurrentCompensation;a.Availability=input.Availability;a.NoticePeriod=input.NoticePeriod;a.RecruiterNotes=input.RecruiterNotes;
-        Audit(db,uid,"Lifecycle updated",a.Id.ToString(),a.Stage,a.CandidateId,a.Id,old,JsonSerializer.Serialize(new{a.Stage,a.InterviewStatus,a.ClientStatus,a.ExpectedSalary,a.Availability,a.RecruiterNotes})); await db.SaveChangesAsync();updates?.Publish();
+        a.ExpectedSalary=input.ExpectedSalary;a.CurrentCompensation=input.CurrentCompensation;a.Availability=input.Availability;a.NoticePeriod=input.NoticePeriod;a.RecruiterNotes=input.RecruiterNotes;a.InterviewDateTimeUtc=input.InterviewDateTimeUtc;a.InterviewTimeZone=input.InterviewTimeZone;
+        Audit(db,uid,"Lifecycle updated",a.Id.ToString(),a.Stage,a.CandidateId,a.Id,old,JsonSerializer.Serialize(new{a.Stage,a.InterviewStatus,a.InterviewDateTimeUtc,a.InterviewTimeZone,a.ClientStatus,a.ExpectedSalary,a.Availability,a.RecruiterNotes})); await db.SaveChangesAsync();updates?.Publish();
     }
     public async Task<List<AssessmentVersion>> Versions(Guid applicationId)
     {

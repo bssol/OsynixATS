@@ -3,6 +3,17 @@ namespace Osynix.Ats.Domain;
 
 public class EmployerWorkspace : Record
 {
+    public Guid? SubscriptionPlanId { get; set; }
+    public string SubscriptionName { get; set; } = "Free";
+    public string SubscriptionTermsJson { get; set; } = "";
+    public string SubscriptionBilling { get; set; } = "Monthly";
+    public string SubscriptionCurrency { get; set; } = "PKR";
+    public decimal? SubscriptionPrice { get; set; }
+    public DateTime? SubscriptionActivatedUtc { get; set; }
+    public Guid SubscriptionAllowanceId { get; set; }
+    public DateOnly? SubscriptionRenewalDate { get; set; }
+    public DateOnly? SubscriptionReminderNoticeForDate { get; set; }
+    public DateOnly? SubscriptionReminderEmailForDate { get; set; }
     public string Kind {get;set;} = "Employer";
     public bool AgencyEnabled {get;set;}
     public bool EmailTemplatesEnabled {get;set;}
@@ -35,6 +46,12 @@ public class EmployerWorkspace : Record
 
 public class EmployerAccessRequest : Record
 {
+    public Guid? SubscriptionPlanId { get; set; }
+    public string PlanSnapshotJson { get; set; } = "";
+    public string BillingPeriod { get; set; } = "Monthly";
+    public string Currency { get; set; } = "PKR";
+    public decimal? QuotedPrice { get; set; }
+    public bool PaymentConfirmed { get; set; }
     public Guid WorkspaceId { get; set; }
     [MaxLength(50)] public string Feature { get; set; } = "Position Slots";
     public int Quantity { get; set; } = 1;

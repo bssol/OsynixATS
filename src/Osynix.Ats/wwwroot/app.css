@@ -16,6 +16,7 @@ html{scrollbar-gutter:stable}.profile-grid>div{min-width:0}.preserve{overflow-wr
 .global-search input:focus{outline:none}
 .global-search .search-submit{background:#e5eaf3;color:#526581;border:0;padding:4px 7px;font-size:11px;font-weight:500;border-radius:5px}
 .topbar-actions{display:flex;align-items:center;gap:20px;margin-left:auto}
+
 .header-menu{position:relative}
 .header-menu>summary{display:flex;align-items:center;gap:12px;margin:0;list-style:none;color:#17233b;cursor:pointer;border-radius:8px;padding:5px}
 .header-menu>summary::-webkit-details-marker{display:none}
@@ -31,7 +32,7 @@ html{scrollbar-gutter:stable}.profile-grid>div{min-width:0}.preserve{overflow-wr
 .header-popover h2{font-size:15px;margin-bottom:10px}
 .header-popover p{font-size:13px;margin:0}
 .profile-popover{width:200px;padding:7px}
-.profile-popover a{display:block;padding:12px;color:var(--ink);border-radius:7px;font-size:13px}
+.profile-popover a{display:flex;align-items:center;gap:9px;padding:12px;color:var(--ink);border-radius:7px;font-size:13px}.profile-popover a .nav-icon{width:17px;height:17px;color:#667a9b;flex:0 0 auto}
 .profile-popover a:hover{background:#f0f4fb}
 
 .profile-avatar-large{width:72px;height:72px;border-radius:50%;margin-bottom:18px}
@@ -421,3 +422,6 @@ a.kpi::after,button.kpi::after{top:12px;right:12px;font-size:15px}
 .messages-page .conversation-item.unread .conversation-preview{color:#263b60;font-weight:600}
 .messages-page .conversation-item.unread:after{content:"";flex:0 0 9px;width:9px;height:9px;align-self:center;border-radius:50%;background:#175aff}
 @media(max-width:700px){.messages-page>.messages-shell{grid-template-columns:minmax(0,1fr)}.messages-page>.messages-shell>.conversation-list,.messages-page>.messages-shell>.message-thread{grid-column:1}.messages-page>.messages-shell>.message-thread{min-height:520px}}
+.sc-renewal{margin:10px 0 0;color:#253653;font-size:13px}.sc-benefit-new{background:#f1faf6;border-radius:8px}.sc-original-price{display:block;color:#77829a;font-size:13px;font-weight:500;text-decoration:line-through}.sc-promo-badge{display:inline-flex;align-items:center;border-radius:999px;padding:4px 9px;background:#fff1dc;color:#9a5410;font-size:11px;font-weight:800}.catalogue-preview-backdrop{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:20px;background:#17233b88}.catalogue-preview-modal{width:min(560px,100%);max-height:min(90vh,850px);overflow:auto;padding:24px;background:#fff;border-radius:18px;box-shadow:0 25px 80px #10234444}.catalogue-preview-card{margin:18px 0;padding:22px;border:1px solid #dce4f1;border-radius:15px;background:linear-gradient(155deg,#fff,#f7f9ff)}.catalogue-preview-card h3{margin:7px 0;font-size:25px}.catalogue-preview-card p{color:#697791}.catalogue-preview-card ul{padding-left:20px;line-height:1.9}.catalogue-preview-price{display:flex;align-items:baseline;gap:12px;margin:18px 0}.catalogue-preview-price b{font-size:25px;color:#142a50}.catalogue-preview-price del{color:#8691a6}.catalogue-preview-modal>.catalogue-drawer-header{display:flex;justify-content:space-between;align-items:flex-start}.catalogue-preview-modal .catalogue-drawer-header h2{margin:4px 0}
+
+.catalogue-preview-card li{padding:7px 9px;border-radius:8px}

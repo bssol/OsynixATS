@@ -1,6 +1,6 @@
 # Freelancer profiles, assignment invitations and Messages
 
-Employer and Agency owners start in **My Team → Find Freelance Recruiters → View Profile**. The profile uses the published professional portfolio (overview, skills, technologies, industries, experience, education, case studies, availability and working preferences). Private account contact details and recruitment data are excluded. Reviews remain empty until a verified review process exists.
+Employer and Agency owners start in **My Team → Find Freelance Recruiters → View Profile**. The profile uses the professional portfolio (overview, skills, technologies, industries, experience, education, case studies, availability and working preferences). Private account contact details and recruitment data are excluded. Reviews remain empty until a verified review process exists.
 
 **Invite To Project** opens a position invitation or a general project brief. Position options include only open positions belonging to the selected Employer/Agency working profile. Sending creates a private conversation. The same freelancer may receive further assignments, including when already in the external team. Duplicate pending invitations for the same position/brief are rejected.
 
@@ -12,9 +12,17 @@ Messages support text and downloadable PDF, DOCX, PNG/JPEG attachments up to 5 M
 
 Email notification is optional. In-app delivery works locally. Email requires a configured mail provider and public HTTPS `Review:PublicBaseUrl`. The invitation card reports whether email was sent or unavailable; unavailable email does not discard the in-app invitation.
 
+## Automatic Freelancer visibility
+
+The active subscription's saved Marketplace entitlement controls visibility. Starter, Growth and Pro include it by default. Active, email-verified Freelancer accounts appear automatically; the old per-profile Published flag is no longer a listing gate. A missing or incomplete professional profile does not require a separate publishing step. Search returns the existing professional fields, with empty fields where information has not yet been provided.
+
+Profile details, Employer invitations and new Marketplace conversations enforce the same eligibility rule. Free, unverified and inactive accounts are excluded. Downgrading or deactivating removes listing access immediately while retaining profile data and existing private conversation or assignment history. Availability describes workload and does not independently hide an entitled account; Employers can filter it.
+
+The Freelancer profile page shows automatic listing status and no manual visibility toggle. Subscription and profile changes refresh connected Employer directory pages. Only the professional portfolio is exposed; account contacts, client and candidate data remain private.
+
 ## Verification
 
-- Employer/Agency: open a published profile, review every section, send a position invitation and a project brief, then return through Messages.
+- Employer/Agency: open an automatically listed profile, review every section, send a position invitation and a project brief, then return through Messages.
 - Freelancer: observe notification badge, read the invitation, ask a question, then accept or decline. Confirm the Employer sees the same thread/status.
 - Accept a position invitation and open the existing Employer workspace; only the assigned vacancy becomes available. Internal seat and personal slot allowances must remain unchanged.
 - Try a different user's conversation/attachment URL; access must fail. Deactivate membership or close a vacancy before acceptance; acceptance must fail.

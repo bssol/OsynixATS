@@ -24,7 +24,7 @@
                     <span class="user-label"><strong>@name</strong><small>@role</small></span>
                     <svg class="menu-chevron" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" /></svg>
                 </summary>
-                <div class="header-popover profile-popover">@if(canSwitch){<div class="profile-mode-picker"><small>Working Profile</small>@foreach(var mode in new[]{"Employer","Agency"}){<form method="post" action="/Account/ProfileMode" data-enhance="false"><AntiforgeryToken /><input type="hidden" name="Mode" value="@mode"/><button class="secondary profile-mode-button @(currentMode==mode?"selected":"")" disabled="@(currentMode==mode)" type="submit">@mode @(currentMode==mode?"✓":"")</button></form>}</div>}<a href="/profile">My Profile</a><LogoutButton CssClass="text-button profile-logout" /></div>
+                <div class="header-popover profile-popover">@if(canSwitch){<div class="profile-mode-picker"><small>Working Profile</small>@foreach(var mode in new[]{"Employer","Agency"}){<form method="post" action="/Account/ProfileMode" data-enhance="false"><AntiforgeryToken /><input type="hidden" name="Mode" value="@mode"/><button class="secondary profile-mode-button @(currentMode==mode?"selected":"")" disabled="@(currentMode==mode)" type="submit">@mode @(currentMode==mode?"✓":"")</button></form>}</div>}<a href="/profile">My Profile</a><a href="/messages?chat=support"><NavIcon Name="message" />Contact Support</a><LogoutButton CssClass="text-button profile-logout" /></div>
             </details>
         </div>
     </Authorized><NotAuthorized><a href="/Account/Login">Sign in</a></NotAuthorized></AuthorizeView>

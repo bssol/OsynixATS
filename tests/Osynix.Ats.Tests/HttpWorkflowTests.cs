@@ -19,6 +19,44 @@ using Xunit;
 namespace Osynix.Ats.Tests;
 public class HttpWorkflowTests
 {
+    [Theory][InlineData("Freelancer")][InlineData("Employer")][InlineData("Agency")]
+    public async Task SubscriptionScreensRenderTheAccountSpecificFreePlan(string category){
+        await using var host=new Host();using var client=await Login(host,category=="Freelancer"?"Recruiter":"Employer");
+        using(var scope=host.Services.CreateScope()){
+            var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();var user=await db.Users.SingleAsync(u=>u.UserName=="HttpUser");user.AccountType=category=="Freelancer"?AccountTypes.Freelance:AccountTypes.Employer;await db.SaveChangesAsync();var workspace=await EmployerService.EnsureWorkspace(db,user);
+            if(category=="Agency"){var tracked=await db.EmployerWorkspaces.SingleAsync(w=>w.Id==workspace.Id);tracked.AgencyEnabled=true;await SubscriptionDefaults.AssignFree(db,tracked);await db.SaveChangesAsync();}
+        }
+        var html=WebUtility.HtmlDecode(await client.GetStringAsync("/employer/subscriptions"));
+        foreach(var text in new[]{"My subscription","Compare plans","Upgrade requests","AI assessments this month","Change plan",category,"Free"})Assert.Contains(text,html);
+        Assert.DoesNotContain("The operation failed",html);Assert.DoesNotContain("The page could not load",html);
+    }
+    [Fact]public async Task AdminCanOpenSeparateSubscriptionCataloguesAndUsersCannot(){
+        await using var host=new Host();using var client=await Login(host);var html=WebUtility.HtmlDecode(await client.GetStringAsync("/settings/subscription-plans"));
+        foreach(var text in new[]{"Freelancer plans","Employer plans","Agency plans","Subscription Plans & Pricing","Monthly / PKR","Annual / USD","Price on request"})Assert.Contains(text,html);
+        Assert.DoesNotContain("The operation failed",html);Assert.DoesNotContain("The page could not load",html);
+        await using var otherHost=new Host();using var employer=await Login(otherHost,"Employer");var denied=await employer.GetAsync("/settings/subscription-plans");Assert.Contains(denied.StatusCode,new[]{HttpStatusCode.Forbidden,HttpStatusCode.Redirect});
+    }
+    [Theory][InlineData("Cancellation","starter","free")][InlineData("Downgrade","growth","starter")]
+    public async Task SubscriptionScheduledChangesRenderWithCancellationAndKeepPlanControls(string kind,string currentCode,string nextCode)
+    {
+        await using var host=new Host();using var client=await Login(host,"Recruiter");Guid workspaceId;
+        using(var scope=host.Services.CreateScope()){
+            var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();var user=await db.Users.SingleAsync(u=>u.UserName=="HttpUser");user.AccountType=AccountTypes.Freelance;await db.SaveChangesAsync();
+            var workspace=await EmployerService.EnsureWorkspace(db,user);workspaceId=workspace.Id;
+            var current=await db.SubscriptionPlans.SingleAsync(p=>p.AccountCategory=="Freelancer"&&p.Code==currentCode);
+            var next=await db.SubscriptionPlans.SingleAsync(p=>p.AccountCategory=="Freelancer"&&p.Code==nextCode);
+            SubscriptionRules.Apply(workspace,current);
+            db.SubscriptionChanges.Add(new(){WorkspaceId=workspace.Id,PlanId=next.Id,PlanName=next.Name,PlanSnapshotJson=JsonSerializer.Serialize(next),Kind=kind,EffectiveDate=workspace.SubscriptionRenewalDate!.Value});
+            await db.SaveChangesAsync();
+        }
+        var html=WebUtility.HtmlDecode(await client.GetStringAsync("/employer/subscriptions"));
+        foreach(var text in new[]{"Cancel subscription","Keep current plan","Change plan","remains active until","Unused AI allowance will not carry forward"})Assert.Contains(text,html);
+        Assert.Contains(kind=="Cancellation"?"Cancellation scheduled":"Downgrade to Starter scheduled",html);
+        Assert.DoesNotContain("The operation failed",html);Assert.DoesNotContain("The page could not load",html);
+        using var checkScope=host.Services.CreateScope();var check=checkScope.ServiceProvider.GetRequiredService<AtsDbContext>();
+        Assert.Equal(currentCode,(await check.SubscriptionPlans.SingleAsync(p=>p.Id==check.EmployerWorkspaces.Single(w=>w.Id==workspaceId).SubscriptionPlanId)).Code);
+        Assert.Equal("Scheduled",(await check.SubscriptionChanges.SingleAsync()).Status);
+    }
     sealed class Host:WebApplicationFactory<AtsUser> {
         readonly string path=Path.Combine(Path.GetTempPath(),$"osynix-http-{Guid.NewGuid():N}.db");
         protected override void ConfigureWebHost(IWebHostBuilder builder){builder.UseEnvironment("Development");builder.ConfigureLogging(x=>{x.ClearProviders();x.AddFilter(_=>false);});builder.ConfigureServices(services=>{
@@ -31,12 +69,12 @@ public class HttpWorkflowTests
         var html=await client.GetStringAsync("/Account/Login");var token=Regex.Match(html,"name=\"__RequestVerificationToken\"[^>]*value=\"([^\"]+)\"").Groups[1].Value;
         var result=await client.PostAsync("/Account/Login",new FormUrlEncodedContent(new Dictionary<string,string>{{"Email","HttpUser"},{"Password","Test-password!123"},{"__RequestVerificationToken",token}}));Assert.Equal(HttpStatusCode.Redirect,result.StatusCode);return client;
     }
-    [Fact] public async Task EmployerDirectoryProfileShowsFullPublishedPortfolioAndProjectActions(){
+    [Fact] public async Task EmployerDirectoryAutomaticallyShowsStarterPortfolioWithoutPublishing(){
         await using var host=new Host();using var client=await Login(host,"Employer");
         using(var scope=host.Services.CreateScope()){
             var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();var owner=await db.Users.SingleAsync(u=>u.UserName=="HttpUser");owner.AccountType=AccountTypes.Employer;await db.SaveChangesAsync();await EmployerService.EnsureWorkspace(db,owner);
             db.Users.Add(new(){Id="marketplace-free",UserName="marketplace-free",FullName="Profile Recruiter",Email="private-email@example.test",EmailConfirmed=true,AccountType=AccountTypes.Freelance});db.UserRoles.Add(new(){UserId="marketplace-free",RoleId=(await db.Roles.SingleAsync(r=>r.Name=="Recruiter")).Id});
-            db.FreelancerProfiles.Add(new(){UserId="marketplace-free",Published=true,Headline="Executive Search Expert",Bio="Complete professional introduction",Skills="Sourcing, Interviewing",Technologies="LinkedIn Recruiter",Industries="Technology",WorkingStyle="Remote",Location="Lahore",Experience="Detailed career history",Education="Professional qualifications",CaseStudies="Anonymised project outcomes"});await db.SaveChangesAsync();
+            db.FreelancerProfiles.Add(new(){UserId="marketplace-free",Published=false,Headline="Executive Search Expert",Bio="Complete professional introduction",Skills="Sourcing, Interviewing",Technologies="LinkedIn Recruiter",Industries="Technology",WorkingStyle="Remote",Location="Lahore",Experience="Detailed career history",Education="Professional qualifications",CaseStudies="Anonymised project outcomes"});await db.SaveChangesAsync();await SubscriptionTestPlans.Marketplace(db,"marketplace-free");
         }
         var html=WebUtility.HtmlDecode(await client.GetStringAsync("/employer/recruiters/marketplace-free"));
         foreach(var text in new[]{"Profile Recruiter","Executive Search Expert","Complete professional introduction","LinkedIn Recruiter","Invite To Project","Send A Message","Experience","Case Studies"})Assert.Contains(text,html);
@@ -46,7 +84,7 @@ public class HttpWorkflowTests
     [Fact] public async Task FreelancerMessagesRendersInvitationsAndSidebarDirectlyBelowTasks(){
         await using var host=new Host();using var client=await Login(host,"Recruiter");Guid conversationId;
         using(var scope=host.Services.CreateScope()){
-            var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();var free=await db.Users.SingleAsync(u=>u.UserName=="HttpUser");free.AccountType=AccountTypes.Freelance;await db.SaveChangesAsync();await EmployerService.EnsureWorkspace(db,free);
+            var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();var free=await db.Users.SingleAsync(u=>u.UserName=="HttpUser");free.AccountType=AccountTypes.Freelance;await db.SaveChangesAsync();await EmployerService.EnsureWorkspace(db,free);await SubscriptionTestPlans.Marketplace(db,free.Id);
             var owner=new AtsUser{Id="message-employer",UserName="message-employer",FullName="Message Employer",Email="employer@example.test",EmailConfirmed=true,AccountType=AccountTypes.Employer};db.Users.Add(owner);db.UserRoles.Add(new(){UserId=owner.Id,RoleId=(await db.Roles.SingleAsync(r=>r.Name=="Employer")).Id});await db.SaveChangesAsync();var w=await EmployerService.EnsureWorkspace(db,owner);
             var c=new MarketplaceConversation{WorkspaceId=w.Id,FreelancerId=free.Id};db.Add(c);conversationId=c.Id;var invite=new ProjectInvitation{ConversationId=c.Id,Title="Project Hiring Support",Summary="Help source candidates"};db.Add(invite);db.MarketplaceMessages.Add(new(){ConversationId=c.Id,SenderId=owner.Id,Body="Invitation note",InvitationId=invite.Id});await db.SaveChangesAsync();
         }

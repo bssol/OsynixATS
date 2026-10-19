@@ -125,6 +125,8 @@ public class Assessment : Record
     public string Decision { get; set; } = "";
     public string Stage { get; set; } = "HR Screening";
     public string InterviewStatus { get; set; } = "";
+    public DateTime? InterviewDateTimeUtc { get; set; }
+    public string InterviewTimeZone { get; set; } = "";
     public string ClientStatus { get; set; } = "";
     public string ExpectedSalary { get; set; } = "";
     public string CurrentCompensation { get; set; } = "";
@@ -188,7 +190,7 @@ public static class Choices
     public static readonly string[] Priorities = ["High", "Medium", "Low"];
     public static readonly string[] Stages = ["Applied", "HR Screening", "Background Check", "Consider", "Shortlisted", "Awaiting Client Feedback", "Awaiting Employer Review", "Information Requested", "Interview Requested", "Technical Interview", "Final Interview", "Client Interview", "Offer Requested", "Offer Sent", "Hired", "Hold", "Rejected"];
     public static readonly string[] Decisions = ["Priority Shortlist", "Shortlist", "Consider", "Hold", "Reject", "Insufficient Evidence"];
-    public static readonly string[] Interviews = ["Not Scheduled", "Scheduled", "Completed", "No Show", "Reschedule Required", "Not Required"];
+    public static readonly string[] Interviews = ["Not Scheduled", "Scheduled", "New Time Proposed", "Cancelled", "Completed", "No Show", "Reschedule Required", "Not Required"];
     public static readonly string[] ClientStatuses = ["Not Submitted", "Submitted", "Under Review", "Client Shortlisted", "Client Rejected", "Information Requested", "Interview Requested", "Client Interview", "Offer Requested", "Offer", "Hired"];
     public static readonly string[] TalentStatuses = ["Active", "Priority Talent", "Passive", "Placed", "Archived", "Do Not Contact"];
     public static readonly string[] FilledSources = ["Osynix Recruiter", "Client Direct Hire", "Other"];

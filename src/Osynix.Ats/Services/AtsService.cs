@@ -22,6 +22,7 @@ public class AtsService(IDbContextFactory<AtsDbContext> factory, Access access,R
     }
     public async Task<List<Candidate>> TalentCandidates(bool master=false){
         await access.RequirePermission(master?"Talent.Master":"Talent.View");await using var db=await factory.CreateDbContextAsync();
+        if(master)await TalentIdentity.Consolidate(db);
         var user=await access.Require();var workspaceId=await access.WorkspaceId();
         var active=await access.Context();var query=master?TalentIdentity.MasterCandidates(db,user.IsInRole("Admin")):user.IsInRole("Admin")?db.Candidates:active is {Legacy:false}?await WorkspaceTalent.Query(db,user,active):EndpointAccess.PoolCandidates(db,workspaceId);
         var people=await query.Include(x=>x.EmploymentHistory).Include(x=>x.EducationHistory).AsSplitQuery().AsNoTracking().OrderBy(x=>x.Name).ToListAsync();
@@ -234,7 +235,7 @@ public class AtsService(IDbContextFactory<AtsDbContext> factory, Access access,R
     }
     internal static void UpdateProfile(Candidate target,Candidate source)
     {
-        target.Name=source.Name.Trim();target.NormalizedName=Choices.MatchKey(target.Name);target.Email=CandidateIdentity.Email(source.Email);target.Phone=source.Phone;target.NormalizedPhone=CandidateIdentity.Phone(source.Phone);
+        target.Name=source.Name.Trim();target.NormalizedName=Choices.MatchKey(target.Name);target.Email=CandidateIdentity.Email(source.Email);target.Phone=source.Phone;target.NormalizedPhone=CandidateIdentity.Phone(source.Phone);target.LinkedInUrl=CandidateLinks.NormalizeLinkedIn(source.LinkedInUrl);
         target.City=source.City.Length>0?CandidateCity.Explicit(source.City):CandidateCity.FromLegacy(source.Location);target.Location=target.City;target.CurrentRole=source.CurrentRole;target.CurrentCompany=source.CurrentCompany;target.TotalExperience=source.TotalExperience;
         target.Function=source.Function;target.Specialization=source.Specialization;target.Industry=source.Industry;target.Skills=source.Skills;target.Seniority=source.Seniority;
         target.Systems=source.Systems;target.Markets=source.Markets;target.Summary=source.Summary;target.CareerSummary=source.CareerSummary;target.Employment=source.Employment;target.Education=source.Education;

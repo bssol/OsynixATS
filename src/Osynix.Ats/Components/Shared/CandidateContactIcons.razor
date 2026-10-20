@@ -1,0 +1,20 @@
+@using Osynix.Ats.Domain
+<span class="candidate-contact-icons" aria-label="Candidate contact details">
+    @if (CandidateLinks.NormalizeLinkedIn(Person.LinkedInUrl) is string linkedin && linkedin.Length > 0)
+    {
+        <a class="contact-icon linkedin available" href="@linkedin" target="_blank" rel="noopener noreferrer" aria-label="Open LinkedIn profile" title="Open LinkedIn profile"><span aria-hidden="true">in</span></a>
+    }
+    else
+    {
+        <span class="contact-icon linkedin unavailable" aria-label="LinkedIn profile not listed" title="LinkedIn profile not listed"><span aria-hidden="true">in</span></span>
+    }
+    @if (!string.IsNullOrWhiteSpace(Person.Phone))
+    {
+        <a class="contact-icon phone available" href="@($"tel:{Person.Phone}")" aria-label="Call candidate" title="Call candidate"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.4 19.4 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.2 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72l.45 3.12a2 2 0 0 1-.57 1.68L7.2 10.31a16 16 0 0 0 6.49 6.49l1.79-1.79a2 2 0 0 1 1.68-.57l3.12.45A2 2 0 0 1 22 16.92z"/></svg></a>
+    }
+    else
+    {
+        <span class="contact-icon phone unavailable" aria-label="Phone number not listed" title="Phone number not listed"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.4 19.4 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.2 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72l.45 3.12a2 2 0 0 1-.57 1.68L7.2 10.31a16 16 0 0 0 6.49 6.49l1.79-1.79a2 2 0 0 1 1.68-.57l3.12.45A2 2 0 0 1 22 16.92z"/></svg></span>
+    }
+</span>
+@code { [Parameter, EditorRequired] public Candidate Person { get; set; } = default!; }

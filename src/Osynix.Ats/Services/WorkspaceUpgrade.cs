@@ -24,8 +24,8 @@ public static class WorkspaceUpgrade {
   await db.SaveChangesAsync();
   var candidates=await db.Candidates.Include(c=>c.EmploymentHistory).Include(c=>c.EducationHistory).AsSplitQuery().Where(c=>c.PersonId==null).ToListAsync();
   var displayIds=(await db.Candidates.Select(c=>c.LegacyId).ToListAsync()).ToList();
+  await TalentIdentity.AttachMany(db,candidates);
   foreach(var candidate in candidates){
-   await TalentIdentity.Attach(db,candidate);
    var applications=await db.Assessments.Include(a=>a.Position).Where(a=>a.CandidateId==candidate.Id).ToListAsync();var workspaces=applications.Select(a=>a.Position!.WorkspaceId).Distinct().ToList();
    if(workspaces.Count==1){candidate.WorkspaceId=workspaces[0];}
    else if(workspaces.Count>1){

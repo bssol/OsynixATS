@@ -76,6 +76,7 @@ public class Candidate : Record
     public string NormalizedName { get; set; } = "";
     public string Email { get; set; } = "";
     public string Phone { get; set; } = "";
+    public string LinkedInUrl { get; set; } = "";
     public string NormalizedPhone { get; set; } = "";
     public string Location { get; set; } = "";
     public string City { get; set; } = "";

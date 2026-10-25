@@ -29,6 +29,7 @@ public class MarketplaceMessagesTests
             await db.SaveChangesAsync();
             var w=await EmployerService.EnsureWorkspace(db,await db.Users.SingleAsync(u=>u.Id=="owner"));Workspace=w.Id;
             var tracked=await db.EmployerWorkspaces.SingleAsync(x=>x.Id==w.Id);tracked.AgencyEnabled=true;
+            SubscriptionRules.Apply(tracked,await db.SubscriptionPlans.SingleAsync(p=>p.AccountCategory=="Agency"&&p.Code=="free"));
             foreach(var id in new[]{"free","other-free"})await SubscriptionTestPlans.Marketplace(db,id);
             foreach(var id in new[]{"free","other-free"})db.FreelancerProfiles.Add(new(){UserId=id,Published=true,Headline="Recruiter",Skills="Sourcing",Bio="Recruitment expert"});
             var p=new Position{Reference="A1",Title="Engineer",Client="Employer",WorkspaceId=w.Id,Status="Active"};db.Add(p);Position=p.Id;
@@ -39,6 +40,26 @@ public class MarketplaceMessagesTests
         public ProjectInviteDraft Draft(Guid? position=null)=>new(position??Position,"Project","Source and shortlist candidates","Hello","To be agreed","Short-term project",true);
         public async Task<ProjectInvitation> Invitation(Guid conversation){await using var db=Factory.CreateDbContext();return await db.ProjectInvitations.AsNoTracking().SingleAsync(i=>i.ConversationId==conversation);}
         public ValueTask DisposeAsync()=>connection.DisposeAsync();
+    }
+
+    [Fact] public async Task EmployerOutreachIsChargedOnContactAndExistingChatSurvivesDowngrade(){
+        await using var f=new Fixture();await f.Init();
+        await using(var db=f.Factory.CreateDbContext()){
+            var workspace=await db.EmployerWorkspaces.SingleAsync(w=>w.Id==f.Workspace);workspace.AgencyEnabled=false;
+            SubscriptionRules.Apply(workspace,await db.SubscriptionPlans.SingleAsync(p=>p.AccountCategory=="Employer"&&p.Code=="starter"));await db.SaveChangesAsync();
+        }
+        var owner=f.Service("owner");var conversation=await owner.Start("free");
+        await using(var db=f.Factory.CreateDbContext())Assert.Equal(0,await SubscriptionRules.FreelancerApproaches(db,f.Workspace));
+        await owner.Send(conversation,"Can we discuss an assignment?");await owner.Send(conversation,"Here are more details.");
+        await owner.Invite("free",f.Draft());
+        await using(var db=f.Factory.CreateDbContext()){
+            Assert.Equal(1,await SubscriptionRules.FreelancerApproaches(db,f.Workspace));
+            var workspace=await db.EmployerWorkspaces.SingleAsync(w=>w.Id==f.Workspace);
+            SubscriptionRules.Apply(workspace,await db.SubscriptionPlans.SingleAsync(p=>p.AccountCategory=="Employer"&&p.Code=="free"));await db.SaveChangesAsync();
+        }
+        await owner.Send(conversation,"Continuing our existing discussion.");
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>owner.Start("other-free"));
+        Assert.Contains((await owner.Open(conversation)).Messages,m=>m.Body=="Continuing our existing discussion.");
     }
 
     [Fact] public async Task InboxDeletionIsParticipantOnlyAndKeepsInvitationsAndOtherCopy(){

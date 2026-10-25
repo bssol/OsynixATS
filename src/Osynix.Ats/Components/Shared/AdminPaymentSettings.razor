@@ -1,0 +1,25 @@
+@inherits PageBase
+@inject AdminPaymentDetailsService Payments
+
+<details class="panel admin-tray">
+    <summary><span><b>Subscription Payment Details</b><small>Bank transfer information shown privately in each upgrade request’s Messages conversation</small></span><span class="tray-chevron">⌄</span></summary>
+    <div class="admin-tray-content">
+        <p class="muted">Users will receive these details in their inbox after requesting an upgrade. They can attach a payment receipt in the same conversation. Email delivery will be enabled after secure email integration is configured.</p>
+        <div class="form-grid">
+            <label>Bank name<input @bind="details.BankName" maxlength="120" /></label>
+            <label>Account title<input @bind="details.AccountTitle" maxlength="160" /></label>
+            <label>Account number<input @bind="details.AccountNumber" maxlength="80" /></label>
+            <label>IBAN<input @bind="details.Iban" maxlength="80" /></label>
+            <label>Branch<input @bind="details.Branch" maxlength="160" /></label>
+        </div>
+        <label>Payment instructions<textarea rows="3" maxlength="2000" @bind="details.PaymentInstructions" placeholder="For example, transfer reference or deposit method."></textarea></label>
+        <button disabled="@Busy" @onclick="Save">Save Payment Details</button>
+    </div>
+</details>
+
+@code {
+    AdminPaymentDetails details = new();
+    protected override Task OnInitializedAsync() => Run(Load);
+    async Task Load() => details = await Payments.GetForAdmin();
+    Task Save() => Run(async () => { await Payments.Save(details); await Load(); Notice = "Subscription payment details saved."; });
+}

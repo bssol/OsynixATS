@@ -43,7 +43,26 @@ Existing subscriptions and recorded consumption are preserved by the allocation 
 
 Freelancer plans never include internal team seats. All have core recruitment, clients, the private talent pool and a Careers page (with the per-position application cap shown on the plan). Report exports start with Starter. Email Templates remain an explicit Admin grant until the catalogue's feature is enabled. Master pool access included in a paid plan does not require a second grant. Plan comparison cards mark new or increased limits—such as position slots, assessments, JD analyses and Careers page application caps—against the preceding tier. Meeting access is labelled **Integrate Meet/Zoom or MS Teams**; provider OAuth connections remain a separate integrations phase.
 
-Employer and Agency paid plans are drafts until Admin defines and publishes them. Their baseline Free capacity preserves three position slots and one internal seat, existing core features and separately granted access. Their unconfirmed AI limits remain uncapped until explicitly configured; Freelancer AI limits are not applied to those workspaces.
+## Approved Employer catalogue
+
+Employer accounts use the same **My subscription / Compare plans / Upgrade requests** format as Freelancers. The Employer owner does not consume an internal seat. Active and on-hold positions share the workspace allowance.
+
+| Plan | Slots | Internal seats | Assessments/month | JD analyses/month | Monthly PKR | Annual PKR | Monthly USD | Annual USD |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Free | 3 | 0 | 30 | 3 | 0 | 0 | 0 | 0 |
+| Starter | 5 | 1 | 150 | 10 | 7,500 | 75,000 | 25 | 250 |
+| Growth | 10 | 3 | 500 | 30 | 15,000 | 150,000 | 50 | 500 |
+| Pro | 20 | 5 | 1,500 | 100 | 30,000 | 300,000 | 99 | 990 |
+
+Free includes company jobs, the careers page, private candidate records and manual recruitment. It excludes hiring-manager review links, freelancer profiles/new outreach, the Master Talent Pool, meeting integrations, email templates and report exports. Starter adds hiring-manager review links, report exports and freelancer profiles, with outreach to five unique freelancers per UTC calendar month. Repeated outreach to the same freelancer counts once. Messages in existing conversations remain available on every plan. New invitations and first messages enforce the allowance on the server in a database transaction; opening a profile or an empty conversation does not spend it.
+
+Growth adds Master Talent Pool access, email templates, Google Meet and Microsoft Teams interview options, and no monthly freelancer outreach cap. Pro adds Zoom. Provider account authorization remains a later integration phase; the existing manual meeting link flow remains available when interview scheduling is included. Careers application intake already exists in the app and shares the workspace's monthly AI allowance; Employer plans do not introduce a per-position intake cap.
+
+The Clients module remains Agency-only for company owners. Employer subscriptions never enable Agency access. Agency paid plans remain unpublished drafts and retain their separate baseline and Admin approval flow.
+
+Admin maintains all Employer prices, capacities and feature access under **Workspaces & Subscriptions → Manage subscription plans & pricing → Employer plans**. The editor includes Hiring Manager links, freelancer directory access, monthly unique freelancer outreach and Zoom controls. **Apply updated benefits and limits to current subscribers** is optional: it updates active workspaces on that exact plan while retaining their agreed price, renewal date, allowance identity, consumption history, existing records and explicit Admin add-ons. Leave it off to keep existing agreements unchanged. Pending requests and scheduled downgrades retain their original saved snapshots. Reduced limits block new activity when usage is already over the limit.
+
+Approved Employer prices are seeded once. Editing a monthly PKR price recalculates annual and USD amounts using the editor's existing pricing rule; merely opening an editor does not overwrite the approved amounts. Subsequent deployments do not replace saved Admin catalogue changes.
 
 ## Usage and isolation
 

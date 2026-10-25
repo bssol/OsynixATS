@@ -20,6 +20,8 @@
     <div class="admin-tray-content"><p class="muted">Manage Templates For Communicating With Candidates, Clients, Hiring Managers And Your Team.</p><a class="button" href="/settings/email-templates">Open Email Templates</a></div>
 </details>
 
+@if(canManageSubscriptions){<AdminPaymentSettings />}
+
 @if(canViewSubAdmins || canManageSubAdmins){
 <details class="panel admin-tray" open>
     <summary><span><b>Sub-Admins</b><small>Admin Panel users only · @subAdmins.Count accounts</small></span><span class="tray-chevron">⌄</span></summary>
@@ -116,7 +118,7 @@
     string newFullName="",newEmail="",newPassword="",newLevel="View Only";
     string editFullName="",editStatus="Active",editLevel="View Only";
     HashSet<string> newPermissions=new(StringComparer.Ordinal),editPermissions=new(StringComparer.Ordinal);
-    bool loaded,platform,canViewSubAdmins,canManageSubAdmins,canViewRules,canManageRules,canViewAudit,canWorkspaces;
+    bool loaded,platform,canViewSubAdmins,canManageSubAdmins,canViewRules,canManageRules,canViewAudit,canWorkspaces,canManageSubscriptions;
 
     protected override Task OnInitializedAsync()=>Run(Load);
 
@@ -125,6 +127,7 @@
         canViewSubAdmins=await Access.CanAdmin("admin.subadmins.view");
         canManageSubAdmins=await Access.CanAdmin("admin.subadmins.manage");
         canWorkspaces=await Access.CanAdmin("admin.workspaces.view");
+        canManageSubscriptions=await Access.CanAdmin("admin.subscriptions.manage");
         canViewRules=await Access.CanAdmin("admin.rules.view");
         canManageRules=await Access.CanAdmin("admin.rules.manage");
         canViewAudit=await Access.CanAdmin("admin.audit.view");

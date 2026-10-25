@@ -58,6 +58,7 @@ public class HiringReviewService(IDbContextFactory<AtsDbContext> factory,Access 
   await using var db=await factory.CreateDbContextAsync();
 
   var records=await db.Assessments.Include(x=>x.Position).Where(a=>list.Contains(a.Id)&&a.State=="Saved").AsNoTracking().ToListAsync();
+  foreach(var workspaceId in records.Select(a=>a.Position?.WorkspaceId).Distinct())await SubscriptionRules.RequireHiringReviews(db,workspaceId);
 
   if(records.Count!=list.Count)throw new InvalidOperationException("Only saved assessments can be forwarded.");
 
@@ -156,6 +157,7 @@ public class HiringReviewService(IDbContextFactory<AtsDbContext> factory,Access 
 
   var grant=await db.HiringReviewGrants.AsNoTracking().SingleOrDefaultAsync(g=>g.TokenHash==hash&&!g.Revoked&&g.ExpiresUtc>DateTime.UtcNow);
 
+  if(grant?.ClientId is Guid clientId){try{await SubscriptionRules.RequireHiringReviews(db,await db.Clients.Where(c=>c.Id==clientId).Select(c=>c.WorkspaceId).SingleAsync());}catch(UnauthorizedAccessException){return null;}}
   return grant is null?null:(cookieProtector.Protect(grant.Id+":"+grant.TokenHash),grant.ExpiresUtc);
 
  }
@@ -164,7 +166,9 @@ public class HiringReviewService(IDbContextFactory<AtsDbContext> factory,Access 
 
   Guid id;string hash;try{var values=cookieProtector.Unprotect(cookie??"").Split(':');id=Guid.Parse(values[0]);hash=values[1];}catch{throw new UnauthorizedAccessException("This review link is invalid or expired.");}
 
-  return await db.HiringReviewGrants.SingleOrDefaultAsync(g=>g.Id==id&&g.TokenHash==hash&&!g.Revoked&&g.ExpiresUtc>DateTime.UtcNow)??throw new UnauthorizedAccessException("This review link is invalid or expired.");
+  var grant=await db.HiringReviewGrants.SingleOrDefaultAsync(g=>g.Id==id&&g.TokenHash==hash&&!g.Revoked&&g.ExpiresUtc>DateTime.UtcNow)??throw new UnauthorizedAccessException("This review link is invalid or expired.");
+  if(grant.ClientId is Guid clientId)await SubscriptionRules.RequireHiringReviews(db,await db.Clients.Where(c=>c.Id==clientId).Select(c=>c.WorkspaceId).SingleAsync());
+  return grant;
 
  }
 
@@ -301,11 +305,13 @@ public class HiringReviewService(IDbContextFactory<AtsDbContext> factory,Access 
  }
 
 
- public async Task<ClientReviewLink> ClientLink(Guid clientId,Guid? positionId=null,Guid? contactId=null){await access.RequireClient(clientId);var active=await access.Context();if(active?.Owner!=true&&!(await new AtsService(factory,access).Positions()).Any(p=>p.ClientId==clientId))throw new UnauthorizedAccessException("This Client Is Not Assigned To You.");await using var db=await factory.CreateDbContextAsync();if(contactId is Guid cid&&!await db.ClientContacts.AnyAsync(c=>c.Id==cid&&c.ClientId==clientId))throw new UnauthorizedAccessException();if(positionId is Guid pid){await access.RequirePosition(pid);if(!await db.Positions.AnyAsync(p=>p.Id==pid&&p.ClientId==clientId))throw new UnauthorizedAccessException();}var grant=await db.HiringReviewGrants.AsNoTracking().Where(g=>g.ClientId==clientId).OrderBy(g=>g.Revoked).ThenBy(g=>g.CreatedUtc).FirstOrDefaultAsync();if(grant is null)return new(null,"Not Created",null,0);var count=await db.HiringSubmissions.CountAsync(s=>s.GrantId==grant.Id&&!s.Revoked);var status=grant.Revoked?"Revoked":grant.ExpiresUtc<=DateTime.UtcNow?"Expired":"Active";var link=status=="Active"?BaseUrl+"/review/access?token="+Uri.EscapeDataString(tokenProtector.Unprotect(grant.ProtectedToken))+(positionId.HasValue?"&position="+positionId.Value:""):null;return new(link,status,grant.ExpiresUtc,count);}
+ public async Task<ClientReviewLink> ClientLink(Guid clientId,Guid? positionId=null,Guid? contactId=null){await access.RequirePermission("HiringReview.Share");await access.RequireClient(clientId);var active=await access.Context();if(active?.Owner!=true&&!(await new AtsService(factory,access).Positions()).Any(p=>p.ClientId==clientId))throw new UnauthorizedAccessException("This Client Is Not Assigned To You.");await using var db=await factory.CreateDbContextAsync();if(contactId is Guid cid&&!await db.ClientContacts.AnyAsync(c=>c.Id==cid&&c.ClientId==clientId))throw new UnauthorizedAccessException();if(positionId is Guid pid){await access.RequirePosition(pid);if(!await db.Positions.AnyAsync(p=>p.Id==pid&&p.ClientId==clientId))throw new UnauthorizedAccessException();}var grant=await db.HiringReviewGrants.AsNoTracking().Where(g=>g.ClientId==clientId).OrderBy(g=>g.Revoked).ThenBy(g=>g.CreatedUtc).FirstOrDefaultAsync();if(grant is null)return new(null,"Not Created",null,0);var count=await db.HiringSubmissions.CountAsync(s=>s.GrantId==grant.Id&&!s.Revoked);var status=grant.Revoked?"Revoked":grant.ExpiresUtc<=DateTime.UtcNow?"Expired":"Active";var link=status=="Active"?BaseUrl+"/review/access?token="+Uri.EscapeDataString(tokenProtector.Unprotect(grant.ProtectedToken))+(positionId.HasValue?"&position="+positionId.Value:""):null;return new(link,status,grant.ExpiresUtc,count);}
  public async Task ManageClientLink(Guid clientId,bool replace){
+  if(replace)await access.RequirePermission("HiringReview.Share");
   await access.RequireClient(clientId);var active=await access.Context();if(active?.Owner!=true&&!(await access.Require()).IsInRole("Admin"))throw new UnauthorizedAccessException("Only The Workspace Owner Can Manage The Client Review Link.");
   await using var db=await factory.CreateDbContextAsync();var client=await db.Clients.SingleOrDefaultAsync(c=>c.Id==clientId)??throw new InvalidOperationException("Client Not Found.");var grants=await db.HiringReviewGrants.Where(g=>g.ClientId==clientId).OrderBy(g=>g.Revoked).ThenBy(g=>g.CreatedUtc).ToListAsync();var grant=grants.FirstOrDefault();
   if(replace){
+   await SubscriptionRules.RequireHiringReviews(db,client.WorkspaceId);
    var token=WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
    if(grant is null){grant=new(){ClientId=clientId,EmailKey="client:"+clientId.ToString("N"),Name=client.Name};db.HiringReviewGrants.Add(grant);}
    grant.TokenHash=Hash(token);grant.ProtectedToken=tokenProtector.Protect(token);grant.ExpiresUtc=DateTime.SpecifyKind(DateTime.MaxValue,DateTimeKind.Utc);grant.Revoked=false;grant.Name=client.Name;

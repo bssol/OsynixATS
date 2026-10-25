@@ -26,6 +26,38 @@ public static class SubscriptionRules
     {
         if(!await MarketplaceAllowed(db,userId))throw new UnauthorizedAccessException("Marketplace profiles, availability and invitations require Starter or a higher Freelancer plan. Upgrade in Settings → Subscriptions.");
     }
+    public static async Task RequireFreelancerDirectory(AtsDbContext db,Guid workspaceId)
+    {
+        await SubscriptionLifecycle.ApplyDue(db,workspaceId);
+        var workspace=await db.EmployerWorkspaces.AsNoTracking().SingleAsync(w=>w.Id==workspaceId);
+        if(workspace.Kind==AccountTypes.Freelance||Terms(workspace)?.FreelancerDirectory==false)
+            throw new UnauthorizedAccessException("Freelancer profiles and new outreach require Starter or a higher Employer plan. Upgrade in Settings → Subscriptions.");
+    }
+    public static async Task RequireHiringReviews(AtsDbContext db,Guid? workspaceId)
+    {
+        if(workspaceId is not Guid id)return;
+        await SubscriptionLifecycle.ApplyDue(db,id);
+        var workspace=await db.EmployerWorkspaces.AsNoTracking().SingleAsync(w=>w.Id==id);
+        if(Terms(workspace)?.HiringManagerReviews==false)
+            throw new UnauthorizedAccessException("Hiring Manager review links require a plan that includes this feature. Upgrade in Settings → Subscriptions.");
+    }
+    public static Task<int> FreelancerApproaches(AtsDbContext db,Guid workspaceId){var month=Month(DateTime.UtcNow);return db.SubscriptionUsage.Where(u=>u.WorkspaceId==workspaceId&&u.MonthUtc==month&&u.Kind.StartsWith("FreelancerApproach:")).Select(u=>u.Kind).Distinct().CountAsync();}
+    public static async Task ChargeFreelancerApproach(AtsDbContext db,Guid workspaceId,string freelancerId)
+    {
+        var owns=db.Database.CurrentTransaction is null;
+        await using var tx=owns?await db.Database.BeginTransactionAsync():null;
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE EmployerWorkspaces SET Id=Id WHERE Id={workspaceId}");
+        await RequireFreelancerDirectory(db,workspaceId);
+        var w=await db.EmployerWorkspaces.AsNoTracking().SingleAsync(w=>w.Id==workspaceId);
+        var month=Month(DateTime.UtcNow);var kind="FreelancerApproach:"+freelancerId;
+        if(!await db.SubscriptionUsage.AnyAsync(u=>u.WorkspaceId==workspaceId&&u.Kind==kind&&u.MonthUtc==month)){
+            if(Terms(w)?.MonthlyFreelancerApproaches is int limit&&await FreelancerApproaches(db,workspaceId)>=limit)
+                throw new InvalidOperationException($"Your plan allows approaching {limit} unique freelancers per month. Continue existing conversations or upgrade your plan.");
+            db.SubscriptionUsage.Add(new(){WorkspaceId=workspaceId,AllowanceId=w.SubscriptionAllowanceId,Kind=kind,MonthUtc=month});
+            await db.SaveChangesAsync();
+        }
+        if(tx is not null)await tx.CommitAsync();
+    }
     // A database write lock serializes allowance checks across browsers and workers.
     // Call inside the intake transaction to reserve an application and its AI allowance together.
     public static async Task Charge(AtsDbContext db,Guid workspaceId,string kind,Guid? applicationId=null,CancellationToken ct=default)

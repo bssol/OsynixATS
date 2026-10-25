@@ -27,13 +27,15 @@ public class EmployerTeamService(EmployerService employer,IDbContextFactory<AtsD
     {
         var owner=await employer.RequireAccount();var overview=await employer.Overview();if(overview.Workspace.Kind==AccountTypes.Freelance)throw new UnauthorizedAccessException("Upgrade To An Employer Account Before Inviting Team Members.");email=email.Trim();name=name.Trim();
         if(name.Length is <1 or >100||email.Length>320||!new EmailAddressAttribute().IsValid(email))throw new InvalidOperationException("Enter a name and a valid email address.");
-        var normalized=email.ToUpperInvariant();await using var db=await factory.CreateDbContextAsync();
+        var normalized=email.ToUpperInvariant();await using var db=await factory.CreateDbContextAsync();await using var tx=await db.Database.BeginTransactionAsync();
+        var external=await db.Users.SingleOrDefaultAsync(u=>u.NormalizedEmail==normalized&&(u.AccountType==AccountTypes.Freelance||u.AccountType==AccountTypes.Employer));
+        if(external is not null){if(external.Id==owner.Id)throw new InvalidOperationException("The workspace owner cannot invite their own account.");if(external.AccountType==AccountTypes.Freelance)await SubscriptionRules.RequireMarketplace(db,external.Id);await SubscriptionRules.ChargeFreelancerApproach(db,overview.Workspace.Id,external.Id);}else await CheckCapacity(db,await db.EmployerWorkspaces.SingleAsync(w=>w.Id==overview.Workspace.Id),"");
         if(await db.WorkspaceMemberships.AnyAsync(m=>m.WorkspaceId==overview.Workspace.Id&&db.Users.Any(u=>u.Id==m.UserId&&u.NormalizedEmail==normalized)))throw new InvalidOperationException("This Recruiter Is Already A Team Member. Manage Their Access Instead.");
         var invitation=await db.EmployerInvitations.SingleOrDefaultAsync(i=>i.WorkspaceId==overview.Workspace.Id&&i.NormalizedEmail==normalized);
         if(invitation?.Status=="Accepted")throw new InvalidOperationException("This invitation was accepted. Manage the team member instead.");
         if(invitation is null){invitation=new(){WorkspaceId=overview.Workspace.Id,NormalizedEmail=normalized};db.EmployerInvitations.Add(invitation);}
         var token=Convert.ToHexString(RandomNumberGenerator.GetBytes(32));invitation.Email=email;invitation.FullName=name;invitation.TokenHash=Hash(token);invitation.ProtectedToken=protector.Protect(token);invitation.ExpiresUtc=DateTime.UtcNow.AddDays(7);invitation.Status="Pending";invitation.Delivery="Link Created";
-        AtsService.Audit(db,owner.Id,"Recruiter invited",invitation.Id.ToString(),email);await db.SaveChangesAsync();
+        AtsService.Audit(db,owner.Id,"Recruiter invited",invitation.Id.ToString(),email);await db.SaveChangesAsync();await tx.CommitAsync();
         updates?.Publish();return new(Link(token),"Invitation Created. Copy The Link And Share It With The Invited Recruiter. No Email Has Been Sent.");
     }
     string Link(string token)=>BaseUrl+"/Account/TeamInvitation?token="+Uri.EscapeDataString(token);

@@ -6,7 +6,7 @@ using Osynix.Ats.Domain;
 
 namespace Osynix.Ats.Services;
 
-public record SubscriptionOverview(EmployerWorkspace Workspace,List<SubscriptionPlan> Plans,List<EmployerAccessRequest> Requests,int Assessments,int Jds,int Slots,int Seats,SubscriptionChange? ScheduledChange=null,string CurrentPlanCode="free");
+public record SubscriptionOverview(EmployerWorkspace Workspace,List<SubscriptionPlan> Plans,List<EmployerAccessRequest> Requests,int Assessments,int Jds,int Slots,int Seats,SubscriptionChange? ScheduledChange=null,string CurrentPlanCode="free",int FreelancerApproaches=0,bool PaymentConfigured=false);
 public record SubscriptionNotice(Guid WorkspaceId,Guid? RequestId,string Title,string Status,string Message,DateOnly? RenewalDate=null);
 public class SubscriptionService(EmployerService employers,Access access,IDbContextFactory<AtsDbContext> factory,RecruitmentUpdates updates)
 {
@@ -24,7 +24,7 @@ public class SubscriptionService(EmployerService employers,Access access,IDbCont
         var category=SubscriptionRules.Category(w);var month=SubscriptionRules.Month(DateTime.UtcNow);
         var counts=await db.SubscriptionUsage.Where(u=>u.WorkspaceId==w.Id&&u.AllowanceId==w.SubscriptionAllowanceId&&u.MonthUtc==month).GroupBy(u=>u.Kind).Select(g=>new{Kind=g.Key,Count=g.Count()}).ToDictionaryAsync(g=>g.Kind,g=>g.Count);
         var usage=await employers.Usage();
-        return new(w,await db.SubscriptionPlans.AsNoTracking().Where(p=>p.AccountCategory==category&&p.Published).OrderBy(p=>p.MonthlyPkr).ThenBy(p=>p.Code=="free"?0:p.Code=="starter"?1:p.Code=="growth"?2:3).ToListAsync(),overview.Requests,counts.GetValueOrDefault("Assessment"),counts.GetValueOrDefault("JD"),usage.UsedPositionSlots,usage.ActiveRecruiters,await db.SubscriptionChanges.AsNoTracking().SingleOrDefaultAsync(x=>x.WorkspaceId==w.Id&&x.Status=="Scheduled"),await db.SubscriptionPlans.Where(p=>p.Id==w.SubscriptionPlanId).Select(p=>p.Code).SingleAsync());
+        return new(w,await db.SubscriptionPlans.AsNoTracking().Where(p=>p.AccountCategory==category&&p.Published).OrderBy(p=>p.MonthlyPkr).ThenBy(p=>p.Code=="free"?0:p.Code=="starter"?1:p.Code=="growth"?2:3).ToListAsync(),overview.Requests,counts.GetValueOrDefault("Assessment"),counts.GetValueOrDefault("JD"),usage.UsedPositionSlots,usage.ActiveRecruiters,await db.SubscriptionChanges.AsNoTracking().SingleOrDefaultAsync(x=>x.WorkspaceId==w.Id&&x.Status=="Scheduled"),await db.SubscriptionPlans.Where(p=>p.Id==w.SubscriptionPlanId).Select(p=>p.Code).SingleAsync(),await SubscriptionRules.FreelancerApproaches(db,w.Id),AdminPaymentDetailsService.IsConfigured(await AdminPaymentDetailsService.Current(db)));
     }
     public async Task Request(Guid planId,Guid revision,string billing,string currency,string note)
     {
@@ -38,8 +38,42 @@ public class SubscriptionService(EmployerService employers,Access access,IDbCont
         var current=await db.SubscriptionPlans.AsNoTracking().SingleAsync(x=>x.Id==w.SubscriptionPlanId);
         if(SubscriptionRules.Tier(p.Code)<=SubscriptionRules.Tier(current.Code))throw new InvalidOperationException("Choose Schedule downgrade to change to a lower tier at renewal.");
         if(await db.EmployerAccessRequests.AnyAsync(r=>r.WorkspaceId==w.Id&&r.SubscriptionPlanId!=null&&(r.Status=="Submitted"||r.Status=="Under Review"||r.Status=="Needs Information")))throw new InvalidOperationException("An upgrade request is already pending. View Upgrade Requests for Admin's response.");
+        var bank=await AdminPaymentDetailsService.Current(db);
+        if(!AdminPaymentDetailsService.IsConfigured(bank))throw new InvalidOperationException("Admin has not configured bank transfer instructions yet. Please contact Support and try again later.");
         var r=new EmployerAccessRequest{WorkspaceId=w.Id,SubscriptionPlanId=p.Id,Feature="Subscription: "+p.Name,PlanSnapshotJson=JsonSerializer.Serialize(p),Currency=currency,BillingPeriod=billing,QuotedPrice=SubscriptionRules.Price(p,billing,currency),Remarks=note.Trim()};
-        db.EmployerAccessRequests.Add(r);AtsService.Audit(db,w.OwnerId,"Subscription upgrade requested",r.Id.ToString(),$"{p.AccountCategory} · {p.Name} · {billing} · {currency}");await db.SaveChangesAsync();await tx.CommitAsync();updates.Publish();
+        db.EmployerAccessRequests.Add(r);
+        var adminId=await(from u in db.Users join ur in db.UserRoles on u.Id equals ur.UserId join role in db.Roles on ur.RoleId equals role.Id where role.Name=="Admin"&&u.Status=="Active" orderby u.Id select u.Id).FirstOrDefaultAsync();
+        if(string.IsNullOrWhiteSpace(adminId))throw new InvalidOperationException("An Admin account is not available to receive this request.");
+        var owner=await db.Users.AsNoTracking().Where(u=>u.Id==w.OwnerId).Select(u=>u.FullName).SingleAsync();
+        var conversation=new SupportConversation{UserId=w.OwnerId,WorkspaceId=w.Id,EmployerAccessRequestId=r.Id,IssueType="Subscription & Payment",Subject="Subscription upgrade · "+p.Name};
+        db.SupportConversations.Add(conversation);
+        var body=AdminPaymentDetailsService.UpgradeMessage(r,owner,bank!);
+        db.SupportMessages.Add(new SupportMessage{ConversationId=conversation.Id,SenderId=adminId,Body=body});
+        conversation.LastMessageUtc=DateTime.UtcNow;
+        AtsService.Audit(db,w.OwnerId,"Subscription upgrade requested",r.Id.ToString(),$"{p.AccountCategory} · {p.Name} · {billing} · {currency}");await db.SaveChangesAsync();await tx.CommitAsync();updates.Publish();
+    }
+
+    public async Task WithdrawUpgrade(Guid requestId)
+    {
+        var overview=await employers.Overview();
+        await using var db=await factory.CreateDbContextAsync();
+        await using var tx=await db.Database.BeginTransactionAsync();
+        var request=await db.EmployerAccessRequests.SingleOrDefaultAsync(r=>r.Id==requestId&&r.WorkspaceId==overview.Workspace.Id&&r.SubscriptionPlanId!=null)
+            ??throw new InvalidOperationException("This upgrade request is not available in your workspace.");
+        if(request.Status is not("Submitted" or "Under Review" or "Needs Information"))
+            throw new InvalidOperationException("Only a pending upgrade request can be withdrawn.");
+        request.Status="Withdrawn";
+        request.RespondedUtc=DateTime.UtcNow;
+        request.AdminResponse="The account owner withdrew this upgrade request.";
+        var conversation=await db.SupportConversations.SingleOrDefaultAsync(c=>c.EmployerAccessRequestId==request.Id&&c.Status=="Open");
+        var ownerId=overview.Workspace.OwnerId;
+        if(conversation is not null){
+            db.SupportMessages.Add(new SupportMessage{ConversationId=conversation.Id,SenderId=ownerId,Body="I have withdrawn this upgrade request. Please do not activate the requested plan."});
+            conversation.LastMessageUtc=DateTime.UtcNow;
+            conversation.UserReadUtc=conversation.LastMessageUtc;
+        }
+        AtsService.Audit(db,ownerId,"Subscription upgrade withdrawn",request.Id.ToString(),request.Feature);
+        await db.SaveChangesAsync();await tx.CommitAsync();updates.Publish();
     }
     public async Task<List<SubscriptionPlan>> Catalogue()
     {
@@ -85,7 +119,7 @@ public class SubscriptionService(EmployerService employers,Access access,IDbCont
         change.Status="Withdrawn";AtsService.Audit(db,owner.Workspace.OwnerId,"Scheduled subscription change withdrawn",owner.Workspace.Id.ToString(),"The current plan will continue.");
         await db.SaveChangesAsync();await tx.CommitAsync();updates.Publish();
     }
-    public async Task SavePlan(SubscriptionPlan input,SubscriptionTerms terms)
+    public async Task SavePlan(SubscriptionPlan input,SubscriptionTerms terms,bool applyToSubscribers=false)
     {
         await access.RequireAdminPermission("admin.workspaces.view");
         var actor=await access.RequireAdminPermission("admin.subscriptions.manage");
@@ -95,12 +129,22 @@ public class SubscriptionService(EmployerService employers,Access access,IDbCont
         if(input.Code=="free"&&new[]{input.MonthlyPkr,input.AnnualPkr,input.MonthlyUsd,input.AnnualUsd}.Any(n=>n!=0))throw new InvalidOperationException("Free plans must remain free.");
         if(input.Code=="free"&&input.PromotionPercent>0)throw new InvalidOperationException("The Free plan cannot have promotional pricing.");
         if(input.Code=="free"&&!input.Published)throw new InvalidOperationException("Keep the default Free plan published.");
-        await using var db=await factory.CreateDbContextAsync();var p=await db.SubscriptionPlans.SingleAsync(p=>p.Id==input.Id);
+        if(terms.MonthlyFreelancerApproaches is <0 or >1000000)throw new InvalidOperationException("Enter a non-negative monthly freelancer approach limit or leave it blank for unlimited.");
+        await using var db=await factory.CreateDbContextAsync();await using var tx=await db.Database.BeginTransactionAsync();var p=await db.SubscriptionPlans.SingleAsync(p=>p.Id==input.Id);
         if(p.Revision!=input.Revision)throw new DbUpdateConcurrencyException("This plan changed. Reload before saving.");
         if(p.AccountCategory!=input.AccountCategory||p.Code!=input.Code)throw new InvalidOperationException("The plan's account type and code cannot be changed.");
-        var previous=JsonSerializer.Serialize(p);p.Name=input.Name.Trim();p.Description=input.Description.Trim();p.Published=input.Published;p.PricingConfirmed=input.PricingConfirmed;p.MonthlyPkr=input.MonthlyPkr;p.AnnualPkr=input.AnnualPkr;p.MonthlyUsd=input.MonthlyUsd;p.AnnualUsd=input.AnnualUsd;p.PromotionPercent=input.PromotionPercent;p.PromotionLabel=input.PromotionLabel.Trim();p.PromotionStartsOn=input.PromotionPercent>0?input.PromotionStartsOn:null;p.PromotionEndsOn=input.PromotionPercent>0?input.PromotionEndsOn:null;p.TermsJson=JsonSerializer.Serialize(terms);
-        AtsService.Audit(db,actor.FindFirstValue(ClaimTypes.NameIdentifier)!,"Subscription plan updated",p.Id.ToString(),$"{p.AccountCategory} · {p.Name} · published={p.Published}",null,null,previous,JsonSerializer.Serialize(p));await db.SaveChangesAsync();updates.Publish();
+        var previous=JsonSerializer.Serialize(p);
+        p.Name=input.Name.Trim();p.Description=input.Description.Trim();p.Published=input.Published;p.PricingConfirmed=input.PricingConfirmed;p.MonthlyPkr=input.MonthlyPkr;p.AnnualPkr=input.AnnualPkr;p.MonthlyUsd=input.MonthlyUsd;p.AnnualUsd=input.AnnualUsd;p.PromotionPercent=input.PromotionPercent;p.PromotionLabel=input.PromotionLabel.Trim();p.PromotionStartsOn=input.PromotionPercent>0?input.PromotionStartsOn:null;p.PromotionEndsOn=input.PromotionPercent>0?input.PromotionEndsOn:null;p.TermsJson=JsonSerializer.Serialize(terms);
+        var updated=0;
+        if(applyToSubscribers){
+            foreach(var workspace in await db.EmployerWorkspaces.Where(w=>w.SubscriptionPlanId==p.Id).ToListAsync()){
+                workspace.SubscriptionTermsJson=p.TermsJson;workspace.SubscriptionName=p.Name;
+                workspace.FreePositionSlots=terms.PositionSlots;workspace.FreeRecruiterSeats=terms.InternalSeats;updated++;
+            }
+        }
+        AtsService.Audit(db,actor.FindFirstValue(ClaimTypes.NameIdentifier)!,"Subscription plan updated",p.Id.ToString(),$"{p.AccountCategory} · {p.Name} · published={p.Published} · current subscribers updated={updated}; prices, renewal dates, usage and explicit Admin grants preserved.",null,null,previous,JsonSerializer.Serialize(p));await db.SaveChangesAsync();await tx.CommitAsync();updates.Publish();
     }
+
     public async Task ResetFree(Guid workspaceId,Guid revision)
     {
         var actor=await access.RequireAdminPermission("admin.subscriptions.manage");await access.RequireAdminPermission("admin.workspaces.view");

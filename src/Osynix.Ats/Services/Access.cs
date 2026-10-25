@@ -71,6 +71,8 @@ public class Access(AuthenticationStateProvider state, IDbContextFactory<AtsDbCo
         var active=await Context();
         if(active is {Legacy:false}){
             var workspace=await db.EmployerWorkspaces.AsNoTracking().SingleAsync(w=>w.Id==active.Id);
+            if(permission=="HiringReview.Share"){await SubscriptionRules.RequireHiringReviews(db,workspace.Id);return;}
+            if(permission=="Freelancers.View"){if(!active.Owner)throw new UnauthorizedAccessException("Only the workspace owner can browse freelance recruiters.");await SubscriptionRules.RequireFreelancerDirectory(db,workspace.Id);return;}
             if(permission=="EmailTemplates.Manage"){
                 if(!workspace.EmailTemplatesEnabled&&SubscriptionRules.Terms(workspace)?.EmailTemplates!=true)throw new UnauthorizedAccessException("Email Templates Access Has Not Been Enabled By Admin For This Workspace.");
                 return;
@@ -86,7 +88,7 @@ public class Access(AuthenticationStateProvider state, IDbContextFactory<AtsDbCo
             var permit=active.Owner?(permission is "Positions.Create" or "Clients.Create" or "Clients.Delete" or "Reports.Export" or "Talent.View" || permission=="Talent.Master"&&master):permission switch{"Positions.Create"=>active.Membership!.CanCreatePositions,"Clients.Create"=>active.Membership!.CanCreateClients,"Reports.Export"=>active.Membership!.CanExportReports,"Talent.View"=>active.Membership!.CanViewTalentPool,"Talent.Master"=>master&&active.Membership!.CanUseMasterPool,_=>false};
             if(!permit)throw new UnauthorizedAccessException("Your Workspace Does Not Have Access To This Feature.");return;
         }
-        var allowed=account is not null && (permission switch { "Positions.Create"=>account.CanCreatePositions,"Clients.Create"=>account.CanCreateClients,"Talent.View"=>account.EmployerWorkspaceId is Guid team?account.CanViewTalentPool&&db.EmployerWorkspaces.Any(w=>w.Id==team&&w.TeamTalentPoolEnabled):account.TalentPoolPaidUntilUtc>DateTime.UtcNow,"Reports.Export"=>account.CanExportReports,_=>false });
+        var allowed=account is not null && (permission switch { "HiringReview.Share"=>account.AccountType==AccountTypes.Legacy,"Positions.Create"=>account.CanCreatePositions,"Clients.Create"=>account.CanCreateClients,"Talent.View"=>account.EmployerWorkspaceId is Guid team?account.CanViewTalentPool&&db.EmployerWorkspaces.Any(w=>w.Id==team&&w.TeamTalentPoolEnabled):account.TalentPoolPaidUntilUtc>DateTime.UtcNow,"Reports.Export"=>account.CanExportReports,_=>false });
         if(!allowed) throw new UnauthorizedAccessException("Your account does not have permission for this action.");
     }
     public async Task<bool> Can(string permission){try{await RequirePermission(permission);return true;}catch(UnauthorizedAccessException){return false;}}

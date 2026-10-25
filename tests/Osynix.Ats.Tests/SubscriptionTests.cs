@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Osynix.Ats.Data;
 using Osynix.Ats.Domain;
 using Osynix.Ats.Services;
@@ -13,6 +15,52 @@ namespace Osynix.Ats.Tests;
 
 public class SubscriptionTests
 {
+    [Theory]
+    [InlineData("free")]
+    [InlineData("starter")]
+    [InlineData("growth")]
+    [InlineData("pro")]
+    public async Task EmployerCareersLimitsSaveAfterMigratedRevisionRepair(string code)
+    {
+        await using var f=new Fixture();await f.Init();
+        if(code=="free")await f.Service("employer").Overview();else await ActivateEmployer(f,code);
+        await using(var db=f.Factory.CreateDbContext()){
+            await db.GetService<IMigrator>().MigrateAsync("20261025200000_EmployerSubscriptionCatalogue");
+            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE SubscriptionPlans SET Revision=lower(Revision) WHERE AccountCategory='Employer' AND Code={code}");
+            await db.Database.MigrateAsync();
+        }
+        var plan=(await f.Service("admin").Catalogue()).Single(p=>p.AccountCategory=="Employer"&&p.Code==code);
+        var terms=SubscriptionRules.Terms(plan);terms.ApplicationsPerPosition=17;
+        await f.Service("admin").SavePlan(plan,terms,true);
+        var saved=(await f.Service("admin").Catalogue()).Single(p=>p.Id==plan.Id);
+        Assert.Equal(17,SubscriptionRules.Terms(saved).ApplicationsPerPosition);
+        Assert.Equal(17,SubscriptionRules.Terms((await f.Service("employer").Overview()).Workspace)!.ApplicationsPerPosition);
+        terms.ApplicationsPerPosition=23;await f.Service("admin").SavePlan(saved,terms,true);
+        Assert.Equal(23,SubscriptionRules.Terms((await f.Service("employer").Overview()).Workspace)!.ApplicationsPerPosition);
+    }
+    [Fact]
+    public async Task UpgradeRequestCreatesPaymentInboxAndOwnerCanWithdraw()
+    {
+        await using var f=new Fixture();await f.Init();
+        var overview=await f.Service("free").Overview();var plan=overview.Plans.Single(p=>p.AccountCategory=="Freelancer"&&p.Code=="starter");
+        plan.PricingConfirmed=true;plan.MonthlyPkr=8000;await f.Service("admin").SavePlan(plan,SubscriptionRules.Terms(plan));
+        plan=(await f.Service("free").Overview()).Plans.Single(p=>p.Id==plan.Id);
+        await f.Service("free").Request(plan.Id,plan.Revision,"Monthly","PKR","Please upgrade my plan.");
+        Guid requestId;
+        await using(var db=f.Factory.CreateDbContext()){
+            var request=await db.EmployerAccessRequests.SingleAsync(r=>r.WorkspaceId==overview.Workspace.Id&&r.SubscriptionPlanId!=null);requestId=request.Id;
+            var conversation=await db.SupportConversations.SingleAsync(c=>c.EmployerAccessRequestId==request.Id);
+            var message=await db.SupportMessages.SingleAsync(m=>m.ConversationId==conversation.Id);
+            Assert.Contains("PKR",message.Body);Assert.Contains("Test Bank",message.Body);Assert.Contains("24 hours",message.Body);Assert.Equal("Subscription & Payment",conversation.IssueType);
+        }
+        await f.Service("free").WithdrawUpgrade(requestId);
+        await using(var db=f.Factory.CreateDbContext()){
+            Assert.Equal("Withdrawn",(await db.EmployerAccessRequests.SingleAsync(r=>r.Id==requestId)).Status);
+            var conversation=await db.SupportConversations.SingleAsync(c=>c.EmployerAccessRequestId==requestId);
+            Assert.Equal("Open",conversation.Status);
+            Assert.Contains(await db.SupportMessages.Where(m=>m.ConversationId==conversation.Id).Select(m=>m.Body).ToListAsync(),m=>m.Contains("withdrawn",StringComparison.OrdinalIgnoreCase));
+        }
+    }
     sealed class State(string id,string role):AuthenticationStateProvider
     {
         public override Task<AuthenticationState> GetAuthenticationStateAsync()=>Task.FromResult(new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity([new(ClaimTypes.NameIdentifier,id),new(ClaimTypes.Name,id),new(ClaimTypes.Role,role)],"Test"))));
@@ -22,7 +70,7 @@ public class SubscriptionTests
     {
         readonly SqliteConnection connection=new($"Data Source=subscription-{Guid.NewGuid():N};Mode=Memory;Cache=Shared");
         public Factory Factory=null!;public RecruitmentUpdates Updates=new();
-        public async Task Init(){await connection.OpenAsync();Factory=new(new DbContextOptionsBuilder<AtsDbContext>().UseSqlite(connection.ConnectionString).Options);await using var db=Factory.CreateDbContext();await DatabaseInitializer.InitializeAsync(db);foreach(var role in new[]{"Admin","Employer","Recruiter"})db.Roles.Add(new IdentityRole(role){Id=role});foreach(var id in new[]{"free","other","employer","admin"}){var role=id=="admin"?"Admin":id=="employer"?"Employer":"Recruiter";db.Users.Add(new AtsUser{Id=id,UserName=id,Email=id+"@example.test",EmailConfirmed=true,AccountType=role=="Recruiter"?AccountTypes.Freelance:role=="Employer"?AccountTypes.Employer:AccountTypes.Legacy});db.UserRoles.Add(new IdentityUserRole<string>{UserId=id,RoleId=role});}await db.SaveChangesAsync();}
+        public async Task Init(){await connection.OpenAsync();Factory=new(new DbContextOptionsBuilder<AtsDbContext>().UseSqlite(connection.ConnectionString).Options);await using var db=Factory.CreateDbContext();await DatabaseInitializer.InitializeAsync(db);foreach(var role in new[]{"Admin","Employer","Recruiter"})db.Roles.Add(new IdentityRole(role){Id=role});foreach(var id in new[]{"free","other","employer","admin"}){var role=id=="admin"?"Admin":id=="employer"?"Employer":"Recruiter";db.Users.Add(new AtsUser{Id=id,UserName=id,Email=id+"@example.test",EmailConfirmed=true,AccountType=role=="Recruiter"?AccountTypes.Freelance:role=="Employer"?AccountTypes.Employer:AccountTypes.Legacy});db.UserRoles.Add(new IdentityUserRole<string>{UserId=id,RoleId=role});}await db.SaveChangesAsync();await using var settingsDb=Factory.CreateDbContext();settingsDb.AdminPaymentDetails.Add(new AdminPaymentDetails{Id=AdminPaymentDetailsService.SettingsId,BankName="Test Bank",AccountTitle="Osynix Group",AccountNumber="1234567890",Iban="PK00TEST0000000000000000"});await settingsDb.SaveChangesAsync();}
         public Access Access(string id)=>new(new State(id,id=="admin"?"Admin":id=="employer"?"Employer":"Recruiter"),Factory);
         public EmployerService Employer(string id)=>new(new State(id,id=="admin"?"Admin":id=="employer"?"Employer":"Recruiter"),Access(id),Factory,Updates);
         public SubscriptionService Service(string id)=>new(Employer(id),Access(id),Factory,Updates);
@@ -34,11 +82,68 @@ public class SubscriptionTests
         await using var f=new Fixture();await f.Init();var free=await f.Service("free").Overview();
         Assert.Equal("Free",free.Workspace.SubscriptionName);var t=SubscriptionRules.Terms(free.Workspace)!;
         Assert.Equal(1,t.PositionSlots);Assert.Equal(20,t.MonthlyAssessments);Assert.Equal(2,t.MonthlyJdAnalyses);Assert.False(t.Marketplace);Assert.False(await f.Access("free").Can("Reports.Export"));
-        Assert.Equal(4,free.Plans.Count);Assert.Single((await f.Service("employer").Overview()).Plans);
+        Assert.Equal(4,free.Plans.Count);Assert.Equal(4,(await f.Service("employer").Overview()).Plans.Count);
         await using var db=f.Factory.CreateDbContext();Assert.Equal(12,await db.SubscriptionPlans.CountAsync());
         var employerDraft=await db.SubscriptionPlans.SingleAsync(p=>p.AccountCategory=="Employer"&&p.Code=="growth");
         await Assert.ThrowsAsync<InvalidOperationException>(()=>f.Service("free").Request(employerDraft.Id,employerDraft.Revision,"Monthly","PKR",""));
         await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>f.Service("free").Catalogue());
+    }
+
+    [Fact]public async Task ApprovedEmployerPlansHaveIndependentLimitsAndFreeFeatureGates()
+    {
+        await using var f=new Fixture();await f.Init();var current=await f.Service("employer").Overview();
+        var free=SubscriptionRules.Terms(current.Workspace)!;
+        Assert.Equal(3,free.PositionSlots);Assert.Equal(0,free.InternalSeats);Assert.Equal(0,current.Workspace.AdditionalRecruiterSeats);
+        Assert.Equal(30,free.MonthlyAssessments);Assert.Equal(3,free.MonthlyJdAnalyses);
+        Assert.False(await f.Access("employer").Can("HiringReview.Share"));Assert.False(await f.Access("employer").Can("Freelancers.View"));
+        Assert.False(await f.Access("employer").Can("Clients.Create"));Assert.False(await f.Access("employer").Can("Talent.Master"));Assert.False(await f.Access("employer").Can("EmailTemplates.Manage"));
+        var starter=current.Plans.Single(p=>p.Code=="starter");var st=SubscriptionRules.Terms(starter);
+        Assert.Equal(7500,starter.MonthlyPkr);Assert.Equal(75000,starter.AnnualPkr);Assert.Equal(25,starter.MonthlyUsd);Assert.Equal(250,starter.AnnualUsd);
+        Assert.Equal(5,st.PositionSlots);Assert.Equal(1,st.InternalSeats);Assert.Equal(5,st.MonthlyFreelancerApproaches);Assert.True(st.HiringManagerReviews);Assert.True(st.FreelancerDirectory);Assert.False(st.MeetingIntegrations);
+        var growth=SubscriptionRules.Terms(current.Plans.Single(p=>p.Code=="growth"));Assert.Equal(10,growth.PositionSlots);Assert.Equal(3,growth.InternalSeats);Assert.Equal(500,growth.MonthlyAssessments);Assert.Equal(30,growth.MonthlyJdAnalyses);Assert.Null(growth.MonthlyFreelancerApproaches);Assert.True(growth.MasterPool);Assert.True(growth.EmailTemplates);Assert.False(growth.ZoomIntegration);
+        var pro=SubscriptionRules.Terms(current.Plans.Single(p=>p.Code=="pro"));Assert.Equal(20,pro.PositionSlots);Assert.Equal(5,pro.InternalSeats);Assert.Equal(1500,pro.MonthlyAssessments);Assert.Equal(100,pro.MonthlyJdAnalyses);Assert.True(pro.ZoomIntegration);
+        await using var db=f.Factory.CreateDbContext();Assert.Single(await db.SubscriptionPlans.Where(p=>p.AccountCategory=="Agency"&&p.Published).ToListAsync());
+    }
+
+    static async Task<SubscriptionOverview> ActivateEmployer(Fixture f,string code)
+    {
+        var before=await f.Service("employer").Overview();var plan=before.Plans.Single(p=>p.Code==code);
+        await f.Service("employer").Request(plan.Id,plan.Revision,"Monthly","PKR","");
+        var request=(await f.Service("employer").Overview()).Requests.Single(r=>r.SubscriptionPlanId==plan.Id);
+        request.Status="Granted";request.PaymentConfirmed=true;request.AdminResponse="Payment confirmed outside ATS.";
+        await f.Employer("admin").Respond(request);return await f.Service("employer").Overview();
+    }
+
+    [Fact]public async Task EmployerStarterCountsUniqueOutreachAndBlocksTheSixthMember()
+    {
+        await using var f=new Fixture();await f.Init();var current=await ActivateEmployer(f,"starter");
+        Assert.True(await f.Access("employer").Can("HiringReview.Share"));Assert.True(await f.Access("employer").Can("Freelancers.View"));Assert.False(await f.Access("employer").Can("Clients.Create"));
+        await using var db=f.Factory.CreateDbContext();
+        for(var i=0;i<5;i++)await SubscriptionRules.ChargeFreelancerApproach(db,current.Workspace.Id,$"member-{i}");
+        await SubscriptionRules.ChargeFreelancerApproach(db,current.Workspace.Id,"member-0");
+        Assert.Equal(5,await SubscriptionRules.FreelancerApproaches(db,current.Workspace.Id));
+        await Assert.ThrowsAsync<InvalidOperationException>(()=>SubscriptionRules.ChargeFreelancerApproach(db,current.Workspace.Id,"member-5"));
+        Assert.Equal(5,(await f.Service("employer").Overview()).FreelancerApproaches);
+        var growth=await ActivateEmployer(f,"growth");
+        for(var i=5;i<8;i++)await SubscriptionRules.ChargeFreelancerApproach(db,growth.Workspace.Id,$"member-{i}");
+        Assert.Equal(8,await SubscriptionRules.FreelancerApproaches(db,growth.Workspace.Id));
+        foreach(var usage in await db.SubscriptionUsage.Where(u=>u.Kind.StartsWith("FreelancerApproach:")).ToListAsync())usage.MonthUtc=SubscriptionRules.Month(DateTime.UtcNow).AddMonths(-1);
+        await db.SaveChangesAsync();Assert.Equal(0,await SubscriptionRules.FreelancerApproaches(db,current.Workspace.Id));
+    }
+
+    [Fact]public async Task AdminCanApplyEmployerLimitsWithoutResettingBillingOrRecordedUsage()
+    {
+        await using var f=new Fixture();await f.Init();var current=await ActivateEmployer(f,"starter");
+        var allowance=current.Workspace.SubscriptionAllowanceId;var renewal=current.Workspace.SubscriptionRenewalDate;
+        await using(var db=f.Factory.CreateDbContext())await SubscriptionRules.Charge(db,current.Workspace.Id,"JD");
+        var plan=(await f.Service("admin").Catalogue()).Single(p=>p.AccountCategory=="Employer"&&p.Code=="starter");var terms=SubscriptionRules.Terms(plan);terms.PositionSlots=7;plan.MonthlyPkr=9000;
+        await f.Service("admin").SavePlan(plan,terms);
+        Assert.Equal(5,(await f.Service("employer").Overview()).Workspace.FreePositionSlots);
+        plan=(await f.Service("admin").Catalogue()).Single(p=>p.Id==plan.Id);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>f.Service("employer").SavePlan(plan,terms,true));
+        await f.Service("admin").SavePlan(plan,terms,true);
+        var updated=await f.Service("employer").Overview();Assert.Equal(7,updated.Workspace.FreePositionSlots);Assert.Equal(7500,updated.Workspace.SubscriptionPrice);Assert.Equal(renewal,updated.Workspace.SubscriptionRenewalDate);Assert.Equal(allowance,updated.Workspace.SubscriptionAllowanceId);Assert.Equal(1,updated.Jds);
+        Assert.Equal(1,(await f.Service("free").Overview()).Workspace.FreePositionSlots);
     }
 
     [Fact]public async Task ApprovalRequiresPaymentPreservesQuoteAndStartsFreshAllowance()

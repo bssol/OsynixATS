@@ -5,7 +5,8 @@
 @inject IJSRuntime JS
 @implements IDisposable
 
-@if(info is not null)
+@if(!allowed){<p class="muted small">Hiring Manager links are available from Starter. <a href="/employer/subscriptions">Compare plans</a></p>}
+else if(info is not null)
 {
     <section class="@(Compact?"review-link-compact":"client-review-link panel")">
         <div class="section-heading">
@@ -59,11 +60,11 @@
     [Parameter] public Guid? ContactId { get; set; }
     [Parameter] public bool Compact { get; set; }
     ClientReviewLink? info;
-    bool owner,confirm,confirmRevoke;
+    bool owner,confirm,confirmRevoke,allowed=true;
 
     protected override void OnInitialized()=>Updates.Changed+=Changed;
     protected override Task OnParametersSetAsync()=>Run(Load);
-    async Task Load(){info=await Review.ClientLink(ClientId,PositionId,ContactId);owner=(await Access.Context())?.Owner==true||(await Access.Require()).IsInRole("Admin");}
+    async Task Load(){allowed=await Access.Can("HiringReview.Share");if(!allowed){info=null;return;}info=await Review.ClientLink(ClientId,PositionId,ContactId);owner=(await Access.Context())?.Owner==true||(await Access.Require()).IsInRole("Admin");}
     void Cancel(){confirm=confirmRevoke=false;}
     Task Manage(bool replace)=>Run(async()=>{await Review.ManageClientLink(ClientId,replace);Cancel();await Load();Notice=replace?"Hiring Manager Link Ready. Copy And Share It When You Need.":"Client Review Access Revoked.";});
     Task Copy()=>Run(async()=>{var copied=await JS.InvokeAsync<bool>("osynixCopyReviewLink",info!.Link);Notice=copied?"Review Link Copied.":"Use View Review Page To Open And Copy The Link From Your Browser.";});

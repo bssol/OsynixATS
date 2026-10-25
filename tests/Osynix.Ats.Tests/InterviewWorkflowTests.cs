@@ -35,10 +35,12 @@ public class InterviewWorkflowTests {
   await using(var db=f.Factory.CreateDbContext()){var a=await db.Assessments.SingleAsync();a.Stage="Hold";await new AtsService(f.Factory,f.Access).SaveLifecycle(a);}
   Assert.Empty(f.Mail.Bodies);
   await using(var db=f.Factory.CreateDbContext()){var w=await db.EmployerWorkspaces.SingleAsync();w.SubscriptionName="Starter";await db.SaveChangesAsync();}
-  var permission=await f.Interviews.CommunicationAccess(f.ApplicationId);Assert.True(permission.Invitations);Assert.False(permission.Integrations);
+  var permission=await f.Interviews.CommunicationAccess(f.ApplicationId);Assert.False(permission.Invitations);Assert.False(permission.Integrations);
   var input=await f.Input();await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>f.Interviews.Invite(input));
+  await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>f.Interviews.Invite(input with{Mode="On-Site",Location="Client office",Provider="Manual Link"}));
+  await using(var db=f.Factory.CreateDbContext()){var w=await db.EmployerWorkspaces.SingleAsync();w.SubscriptionName="Growth";w.SubscriptionTermsJson=JsonSerializer.Serialize(new SubscriptionTerms{MeetingIntegrations=true});await db.SaveChangesAsync();}
   await f.Interviews.Invite(input with{Mode="On-Site",Location="Client office",Provider="Manual Link"});Assert.Contains(f.Mail.Bodies,b=>b.StartsWith("candidate@private.test"));
-  await using(var db=f.Factory.CreateDbContext()){var w=await db.EmployerWorkspaces.SingleAsync();w.SubscriptionName="Free";await db.SaveChangesAsync();}
+  await using(var db=f.Factory.CreateDbContext()){var w=await db.EmployerWorkspaces.SingleAsync();w.SubscriptionName="Free";w.SubscriptionTermsJson=JsonSerializer.Serialize(new SubscriptionTerms());await db.SaveChangesAsync();}
   f.Mail.Bodies.Clear();await using(var db=f.Factory.CreateDbContext()){var a=await db.Assessments.SingleAsync();await f.Interviews.Progress(a.Id,a.Revision,"Hold","");}
   Assert.DoesNotContain(f.Mail.Bodies,b=>b.StartsWith("candidate@private.test"));
  }

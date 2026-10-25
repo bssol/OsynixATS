@@ -8,9 +8,11 @@ public record RecruiterDetail(string Id,string Name,string Image,FreelancerProfi
 
 public class FreelancerDirectory(Access access,EmployerTeamService teams,IDbContextFactory<AtsDbContext> factory,RecruitmentUpdates? updates=null)
 {
+    public async Task<int> Approaches(){var team=await teams.Team();await using var db=await factory.CreateDbContextAsync();return await SubscriptionRules.FreelancerApproaches(db,team.Workspace.Id);}
     public async Task<RecruiterDetail> Details(string id)
     {
-        await teams.Team();await using var db=await factory.CreateDbContextAsync();
+        var team=await teams.Team();await using var db=await factory.CreateDbContextAsync();
+        await SubscriptionRules.RequireFreelancerDirectory(db,team.Workspace.Id);
         await SubscriptionRules.RequireMarketplace(db,id);
         var user=await db.Users.AsNoTracking().SingleAsync(u=>u.Id==id);
         var profile=await db.FreelancerProfiles.AsNoTracking().SingleOrDefaultAsync(p=>p.UserId==id)??new(){UserId=id};
@@ -41,7 +43,8 @@ public class FreelancerDirectory(Access access,EmployerTeamService teams,IDbCont
 
     public async Task<List<RecruiterListing>> Search()
     {
-        await teams.Team();await using var db=await factory.CreateDbContextAsync();
+        var team=await teams.Team();await using var db=await factory.CreateDbContextAsync();
+        if(SubscriptionRules.Terms(team.Workspace)?.FreelancerDirectory==false)return [];
         await SubscriptionLifecycle.ApplyDue(db);
         var workspaces=await db.EmployerWorkspaces.AsNoTracking().Where(w=>w.Kind==AccountTypes.Freelance).ToListAsync();
         var visibleIds=workspaces.Where(w=>SubscriptionRules.Terms(w)?.Marketplace==true).Select(w=>w.OwnerId).ToList();

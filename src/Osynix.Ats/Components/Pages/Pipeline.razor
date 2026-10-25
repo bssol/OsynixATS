@@ -22,7 +22,7 @@
 
 <PageTitle>Recruitment Pipeline · Osynix ATS</PageTitle>
 
-<div class="page-heading"><div><div class="eyebrow">APPLICATION PROGRESS</div><h1>Recruitment Pipeline</h1></div><div class="pipeline-submit-actions"><button disabled="@(Busy||selected.Count==0)" @onclick="OpenForward">Forward To Hiring Manager (@selected.Count)</button></div></div><Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
+<div class="page-heading"><div><div class="eyebrow">APPLICATION PROGRESS</div><h1>Recruitment Pipeline</h1></div><div class="pipeline-submit-actions">@if(canShare){<button disabled="@(Busy||selected.Count==0)" @onclick="OpenForward">Forward To Hiring Manager (@selected.Count)</button>}else{<a class="button secondary" href="/employer/subscriptions">Upgrade for Hiring Manager links</a>}</div></div><Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
 
 @if(!string.IsNullOrEmpty(InterviewFilter)){<p class="muted">Interview status: @InterviewFilter <a href="/pipeline?active=true">Clear filter</a></p>}
 
@@ -104,7 +104,8 @@ void OnChange()=>_=InvokeAsync(async()=>{try{await Load();StateHasChanged();}cat
 
 public void Dispose()=>Updates.Changed-=OnChange;
 
-async Task Load(){var active=await Access.Context();employerName=active?.Membership is not null?(await Ats.Allowance())?.WorkspaceName??"Employer Workspace":"";positions=await Ats.Positions();records=(await Ats.Assessments()).Where(x=>x.State=="Saved").ToList();attribution=await AttributionService.Attribution(records);feedback=await Review.Inbox();interviews=await Interviews.List();actionIds=(await Actions.Inbox(true)).Select(t=>t.Action.AssessmentId).ToHashSet();clients=await Workspace.Clients();selected.RemoveWhere(id=>!records.Any(a=>a.Id==id));if(ApplicationId is Guid appId&&openedApplication!=appId){edit=records.FirstOrDefault(a=>a.Id==appId);if(edit is not null)openedApplication=appId;}}
+bool canShare;
+async Task Load(){canShare=await Access.Can("HiringReview.Share");var active=await Access.Context();employerName=active?.Membership is not null?(await Ats.Allowance())?.WorkspaceName??"Employer Workspace":"";positions=await Ats.Positions();records=(await Ats.Assessments()).Where(x=>x.State=="Saved").ToList();attribution=await AttributionService.Attribution(records);feedback=await Review.Inbox();interviews=await Interviews.List();actionIds=(await Actions.Inbox(true)).Select(t=>t.Action.AssessmentId).ToHashSet();clients=await Workspace.Clients();selected.RemoveWhere(id=>!records.Any(a=>a.Id==id));if(ApplicationId is Guid appId&&openedApplication!=appId){edit=records.FirstOrDefault(a=>a.Id==appId);if(edit is not null)openedApplication=appId;}}
 
 async Task Saved(){var id=edit?.Id;await Load();edit=records.FirstOrDefault(a=>a.Id==id);if(edit is not null){var status=Status(edit);var target=status switch{"Offer Requested"=>"offer-requested","Offer Sent"=>"offer-sent","Hired"=>"hired","Rejected"=>"rejected",_=>""};if(target.Length>0){SetKpi(target);Notice=status=="Offer Sent"?"Offer Sent. Candidate Remains In Recruitment Pipeline Awaiting Hired Or Rejected.":$"{status}. The Relevant Pipeline Card Has Been Opened.";return;}}Notice="Pipeline Updated.";}
 

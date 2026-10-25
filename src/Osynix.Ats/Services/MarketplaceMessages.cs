@@ -103,6 +103,7 @@ public class MarketplaceMessages(AuthenticationStateProvider auth, IDbContextFac
     {
         await using var db = await factory.CreateDbContextAsync();
         var (user, workspace, agency) = await Owner(db);
+        await SubscriptionRules.RequireFreelancerDirectory(db,workspace.Id);
         await SubscriptionRules.RequireMarketplace(db,freelancerId);
         if (!await db.Users.AnyAsync(u => u.Id == freelancerId && u.AccountType == AccountTypes.Freelance && u.EmailConfirmed && u.Status == "Active")) throw new InvalidOperationException("This freelancer is no longer available.");
         var existing = await db.MarketplaceConversations.SingleOrDefaultAsync(c => c.WorkspaceId == workspace.Id && c.FreelancerId == freelancerId && c.Agency == agency);
@@ -125,8 +126,13 @@ public class MarketplaceMessages(AuthenticationStateProvider auth, IDbContextFac
         var (c, w, user) = await Participant(db, id);
         var otherId = user.Id == c.FreelancerId ? w.OwnerId : c.FreelancerId;
         if (!await db.Users.AnyAsync(u => u.Id == otherId && u.Status == "Active")) throw new InvalidOperationException("The recipient's account is inactive.");
+        await using var tx=await db.Database.BeginTransactionAsync();
+        // Continuing existing discussions remains available on every plan.
+        if(user.Id==w.OwnerId&&!await db.MarketplaceMessages.AnyAsync(m=>m.ConversationId==c.Id))
+            await SubscriptionRules.ChargeFreelancerApproach(db,w.Id,c.FreelancerId);
         AddMessage(db, c, user.Id, body, null, fileName, type, content);
         await db.SaveChangesAsync();
+        await tx.CommitAsync();
         updates.Publish();
     }
 
@@ -160,11 +166,14 @@ public class MarketplaceMessages(AuthenticationStateProvider auth, IDbContextFac
         }
         if (title.Length is < 1 or > 250) throw new InvalidOperationException("Enter a project title or select a position.");
         if (await db.ProjectInvitations.AnyAsync(i => i.ConversationId == id && i.Status == "Pending" && ((draft.PositionId != null && i.PositionId == draft.PositionId) || (draft.PositionId == null && i.Title == title)))) throw new InvalidOperationException("An invitation for this assignment is already awaiting a response. Continue the conversation instead.");
+        await using var tx=await db.Database.BeginTransactionAsync();
+        await SubscriptionRules.ChargeFreelancerApproach(db,w.Id,freelancerId);
         var invite = new ProjectInvitation { ConversationId = id, PositionId = draft.PositionId, Title = title, Summary = draft.Summary.Trim(), Start = draft.Start.Trim(), Duration = draft.Duration.Trim(), EmailDelivery = draft.NotifyEmail ? "Pending" : "Not requested" };
         db.Add(invite);
         AddMessage(db, c, user.Id, draft.Note.Trim(), invite.Id);
         AtsService.Audit(db, user.Id, "Project invitation sent", invite.Id.ToString(), title);
         await db.SaveChangesAsync();
+        await tx.CommitAsync();
         updates.Publish();
         if (draft.NotifyEmail) {
             var recipient = await db.Users.SingleAsync(u => u.Id == freelancerId);

@@ -23,6 +23,7 @@ public class AtsDbContext(DbContextOptions<AtsDbContext> options) : IdentityDbCo
 {
     public DbSet<ChatInboxDeletion> ChatInboxDeletions => Set<ChatInboxDeletion>();
     public DbSet<SubscriptionPlan> SubscriptionPlans => Set<SubscriptionPlan>();
+    public DbSet<AdminPaymentDetails> AdminPaymentDetails => Set<AdminPaymentDetails>();
     public DbSet<SubscriptionUsage> SubscriptionUsage => Set<SubscriptionUsage>();
     public DbSet<SubscriptionChange> SubscriptionChanges => Set<SubscriptionChange>();
     public DbSet<MarketplaceConversation> MarketplaceConversations => Set<MarketplaceConversation>();

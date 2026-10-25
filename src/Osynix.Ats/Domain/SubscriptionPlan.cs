@@ -12,6 +12,10 @@ public class SubscriptionTerms
     public bool MeetingIntegrations { get; set; }
     public bool Reports { get; set; }
     public bool EmailTemplates { get; set; }
+    public bool HiringManagerReviews { get; set; } = true;
+    public bool FreelancerDirectory { get; set; } = true;
+    public int? MonthlyFreelancerApproaches { get; set; }
+    public bool ZoomIntegration { get; set; } = true;
 }
 
 public class SubscriptionPlan : Record

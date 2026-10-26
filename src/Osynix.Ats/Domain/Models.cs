@@ -35,6 +35,10 @@ public class Position : Record
     public string JdHash { get; set; } = "";
     public Guid? JdDocumentId { get; set; }
     public string PositionSummary { get; set; } = "";
+    public string Industry { get; set; } = "";
+    public string Seniority { get; set; } = "";
+    public string JobDescriptionHtml { get; set; } = "";
+    public string JdNeedsAttentionJson { get; set; } = "[]";
     public string InternalNotes { get; set; } = "";
     public string Location { get; set; } = "";
     public string SalaryRange { get; set; } = "";

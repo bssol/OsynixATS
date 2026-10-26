@@ -88,11 +88,12 @@ public class AtsService(IDbContextFactory<AtsDbContext> factory, Access access,R
         if(input.CareersPublished&&targetWorkspace is null)throw new InvalidOperationException("Careers Publication Requires An Employer Workspace.");
         input.WorkspaceId=targetWorkspace;
         var autoCompany=employerForm&&p is null&&input.ClientId is null;if(autoCompany){input.Client=company!.CompanyName;}
+        if(!autoCompany&&input.ClientId is null&&p is null)throw new InvalidOperationException("Select an existing client. Create new clients from the Clients section.");
         var clients=await db.Clients.Where(c=>c.WorkspaceId==targetWorkspace).ToListAsync();
         var client=input.ClientId is not null ? clients.SingleOrDefault(x=>x.Id==input.ClientId) : clients.SingleOrDefault(x=>x.NormalizedName==Choices.MatchKey(input.Client));
         if(client is not null&&!autoCompany)await access.RequireClient(client.Id);
         if(input.ClientId is not null && client is null) throw new InvalidOperationException("Client not found.");
-        if(client is null) {if(!employerForm||p is not null)await access.RequirePermission("Clients.Create");client=new Client{WorkspaceId=targetWorkspace,Name=input.Client.Trim(),NormalizedName=Choices.MatchKey(input.Client)};db.Clients.Add(client);}
+        if(client is null) {if(!autoCompany)throw new InvalidOperationException("Client not found. Create and save the client from the Clients section, then select it here.");if(!employerForm||p is not null)await access.RequirePermission("Clients.Create");client=new Client{WorkspaceId=targetWorkspace,Name=input.Client.Trim(),NormalizedName=Choices.MatchKey(input.Client)};db.Clients.Add(client);}
         if(client.Status!="Active" && (p is null||p.ClientId!=client.Id||((input.Status is "Active" or "On Hold")&&p.Status is not("Active" or "On Hold")))) throw new InvalidOperationException("Choose an active client.");
         input.ClientId=client.Id; input.Client=client.Name;
         if(!user.IsInRole("Admin")&&!user.IsInRole("Employer") && p is null) input.AssignedRecruiter=actor;

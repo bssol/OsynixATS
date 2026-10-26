@@ -2359,6 +2359,10 @@ namespace Osynix.Ats.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Industry")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("IsAgencyPosition")
                         .HasColumnType("INTEGER");
 
@@ -2370,6 +2374,14 @@ namespace Osynix.Ats.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("JobDescription")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("JobDescriptionHtml")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("JdNeedsAttentionJson")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -2424,6 +2436,10 @@ namespace Osynix.Ats.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("SalaryRange")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Seniority")
                         .IsRequired()
                         .HasColumnType("TEXT");
 

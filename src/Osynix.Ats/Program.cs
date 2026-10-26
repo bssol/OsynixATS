@@ -85,6 +85,7 @@ builder.Services.AddSingleton<IPublicApplicationAssessmentQueue>(sp=>sp.GetRequi
 builder.Services.AddHostedService(sp=>sp.GetRequiredService<PublicApplicationAssessmentQueue>());
 builder.Services.AddHostedService<SubscriptionRenewalReminderService>();
 builder.Services.AddHostedService<UpgradePaymentReminderService>();
+builder.Services.AddHostedService<PortalEmailWorker>();
 builder.Services.AddHostedService<SubscriptionLifecycleWorker>();
 var app=builder.Build();
 using(var scope=app.Services.CreateScope()) {

@@ -38,9 +38,12 @@ public static class SubscriptionRules
         if(workspaceId is not Guid id)return;
         await SubscriptionLifecycle.ApplyDue(db,id);
         var workspace=await db.EmployerWorkspaces.AsNoTracking().SingleAsync(w=>w.Id==id);
-        if(Terms(workspace)?.HiringManagerReviews==false)
-            throw new UnauthorizedAccessException("Hiring Manager review links require a plan that includes this feature. Upgrade in Settings → Subscriptions.");
+        if(!await PaidPortal(db,workspace))
+            throw new UnauthorizedAccessException("Client / Hiring Manager portal access requires Starter or a higher paid plan. Upgrade in Settings → Subscriptions.");
     }
+    public static async Task<bool> PaidPortal(AtsDbContext db,EmployerWorkspace workspace)=>
+        Terms(workspace)?.HiringManagerReviews!=false && workspace.SubscriptionPlanId is Guid planId &&
+        await db.SubscriptionPlans.AnyAsync(p=>p.Id==planId&&p.Code!="free");
     public static Task<int> FreelancerApproaches(AtsDbContext db,Guid workspaceId){var month=Month(DateTime.UtcNow);return db.SubscriptionUsage.Where(u=>u.WorkspaceId==workspaceId&&u.MonthUtc==month&&u.Kind.StartsWith("FreelancerApproach:")).Select(u=>u.Kind).Distinct().CountAsync();}
     public static async Task ChargeFreelancerApproach(AtsDbContext db,Guid workspaceId,string freelancerId)
     {

@@ -27,6 +27,13 @@ public static class HiringReviewEndpoints {
     return format=="pdf"?Results.File(await reports.Pdf(html),"application/pdf","Osynix-Assessment-Report.pdf"):Results.Content(html,"text/html");
    }catch(UnauthorizedAccessException){return Results.Unauthorized();}catch(InvalidOperationException e){return Results.BadRequest(e.Message);}
   }).AllowAnonymous().RequireRateLimiting("review");
+  app.MapGet("/review/messages",async Task<IResult>(bool? read,HiringReviewService review,HttpContext c)=>{
+   Private(c);try{return Results.Json(await review.PortalMessages(c.Request.Cookies[HiringReviewService.CookieName],read==true));}catch(UnauthorizedAccessException){return Results.Unauthorized();}
+  }).AllowAnonymous().RequireRateLimiting("review");
+  app.MapPost("/review/messages",async Task<IResult>(PortalMessageInput input,HiringReviewService review,IAntiforgery csrf,HttpContext c)=>{
+   Private(c);try{await csrf.ValidateRequestAsync(c);await review.PortalSend(c.Request.Cookies[HiringReviewService.CookieName],input);return Results.Ok(new{message="Message sent to your ATS team."});}
+   catch(AntiforgeryValidationException){return Results.BadRequest(new{message="Reload the portal before sending."});}catch(UnauthorizedAccessException){return Results.Unauthorized();}catch(InvalidOperationException e){return Results.BadRequest(new{message=e.Message});}
+  }).AllowAnonymous().RequireRateLimiting("review");
   app.MapGet("/review/preview",async Task<IResult>(string? ids,HiringReviewService review,ReportService reports,HttpContext c)=>{
    Private(c);var values=(ids??"").Split(',',StringSplitOptions.RemoveEmptyEntries);
    if(values.Length is <1 or >50||values.Any(x=>!Guid.TryParse(x,out _)))return Results.BadRequest("Select 1–50 saved profiles.");

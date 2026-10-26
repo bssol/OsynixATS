@@ -45,6 +45,8 @@ public class AtsDbContext(DbContextOptions<AtsDbContext> options) : IdentityDbCo
     public DbSet<EmployerWorkspace> EmployerWorkspaces => Set<EmployerWorkspace>();
     public DbSet<EmployerAccessRequest> EmployerAccessRequests => Set<EmployerAccessRequest>();
     public DbSet<HiringReviewGrant> HiringReviewGrants => Set<HiringReviewGrant>();
+    public DbSet<ClientPortalMessage> ClientPortalMessages => Set<ClientPortalMessage>();
+    public DbSet<PortalEmailDelivery> PortalEmailDeliveries => Set<PortalEmailDelivery>();
     public DbSet<HiringSubmission> HiringSubmissions => Set<HiringSubmission>();
     public DbSet<Position> Positions => Set<Position>();
     public DbSet<Criterion> Criteria => Set<Criterion>();
@@ -130,6 +132,10 @@ public class AtsDbContext(DbContextOptions<AtsDbContext> options) : IdentityDbCo
         b.Entity<EmployerWorkspace>().HasOne<AtsUser>().WithMany().HasForeignKey(x=>x.OwnerId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<EmployerAccessRequest>().HasOne<EmployerWorkspace>().WithMany().HasForeignKey(x=>x.WorkspaceId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<HiringReviewGrant>().HasIndex(x=>x.ClientId);
+        b.Entity<ClientPortalMessage>().HasIndex(x=>new{x.GrantId,x.CreatedUtc});
+        b.Entity<ClientPortalMessage>().HasOne<HiringReviewGrant>().WithMany().HasForeignKey(x=>x.GrantId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ClientPortalMessage>().HasOne<Position>().WithMany().HasForeignKey(x=>x.PositionId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<PortalEmailDelivery>().HasIndex(x=>x.Key).IsUnique();
         b.Entity<HiringReviewGrant>().HasIndex(x=>x.EmailKey).IsUnique();
         b.Entity<HiringReviewGrant>().HasIndex(x=>x.TokenHash).IsUnique();
         b.Entity<HiringSubmission>().HasIndex(x=>new{x.GrantId,x.AssessmentId}).IsUnique();

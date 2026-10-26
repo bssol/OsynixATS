@@ -4,6 +4,7 @@
 @inject WorkspaceService Workspace
 @inject AtsService Ats
 @inject Access Access
+@inject HiringReviewService Review
 @inject RecruitmentUpdates Updates
 @implements IDisposable
 <PageTitle>Clients · Osynix ATS</PageTitle>
@@ -15,20 +16,20 @@
 @foreach(var c in clients.Where(x=>(clientStatus=="All"||(clientStatus==""?x.Status!="Archived":x.Status==clientStatus))&&$"{x.Name} {x.Industry}".Contains(search,StringComparison.OrdinalIgnoreCase))){<tr><td><b>@c.Name</b></td><td>@c.Industry<small>@c.Location</small></td><td>@positions.Count(x=>x.ClientId==c.Id)</td><td>@c.Contacts.Count</td><td>@c.Status</td><td><button class="secondary" @onclick="()=>Open(c)">Open</button></td></tr>}
 </tbody></table>@if(clients.Count==0){<p class="empty">No clients are assigned to your account yet.</p>}</section>
 @if(edit is not null){<div class="overlay"><section class="drawer wide" role="dialog" aria-modal="true" aria-label="Client editor"><div class="drawer-head"><h2>@(clients.Any(x=>x.Id==edit.Id)?edit.Name:"New Client")</h2><button class="secondary" @onclick="()=>edit=null">Close</button></div><Feedback Error="@Error" Busy="Busy" />
-@if(clients.Any(c=>c.Id==edit.Id)){<ClientReviewLinkPanel ClientId="edit.Id" />}
+@if(clients.Any(c=>c.Id==edit.Id)){<ClientPortalAccessPanel ClientId="edit.Id" />}
 <fieldset disabled="@(!canEdit)" class="client-fields"><div class="form-grid"><label>Client Name<input @bind="edit.Name" /></label><label>Industry<input @bind="edit.Industry" /></label><label>Location<input @bind="edit.Location" /></label><label>Website<input @bind="edit.Website" /></label><label>Status<select @bind="edit.Status"><option>Active</option><option>Inactive</option><option>Archived</option></select></label></div><label>Recruitment Context<textarea rows="4" @bind="edit.Notes"></textarea></label>
 <div class="section-heading"><h3>Contacts</h3><button class="secondary" @onclick="()=>edit.Contacts.Add(new ClientContact())">+ Contact</button></div>
-@foreach(var contact in edit.Contacts){<div class="criterion-editor"><div class="form-grid"><label>Name<input @bind="contact.Name" /></label><label>Title<input @bind="contact.Title" /></label><label>Email<input type="email" @bind="contact.Email" /></label><label>Phone<input @bind="contact.Phone" /></label></div>@if(clients.Any(c=>c.Id==edit.Id)&&cContactSaved(contact.Id)){<ClientReviewLinkPanel ClientId="edit.Id" ContactId="contact.Id" Compact="true" />}<button class="secondary danger" @onclick="()=>edit.Contacts.Remove(contact)">Remove Contact</button></div>}
+@foreach(var contact in edit.Contacts){<div class="criterion-editor"><div class="form-grid"><label>Name<input @bind="contact.Name" /></label><label>Title<input @bind="contact.Title" /></label><label>Email<input type="email" @bind="contact.Email" /></label><label>Phone<input @bind="contact.Phone" /></label></div><label class="check"><input type="checkbox" @bind="contact.PortalEnabled" disabled="@(!canPortal)" /> Give this contact access to the Client / Hiring Manager portal</label><small class="muted">@(canPortal?"Save the client to enable operational portal access and queue an invitation when an email is provided.":"Portal access is included from Starter. Contact details can be saved on your current plan.")</small>@if(contact.PortalEnabled&&cContactSaved(contact.Id)){<ClientPortalAccessPanel ClientId="edit.Id" ContactId="contact.Id" />}<button class="secondary danger" @onclick="()=>edit.Contacts.Remove(contact)">Remove Contact</button></div>}
 </fieldset><h3>Positions</h3>@foreach(var p in positions.Where(x=>x.ClientId==edit.Id)){<p><a href="@($"/positions?ref={Uri.EscapeDataString(p.Reference)}")">#@p.Reference — @p.Title</a> · @p.Status</p>}
 @if(canEdit){<button disabled="@Busy" @onclick="Save">Save Client</button>@if(clients.Any(c=>c.Id==edit.Id)){<button class="secondary" disabled="@Busy" @onclick="Archive">Archive Client</button>}}
 @if(canDelete&&clients.Any(c=>c.Id==edit.Id)&&!positions.Any(p=>p.ClientId==edit.Id)){@if(confirmDelete){<p>Remove This Unused Client And Its Contacts?</p><button class="secondary danger" disabled="@Busy" @onclick="DeleteClient">Confirm Removal</button><button class="secondary" @onclick="()=>confirmDelete=false">Keep Client</button>}else{<button class="secondary danger" @onclick="()=>confirmDelete=true">Remove Unused Client</button>}}</section></div>}
 }
 @code{
-List<Client> clients=[];List<Position> positions=[];Client? edit;string search="",clientStatus="";bool canView,canEdit,canDelete,confirmDelete;
+List<Client> clients=[];List<Position> positions=[];Client? edit;string search="",clientStatus="";bool canView,canEdit,canDelete,confirmDelete,canPortal;
 protected override Task OnInitializedAsync(){Updates.Changed+=Changed;return Run(Load);}
 void Changed()=>_=InvokeAsync(async()=>{await Run(Load);StateHasChanged();});
 public void Dispose()=>Updates.Changed-=Changed;
-async Task Load(){canView=await Access.Can("Clients.View");if(!canView){clients=[];positions=[];edit=null;return;}canEdit=await Access.Can("Clients.Create");canDelete=await Access.Can("Clients.Delete");clients=await Workspace.Clients();positions=await Ats.Positions();}
+async Task Load(){canView=await Access.Can("Clients.View");if(!canView){clients=[];positions=[];edit=null;return;}canPortal=await Review.PortalAllowed(await Access.WorkspaceId());canEdit=await Access.Can("Clients.Create");canDelete=await Access.Can("Clients.Delete");clients=await Workspace.Clients();positions=await Ats.Positions();}
 bool cContactSaved(Guid id)=>clients.Any(c=>c.Contacts.Any(contact=>contact.Id==id));
 void NewClient(){confirmDelete=false;edit=new Client();Error="";}
 void Open(Client c){confirmDelete=false;edit=JsonSerializer.Deserialize<Client>(JsonSerializer.Serialize(c));Error="";}

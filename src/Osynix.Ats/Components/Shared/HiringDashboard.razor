@@ -119,7 +119,7 @@
 
     @foreach(var a in saved.Where(x=>x.InterviewStatus=="Scheduled").OrderByDescending(x=>x.UpdatedUtc).Take(4)){
 
-        <div class="interview-row"><div class="interview-time"><b>Not set</b><small>Time</small></div><span class="candidate-initials">@Initials(a.CandidateName)</span><div class="interview-person"><b>@a.CandidateName</b><small>@a.Position?.Title</small></div><span class="interview-stage">@a.Stage</span><a class="button secondary interview-view" href="@($"/candidates?id={a.CandidateId}")">View</a></div>
+        <div class="interview-row"><div class="interview-time"><b>@(a.InterviewDateTimeUtc is DateTime interviewDate?InterviewService.When(interviewDate,a.InterviewTimeZone):"Time not set")</b><small>@(string.IsNullOrWhiteSpace(a.InterviewTimeZone)?"Scheduled manually":a.InterviewTimeZone)</small></div><span class="candidate-initials">@Initials(a.CandidateName)</span><div class="interview-person"><b>@a.CandidateName</b><small>@a.Position?.Title · Awaiting candidate response outside ATS</small></div><span class="interview-stage">Scheduled</span><a class="button secondary interview-view" href="@($"/candidates?id={a.CandidateId}")">View</a></div>
 
     }
 

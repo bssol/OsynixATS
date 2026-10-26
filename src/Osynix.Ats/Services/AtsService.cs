@@ -6,7 +6,7 @@ using Osynix.Ats.Domain;
 namespace Osynix.Ats.Services;
 
 public record PositionAllowance(int Used,int Limit,string Kind="",string WorkspaceName="",bool Owner=true,bool AgencyEnabled=false,bool AgencyMode=false);
-public class AtsService(IDbContextFactory<AtsDbContext> factory, Access access,RecruitmentUpdates? updates=null)
+public class AtsService(IDbContextFactory<AtsDbContext> factory, Access access,RecruitmentUpdates? updates=null,HiringReviewService? portal=null)
 {
     public async Task<PositionAllowance?> Allowance(){var workspaceId=await access.WorkspaceId();if(workspaceId is not Guid id)return null;await using var db=await factory.CreateDbContextAsync();var w=await db.EmployerWorkspaces.AsNoTracking().SingleAsync(w=>w.Id==id);var used=await db.Positions.CountAsync(p=>p.WorkspaceId==id&&(p.Status=="Active"||p.Status=="On Hold"));return new(used,w.FreePositionSlots+w.AdditionalPositionSlots,w.Kind,w.CompanyName,(await access.Context())?.Owner==true,w.AgencyEnabled,await access.PositionMode(db)==true);}
     public async Task<List<Position>> Positions()
@@ -82,6 +82,8 @@ public class AtsService(IDbContextFactory<AtsDbContext> factory, Access access,R
         if(input.Status!="Active")input.CareersPublished=false;
         if(input.CareersPublished&&string.IsNullOrWhiteSpace(input.PublicJobDescription))throw new InvalidOperationException("Add And Review A Public Job Description Before Publishing. Copy The JD Text In Review & Save, Or Turn Off Careers Page Publishing To Save Privately.");
         var targetWorkspace=p?.WorkspaceId??workspaceId;
+        var previousManagerEmail=p?.HiringManagerEmail??"";
+        if(input.HiringManagerPortalEnabled&&p?.HiringManagerPortalEnabled!=true)await SubscriptionRules.RequireHiringReviews(db,targetWorkspace);
         if(user.IsInRole("Admin")&&p is null&&input.ClientId is Guid selectedClient){targetWorkspace=(await db.Clients.SingleOrDefaultAsync(c=>c.Id==selectedClient))?.WorkspaceId;}
         if(input.CareersPublished&&targetWorkspace is null)throw new InvalidOperationException("Careers Publication Requires An Employer Workspace.");
         input.WorkspaceId=targetWorkspace;
@@ -145,10 +147,11 @@ public class AtsService(IDbContextFactory<AtsDbContext> factory, Access access,R
             }
             p.CareersPublished=input.CareersPublished;p.PublicJobDescription=input.PublicJobDescription;
             p.Title=input.Title.Trim();p.Client=input.Client;p.ClientId=input.ClientId;p.Location=input.Location;p.SalaryRange=input.SalaryRange;p.EmploymentType=input.EmploymentType;
-            p.Department=input.Department;p.WorkArrangement=input.WorkArrangement;p.SalaryMinimum=input.SalaryMinimum;p.SalaryMaximum=input.SalaryMaximum;p.SalaryCurrency=input.SalaryCurrency;p.SalaryPeriod=input.SalaryPeriod;p.ShowSalaryPublicly=input.ShowSalaryPublicly;p.HiringManagerEmail=input.HiringManagerEmail;p.HiringManagerPhone=input.HiringManagerPhone;
+            p.Department=input.Department;p.WorkArrangement=input.WorkArrangement;p.SalaryMinimum=input.SalaryMinimum;p.SalaryMaximum=input.SalaryMaximum;p.SalaryCurrency=input.SalaryCurrency;p.SalaryPeriod=input.SalaryPeriod;p.ShowSalaryPublicly=input.ShowSalaryPublicly;p.HiringManagerEmail=input.HiringManagerEmail;p.HiringManagerPhone=input.HiringManagerPhone;p.HiringManagerPortalEnabled=input.HiringManagerPortalEnabled;
             p.Priority=input.Priority;p.HiringTarget=input.HiringTarget;p.HiringContact=input.HiringContact;p.AssignedRecruiter=input.AssignedRecruiter;p.InternalNotes=input.InternalNotes;
             if(input.Status is "Closed" or "Filled" or "Cancelled" && input.ClosedDate is not null)p.ClosedDate=input.ClosedDate;
             p.Status=input.Status;p.ClosureReason=input.ClosureReason;p.FilledSource=input.FilledSource;p.HiredCandidateId=input.Status=="Filled"?input.HiredCandidateId:null;
+            p.DraftAnalysisSignature=input.DraftAnalysisSignature;p.DraftWorkflowStep=input.DraftWorkflowStep;p.DraftSourceReviewed=input.DraftSourceReviewed;p.DraftCriteriaReviewed=input.DraftCriteriaReviewed;
             if(!p.CriteriaLocked&&!used) {
                 p.JobDescription=input.JobDescription;p.ClientNotes=input.ClientNotes;p.PositionSummary=input.PositionSummary;p.JdDocumentId=input.JdDocumentId;p.JdHash=input.JdHash;
 
@@ -165,6 +168,7 @@ public class AtsService(IDbContextFactory<AtsDbContext> factory, Access access,R
           foreach(var id in external.Where(id=>!previousAssignments.Any(a=>a.UserId==id)))db.PositionRecruiterAssignments.Add(new(){PositionId=p.Id,UserId=id});
         }
         p.LastUpdatedBy=actor;
+        if(portal is not null)await portal.ConfigurePosition(db,p,previousManagerEmail);
         if(p.Status is "Closed" or "Filled" or "Cancelled") {p.ClosedBy=p.ClosedBy.Length>0?p.ClosedBy:actor;p.ClosedDate??=DateTime.UtcNow;p.ClosureStatus=p.Status;}
         Audit(db,uid,"Position saved",p.Id.ToString(),p.Reference,null,null,previous,JsonSerializer.Serialize(new{p.Status,p.Priority,p.HiringTarget,p.ClosedDate,p.ClosureReason,p.FilledSource,p.AssignedRecruiter}));
         await db.SaveChangesAsync(); await tx.CommitAsync();updates?.Publish();

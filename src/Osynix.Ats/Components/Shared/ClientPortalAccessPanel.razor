@@ -1,0 +1,14 @@
+@inherits PageBase
+@inject HiringReviewService Review
+@inject IJSRuntime JS
+@if(info?.Link is string link){
+<section class="portal-access-summary"><div><b>Client / Hiring Manager portal</b><small>@info.Status · @info.Profiles shared profiles · Operational access only</small></div><div class="pipeline-submit-actions"><a class="button secondary" href="@link" target="_blank" rel="noopener noreferrer">Open Portal</a><button type="button" class="secondary" @onclick="Copy">Copy Access Link</button></div><small>Invitation email is queued when an email is provided. Email links require a public HTTPS app address and configured email delivery.</small><Feedback Error="@Error" Notice="@Notice" /></section>
+}
+@code {
+ [Parameter]public Guid ClientId{get;set;}
+ [Parameter]public Guid? ContactId{get;set;}
+ [Parameter]public Guid? PositionId{get;set;}
+ ClientReviewLink? info;
+ protected override async Task OnParametersSetAsync(){try{info=await Review.PortalAccess(ClientId,PositionId,ContactId);}catch(UnauthorizedAccessException){info=null;}}
+ Task Copy()=>Run(async()=>Notice=await JS.InvokeAsync<bool>("osynixCopyReviewLink",info!.Link)?"Portal access link copied.":"Open the portal and copy its invitation link from this panel.");
+}

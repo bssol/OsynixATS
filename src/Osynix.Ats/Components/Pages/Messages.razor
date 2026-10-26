@@ -4,6 +4,7 @@
 @implements IDisposable
 @inject MarketplaceMessages InboxService
 @inject SupportInboxService SupportInbox
+@inject HiringReviewService Review
 @inject RecruitmentUpdates Updates
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider Auth
@@ -19,7 +20,12 @@
         @if(!Filtered.Any()){<p class="empty small">@(unreadOnly?"You are all caught up.":adminSide?"No support conversations yet.":"No conversations yet. Use Chat with Support for help, or review project messages here.")</p>}
     </aside>
     <section class="message-thread">
-    @if(supportDetail is not null){
+    @if(portalDetail is not null){
+        <header class="message-thread-heading"><span class="conversation-avatar">@Initial(portalDetail.Name)</span><div><h2>@portalDetail.Name</h2><p>Client / Hiring Manager portal</p></div></header>
+        <div class="message-history" aria-live="polite">@foreach(var message in portalDetail.Messages){<article class="message-row @(!message.FromClient?"mine":"")"><div class="message-author">@message.SenderName <time>@message.SentUtc.ToString("dd MMM · HH:mm") UTC · @message.Position</time></div><div class="message-bubble preserve">@message.Body</div></article>}</div>
+        <div class="message-compose"><label>Position<select @bind="portalPosition">@foreach(var position in portalDetail.Positions){<option value="@position.Id">@position.Title</option>}</select></label><label class="sr-only" for="portal-reply">Reply to client</label><textarea id="portal-reply" maxlength="10000" rows="2" @bind="body" @bind:event="oninput" placeholder="Write a client-facing reply…"></textarea><div class="composer-actions"><small class="muted">This reply is visible in the client portal. Candidate contact details are removed.</small><button disabled="@(Busy||string.IsNullOrWhiteSpace(body)||portalPosition is null)" @onclick="SendPortal">Send reply</button></div></div>
+    }
+    else if(supportDetail is not null){
         <header class="message-thread-heading"><span class="conversation-avatar">@Initial(supportDetail.UserName)</span><div><h2>@(adminSide?supportDetail.UserName:"Osynix Support")</h2><p>@supportDetail.Subject</p></div>@if(supportDetail.RequestId is Guid requestId){<span class="support-request-ref">Request · @requestId.ToString("N")[..8]</span>}</header>
         <div class="support-session-toolbar"><div><b>@supportDetail.IssueType</b><small>Started @supportDetail.StartedUtc.ToString("dd MMM yyyy · HH:mm") UTC · @supportDetail.Status @if(supportDetail.ClosedUtc is DateTime ended){<span> · Ended @ended.ToString("dd MMM yyyy · HH:mm") UTC</span>}</small></div><a class="button secondary" href="@($"/messages/support-transcript/{supportDetail.Id}")" download>Download transcript</a><button class="secondary delete-chat-button" disabled="@Busy" @onclick="()=>deleteChatOpen=true">Delete chat</button>@if(supportDetail.Status=="Open"){<button class="secondary" disabled="@Busy" @onclick="EndSession">End session</button>}</div>
         @if(!adminSide){<details class="support-session-history"><summary>@(adminSide?"Session history & archive":"Active support sessions") · @supportConversations.Count(c=>c.UserId==supportDetail.UserId)</summary><div class="support-session-list">@foreach(var session in supportConversations.Where(c=>c.UserId==supportDetail.UserId).OrderByDescending(c=>c.StartedUtc)){<button class="secondary @(session.Id==supportDetail.Id?"selected":"")" @onclick="()=>ViewSession(session.Id)"><b>@session.IssueType · @session.StartedUtc.ToString("dd MMM yyyy · HH:mm") UTC</b><span>@session.Context</span><small>@(session.Status=="Closed"?"Archived":"Active") @if(session.Unread>0){<span> · @session.Unread unread</span>}</small></button>}</div></details>}
@@ -61,30 +67,35 @@
 @code{
     [SupplyParameterFromQuery(Name="conversation")] public Guid? ConversationId{get;set;}
     [SupplyParameterFromQuery(Name="support")] public Guid? SupportId{get;set;}
+    [SupplyParameterFromQuery(Name="portal")] public Guid? PortalId{get;set;}
     [SupplyParameterFromQuery(Name="chat")] public string? Chat{get;set;}
     [SupplyParameterFromQuery(Name="request")] public Guid? RequestId{get;set;}
     record InboxRow(Guid Id,string Kind,string Name,string Context,string Preview,DateTime UpdatedUtc,int Unread,string Status,string GroupUserId="");
     List<ConversationSummary> conversations=[];List<SupportConversationSummary> supportConversations=[];List<InboxRow> entries=[];List<SupportUserOption> supportUsers=[];
+    List<PortalConversation> portalConversations=[];PortalThread? portalDetail;Guid? portalPosition;
     ConversationDetail? detail;SupportConversationDetail? supportDetail;ProjectInvitation? question;
     string search="",body="",fileName="",questionText="",targetUser="",newSubject="",issueType="General Support";byte[]? fileContent;bool unreadOnly,inviteOpen,disposed,adminSide,newChatOpen,deleteChatOpen;
     IEnumerable<InboxRow> Filtered=>entries.Where(c=>(!unreadOnly||c.Unread>0)&&$"{c.Name} {c.Context} {c.Preview} {c.Status}".Contains(search,StringComparison.OrdinalIgnoreCase));
     protected override void OnInitialized()=>Updates.Changed+=Changed;
     protected override Task OnParametersSetAsync()=>Run(InitializePage);
-    async Task InitializePage(){detail=null;supportDetail=null;deleteChatOpen=false;body="";RemoveAttachment();if(Chat=="support"){Chat=null;var principal=(await Auth.GetAuthenticationStateAsync()).User;adminSide=principal.IsInRole("Admin")||principal.IsInRole("SubAdmin");if(adminSide){supportUsers=await SupportInbox.Users();newChatOpen=true;Navigation.NavigateTo("/messages",replace:true);}else{newSubject="";issueType="General Support";newChatOpen=true;Navigation.NavigateTo("/messages",replace:true);}return;}if(RequestId is Guid requestId){var id=await SupportInbox.FindRequestConversation(requestId);if(id is Guid conversationId){Navigation.NavigateTo($"/messages?support={conversationId}",replace:true);return;}}await Load();}
+    async Task InitializePage(){detail=null;supportDetail=null;portalDetail=null;deleteChatOpen=false;body="";RemoveAttachment();if(Chat=="support"){Chat=null;var principal=(await Auth.GetAuthenticationStateAsync()).User;adminSide=principal.IsInRole("Admin")||principal.IsInRole("SubAdmin");if(adminSide){supportUsers=await SupportInbox.Users();newChatOpen=true;Navigation.NavigateTo("/messages",replace:true);}else{newSubject="";issueType="General Support";newChatOpen=true;Navigation.NavigateTo("/messages",replace:true);}return;}if(RequestId is Guid requestId){var id=await SupportInbox.FindRequestConversation(requestId);if(id is Guid conversationId){Navigation.NavigateTo($"/messages?support={conversationId}",replace:true);return;}}await Load();}
     async Task Load(){
         var principal=(await Auth.GetAuthenticationStateAsync()).User;adminSide=principal.IsInRole("Admin")||principal.IsInRole("SubAdmin");
+        portalConversations=(principal.IsInRole("Employer")||principal.IsInRole("Recruiter")||principal.IsInRole("Admin"))?await Review.PortalInbox():[];
         supportConversations=await SupportInbox.Inbox();
         conversations=(principal.IsInRole("Employer")||principal.IsInRole("Recruiter"))?await InboxService.Inbox():[];
         BuildEntries();
-        if(SupportId is Guid supportId){supportDetail=await SupportInbox.Open(supportId);detail=null;}
+        if(PortalId is Guid portalId){portalDetail=await Review.PortalOpen(portalId);portalPosition=portalDetail.Positions.Any(p=>p.Id==portalPosition)?portalPosition:portalDetail.Positions.FirstOrDefault()?.Id;detail=null;supportDetail=null;portalConversations=await Review.PortalInbox();}
+        else if(SupportId is Guid supportId){supportDetail=await SupportInbox.Open(supportId);detail=null;}
         else{var id=ConversationId??(detail is not null?detail.Id:entries.FirstOrDefault(e=>e.Kind=="Project")?.Id);if(id is Guid selected){detail=await InboxService.Open(selected);supportDetail=null;}}
         supportConversations=await SupportInbox.Inbox();
         if(principal.IsInRole("Employer")||principal.IsInRole("Recruiter"))conversations=await InboxService.Inbox();
         BuildEntries();
     }
-    bool Selected(InboxRow row)=>row.Kind=="Support"?supportDetail?.UserId==row.GroupUserId:detail?.Id==row.Id;
-    void Select(InboxRow row)=>Navigation.NavigateTo(row.Kind=="Support"?$"/messages?support={row.Id}":$"/messages?conversation={row.Id}");
+    bool Selected(InboxRow row)=>row.Kind=="Portal"?portalDetail?.Id==row.Id:row.Kind=="Support"?supportDetail?.UserId==row.GroupUserId:detail?.Id==row.Id;
+    void Select(InboxRow row)=>Navigation.NavigateTo(row.Kind=="Portal"?$"/messages?portal={row.Id}":row.Kind=="Support"?$"/messages?support={row.Id}":$"/messages?conversation={row.Id}");
     void ViewSession(Guid id)=>Navigation.NavigateTo($"/messages?support={id}");
+    Task SendPortal()=>Run(async()=>{await Review.PortalReply(portalDetail!.Id,portalPosition!.Value,body);body="";await Load();});
     Task Send()=>Run(async()=>{await InboxService.Send(detail!.Id,body,fileName,fileContent);body="";RemoveAttachment();await Load();});
     Task SendSupport()=>Run(async()=>{await SupportInbox.Send(supportDetail!.Id,body,fileName,fileContent);body="";RemoveAttachment();await Load();});
     Task StartSupport()=>adminSide?OpenNewChat():Run(()=>{newSubject="";issueType="General Support";newChatOpen=true;return Task.CompletedTask;});
@@ -100,7 +111,7 @@
         Navigation.NavigateTo("/messages",replace:true);
     });
     Task EndSession()=>Run(async()=>{if(supportDetail is null)return;await SupportInbox.EndSession(supportDetail.Id);await Load();Notice="Session ended. Download your transcript now if you would like a copy. The session remains in Admin records.";});
-    void BuildEntries()=>entries=SupportInboxService.GroupInbox(supportConversations).Select(c=>new InboxRow(c.LatestSessionId,"Support",c.Name,$"{c.Sessions} support session(s)",c.Preview,c.UpdatedUtc,c.Unread,"",c.UserId)).Concat(conversations.Select(c=>new InboxRow(c.Id,"Project",c.Name,c.Context,c.Preview,c.UpdatedUtc,c.Unread,c.InvitationStatus.Length>0?"Invitation: "+c.InvitationStatus:""))).OrderByDescending(c=>c.UpdatedUtc).ToList();
+    void BuildEntries()=>entries=SupportInboxService.GroupInbox(supportConversations).Select(c=>new InboxRow(c.LatestSessionId,"Support",c.Name,$"{c.Sessions} support session(s)",c.Preview,c.UpdatedUtc,c.Unread,"",c.UserId)).Concat(conversations.Select(c=>new InboxRow(c.Id,"Project",c.Name,c.Context,c.Preview,c.UpdatedUtc,c.Unread,c.InvitationStatus.Length>0?"Invitation: "+c.InvitationStatus:""))).Concat(portalConversations.Select(c=>new InboxRow(c.Id,"Portal",c.Name,c.Context,c.Preview,c.UpdatedUtc,c.Unread,""))).OrderByDescending(c=>c.UpdatedUtc).ToList();
     Task Attach(InputFileChangeEventArgs e)=>Run(async()=>{RemoveAttachment();var file=e.File;if(file.Size>5*1024*1024)throw new InvalidOperationException("Attachments must be 5 MB or smaller.");using var stream=new MemoryStream();await file.OpenReadStream(5*1024*1024).CopyToAsync(stream);fileContent=stream.ToArray();fileName=file.Name;});
     void RemoveAttachment(){fileContent=null;fileName="";}
     static string Initial(string name)=>string.IsNullOrWhiteSpace(name)?"?":name[..1].ToUpperInvariant();

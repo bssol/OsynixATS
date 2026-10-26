@@ -134,6 +134,7 @@ public class SubscriptionService(EmployerService employers,Access access,IDbCont
         if(p.Revision!=input.Revision)throw new DbUpdateConcurrencyException("This plan changed. Reload before saving.");
         if(p.AccountCategory!=input.AccountCategory||p.Code!=input.Code)throw new InvalidOperationException("The plan's account type and code cannot be changed.");
         var previous=JsonSerializer.Serialize(p);
+        terms.HiringManagerReviews=p.Code!="free";
         p.Name=input.Name.Trim();p.Description=input.Description.Trim();p.Published=input.Published;p.PricingConfirmed=input.PricingConfirmed;p.MonthlyPkr=input.MonthlyPkr;p.AnnualPkr=input.AnnualPkr;p.MonthlyUsd=input.MonthlyUsd;p.AnnualUsd=input.AnnualUsd;p.PromotionPercent=input.PromotionPercent;p.PromotionLabel=input.PromotionLabel.Trim();p.PromotionStartsOn=input.PromotionPercent>0?input.PromotionStartsOn:null;p.PromotionEndsOn=input.PromotionPercent>0?input.PromotionEndsOn:null;p.TermsJson=JsonSerializer.Serialize(terms);
         var updated=0;
         if(applyToSubscribers){

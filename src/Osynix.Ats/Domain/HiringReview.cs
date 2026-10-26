@@ -2,12 +2,34 @@ using System.ComponentModel.DataAnnotations;
 namespace Osynix.Ats.Domain;
 public class HiringReviewGrant : Record {
  public Guid? ClientId{get;set;}
+ public Guid? PositionId{get;set;}
+ public Guid? ContactId{get;set;}
  [MaxLength(320)]public string EmailKey{get;set;}="";
  public string Name{get;set;}="";
  public string TokenHash{get;set;}="";
  public string ProtectedToken{get;set;}="";
  public DateTime ExpiresUtc{get;set;}
  public bool Revoked{get;set;}
+}
+public class ClientPortalMessage : Record {
+ public Guid GrantId {get;set;}
+ public Guid PositionId {get;set;}
+ public bool FromClient {get;set;}
+ public string SenderName {get;set;}="";
+ public string Body {get;set;}="";
+ public DateTime? ReadUtc {get;set;}
+}
+public class PortalEmailDelivery : Record {
+ public string Key {get;set;}="";
+ public string Email {get;set;}="";
+ public string Subject {get;set;}="";
+ public string Body {get;set;}="";
+ public bool RequiresPublicAddress {get;set;}
+ public Guid? GrantId {get;set;}
+ public string Status {get;set;}="Pending";
+ public int Attempts {get;set;}
+ public DateTime? SentUtc {get;set;}
+ public DateTime NextAttemptUtc {get;set;}=DateTime.UtcNow;
 }
 public class HiringSubmission : Record {
  public Guid GrantId{get;set;}

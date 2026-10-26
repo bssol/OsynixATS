@@ -47,6 +47,7 @@ public class Position : Record
     public bool ShowSalaryPublicly{get;set;}
     public string HiringManagerEmail{get;set;}="";
     public string HiringManagerPhone{get;set;}="";
+    public bool HiringManagerPortalEnabled { get; set; }
     public string EmploymentType { get; set; } = "Full-time";
     public string Status { get; set; } = "Active";
     public string JobDescription { get; set; } = "";
@@ -54,6 +55,10 @@ public class Position : Record
     public string ClosureReason { get; set; } = "";
     public Guid? HiredCandidateId { get; set; }
     public bool CriteriaLocked { get; set; }
+    public string DraftAnalysisSignature { get; set; } = "";
+    public string DraftWorkflowStep { get; set; } = "";
+    public bool DraftSourceReviewed { get; set; }
+    public bool DraftCriteriaReviewed { get; set; }
     public List<Criterion> Criteria { get; set; } = [];
 }
 public class Criterion : Record
@@ -216,6 +221,7 @@ public class Client : Record
 }
 public class ClientContact : Record
 {
+    public bool PortalEnabled { get; set; }
     public Guid ClientId { get; set; }
     public string Name { get; set; } = "";
     public string Title { get; set; } = "";

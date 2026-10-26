@@ -7,7 +7,7 @@ namespace Osynix.Ats.Services;
 
 public record RecruiterChoice(string Username, string Name);
 public record CandidateActivity(AuditEntry Event, string CandidateName, string Role);
-public class WorkspaceService(IDbContextFactory<AtsDbContext> factory,Access access)
+public class WorkspaceService(IDbContextFactory<AtsDbContext> factory,Access access,HiringReviewService? portal=null)
 {
     public async Task<List<RecruiterChoice>> Recruiters(Guid? workspaceFilter=null)
     {
@@ -52,18 +52,22 @@ public class WorkspaceService(IDbContextFactory<AtsDbContext> factory,Access acc
         var key=Choices.MatchKey(input.Name);if(key.Length==0) throw new InvalidOperationException("Enter a client name.");
         var c=await db.Clients.Include(x=>x.Contacts).SingleOrDefaultAsync(x=>x.Id==input.Id);
         var targetWorkspace=c?.WorkspaceId??workspaceId;
+        foreach(var contact in input.Contacts){contact.Name=contact.Name.Trim();contact.Email=contact.Email.Trim();if(contact.Email.Length>320||contact.Email.Length>0&&!new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(contact.Email))throw new InvalidOperationException("Enter a valid client contact email address.");}
+        var oldEmails=c?.Contacts.ToDictionary(x=>x.Id,x=>x.Email)??new Dictionary<Guid,string>();
+        if(input.Contacts.Any(contact=>contact.PortalEnabled&&c?.Contacts.Any(old=>old.Id==contact.Id&&old.PortalEnabled)!=true))await SubscriptionRules.RequireHiringReviews(db,targetWorkspace);
         if(await db.Clients.AnyAsync(x=>x.Id!=input.Id&&x.WorkspaceId==targetWorkspace&&x.NormalizedName==key)) throw new InvalidOperationException("This client already exists. Use the existing client record.");
         if(c is not null&&Access.Scoped(await access.Require())&&!(await Clients()).Any(x=>x.Id==c.Id))throw new UnauthorizedAccessException("This client is not in your workspace.");
         if(c is null) {c=input;c.WorkspaceId=workspaceId;db.Clients.Add(c);}
         else {
             if(c.Revision!=input.Revision) throw new InvalidOperationException("This client changed. Reload before saving.");
             c.Name=input.Name.Trim();c.Industry=input.Industry;c.Location=input.Location;c.Website=input.Website;c.Notes=input.Notes;c.Status=input.Status;
-            db.ClientContacts.RemoveRange(c.Contacts);
-            c.Contacts=input.Contacts.Where(x=>x.Name.Length>0||x.Email.Length>0).Select(x=>new ClientContact{Name=x.Name,Title=x.Title,Email=x.Email,Phone=x.Phone}).ToList();
-            db.ClientContacts.AddRange(c.Contacts);
+            var incoming=input.Contacts.Where(x=>x.Name.Length>0||x.Email.Length>0).ToList();
+            foreach(var removed in c.Contacts.Where(x=>!incoming.Any(i=>i.Id==x.Id)).ToList()){db.ClientContacts.Remove(removed);c.Contacts.Remove(removed);}
+            foreach(var item in incoming){var saved=c.Contacts.SingleOrDefault(x=>x.Id==item.Id);if(saved is null){saved=new ClientContact{Id=item.Id,ClientId=c.Id};c.Contacts.Add(saved);}saved.Name=item.Name;saved.Title=item.Title;saved.Email=item.Email;saved.Phone=item.Phone;saved.PortalEnabled=item.PortalEnabled;}
             foreach(var position in await db.Positions.Where(x=>x.ClientId==c.Id).ToListAsync()) position.Client=c.Name;
         }
         c.Name=c.Name.Trim();c.NormalizedName=key;
+        if(portal is not null)await portal.ConfigureClient(db,c,oldEmails);
         AtsService.Audit(db,uid,"Client saved",c.Id.ToString(),c.Name);await db.SaveChangesAsync();
     }
     public async Task RemoveUnusedClient(Guid id,Guid revision)

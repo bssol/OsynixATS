@@ -17,56 +17,6 @@ namespace Osynix.Ats.Data.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
 
-            modelBuilder.Entity("Osynix.Ats.Domain.AdminPaymentDetails", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("AccountNumber")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("AccountTitle")
-                        .IsRequired()
-                        .HasMaxLength(160)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("BankName")
-                        .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Branch")
-                        .IsRequired()
-                        .HasMaxLength(160)
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("CreatedUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Iban")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("PaymentInstructions")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid>("Revision")
-                        .IsConcurrencyToken()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("UpdatedUtc")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-                    b.ToTable("AdminPaymentDetails");
-                });
-
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
                 {
                     b.Property<string>("Id")
@@ -304,6 +254,57 @@ namespace Osynix.Ats.Data.Migrations
                         .HasDatabaseName("UserNameIndex");
 
                     b.ToTable("AspNetUsers", (string)null);
+                });
+
+            modelBuilder.Entity("Osynix.Ats.Domain.AdminPaymentDetails", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AccountNumber")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AccountTitle")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BankName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Branch")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Iban")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PaymentInstructions")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AdminPaymentDetails");
                 });
 
             modelBuilder.Entity("Osynix.Ats.Domain.Assessment", b =>
@@ -1085,6 +1086,9 @@ namespace Osynix.Ats.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("PortalEnabled")
+                        .HasColumnType("INTEGER");
+
                     b.Property<Guid>("Revision")
                         .IsConcurrencyToken()
                         .HasColumnType("TEXT");
@@ -1101,6 +1105,51 @@ namespace Osynix.Ats.Data.Migrations
                     b.HasIndex("ClientId");
 
                     b.ToTable("ClientContacts");
+                });
+
+            modelBuilder.Entity("Osynix.Ats.Domain.ClientPortalMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("FromClient")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("GrantId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PositionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ReadUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SenderName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PositionId");
+
+                    b.HasIndex("GrantId", "CreatedUtc");
+
+                    b.ToTable("ClientPortalMessages");
                 });
 
             modelBuilder.Entity("Osynix.Ats.Domain.Criterion", b =>
@@ -1721,6 +1770,9 @@ namespace Osynix.Ats.Data.Migrations
                     b.Property<Guid?>("ClientId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("ContactId")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("CreatedUtc")
                         .HasColumnType("TEXT");
 
@@ -1734,6 +1786,9 @@ namespace Osynix.Ats.Data.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("PositionId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ProtectedToken")
@@ -2144,6 +2199,65 @@ namespace Osynix.Ats.Data.Migrations
                     b.ToTable("MarketplaceMessages");
                 });
 
+            modelBuilder.Entity("Osynix.Ats.Domain.PortalEmailDelivery", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("GrantId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("NextAttemptUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("RequiresPublicAddress")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("SentUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Key")
+                        .IsUnique();
+
+                    b.ToTable("PortalEmailDeliveries");
+                });
+
             modelBuilder.Entity("Osynix.Ats.Domain.Position", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2198,6 +2312,20 @@ namespace Osynix.Ats.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("DraftAnalysisSignature")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("DraftCriteriaReviewed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("DraftSourceReviewed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DraftWorkflowStep")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("EmploymentType")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -2220,6 +2348,9 @@ namespace Osynix.Ats.Data.Migrations
                     b.Property<string>("HiringManagerPhone")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("HiringManagerPortalEnabled")
+                        .HasColumnType("INTEGER");
 
                     b.Property<int>("HiringTarget")
                         .HasColumnType("INTEGER");
@@ -3151,6 +3282,21 @@ namespace Osynix.Ats.Data.Migrations
                         .WithMany("Contacts")
                         .HasForeignKey("ClientId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Osynix.Ats.Domain.ClientPortalMessage", b =>
+                {
+                    b.HasOne("Osynix.Ats.Domain.HiringReviewGrant", null)
+                        .WithMany()
+                        .HasForeignKey("GrantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Osynix.Ats.Domain.Position", null)
+                        .WithMany()
+                        .HasForeignKey("PositionId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

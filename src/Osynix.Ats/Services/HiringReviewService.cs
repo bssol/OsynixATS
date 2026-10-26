@@ -22,15 +22,23 @@ public record HiringFeedback(Guid SubmissionId,Guid Revision,Guid ApplicationRev
 
 public record ForwardResult(string Link,string Message);
 public record ClientReviewLink(string? Link,string Status,DateTime? ExpiresUtc,int Profiles);
-public record HiringPosition(Guid Id,string Reference,string Title);
+public record HiringPosition(Guid Id,string Reference,string Title,string Location="",string Status="Active",string Recruiter="");
 
 public record HiringRow(Guid Id,Guid PositionId,string Reference,string PositionTitle,string CandidateName,int? MatchPercent,string Decision,string Stage,string InterviewStatus,string ClientStatus,string Feedback,string Remarks,DateTime SubmittedUtc,DateTime? FeedbackUtc,DateTime? AvailabilityStartUtc,int DurationMinutes,string TimeZone,string InterviewMode,string InterviewLocation,Guid Revision,Guid ApplicationRevision,string LifecycleQueue,string MustHaveFit,string RecruiterResponse="",DateTime? RecruiterResponseUtc=null,InterviewSummary? Interview=null){
+ public DateTime? ManualInterviewDateTimeUtc {get;init;}
+ public string ManualInterviewTimeZone {get;init;}="";
+ public string Role {get;init;}="";
+ public string Employer {get;init;}="";
+ public string City {get;init;}="";
+ public string Summary {get;init;}="";
+ public string Skills {get;init;}="";
+ public string Recruiter {get;init;}="";
  public string ReviewAction=>Stage is "Hired" or "Offer Sent"?"View Outcome":Interview?.Status is "Confirmed" or "Declined" or "New Time Proposed" or "Completed"?"Evaluate":"Review";
 }
 
 public record RecruiterFeedback(Guid Id,Guid AssessmentId,string ContactName,string Feedback,string Remarks,DateTime? AvailabilityStartUtc,int DurationMinutes,string TimeZone,string Mode,string Location,string Delivery);
 
-public class HiringReviewService(IDbContextFactory<AtsDbContext> factory,Access access,IDataProtectionProvider protection,IConfiguration config,IAccountEmail email,RecruitmentUpdates updates){
+public partial class HiringReviewService(IDbContextFactory<AtsDbContext> factory,Access access,IDataProtectionProvider protection,IConfiguration config,IAccountEmail email,RecruitmentUpdates updates){
 
  public const string CookieName="Osynix.HiringReview";
 
@@ -72,12 +80,16 @@ public class HiringReviewService(IDbContextFactory<AtsDbContext> factory,Access 
  public Task<ForwardResult> Forward(Guid? contactId,IEnumerable<Guid> ids,string message,string? recipientEmail)=>ForwardCore(contactId,ids,message,recipientEmail,null);
  async Task<ForwardResult> ForwardCore(Guid? contactId,IEnumerable<Guid> ids,string message,string? recipientEmail,bool? emailRequested){
 
-  var user=await access.Require();var uid=await access.UserId();var list=ids.Distinct().ToList();await Preview(list);
+  var user=await access.Require();var uid=await access.UserId();var list=ids.Distinct().ToList();
+  if(list.Count is <1 or >50)throw new InvalidOperationException("Select 1–50 saved profiles.");
+  foreach(var id in list)await access.RequireApplication(id);
 
   if(message.Length>5000)throw new InvalidOperationException("Keep the message within 5,000 characters.");
+  message=ReportService.ClientSafeText(message.Trim());
 
   await using var db=await factory.CreateDbContextAsync();
   var apps=await db.Assessments.Include(a=>a.Position).Where(a=>list.Contains(a.Id)).ToListAsync();
+  if(apps.Count!=list.Count)throw new UnauthorizedAccessException();
   if(apps.Select(a=>a.PositionId).Distinct().Count()!=1||apps.Any(a=>a.Position?.ClientId is null||a.Position.Status!="Active"||a.State!="Saved"||a.Stage=="Hired"||a.ClientStatus=="Hired"||a.Stage=="Rejected"))throw new InvalidOperationException("Select saved profiles from one active position linked to a client.");
   var clientId=apps[0].Position!.ClientId!.Value;
   var client=await db.Clients.SingleAsync(c=>c.Id==clientId);
@@ -85,13 +97,24 @@ public class HiringReviewService(IDbContextFactory<AtsDbContext> factory,Access 
   if(contactId is Guid cid){
    contact=await db.ClientContacts.SingleOrDefaultAsync(c=>c.Id==cid&&c.ClientId==clientId)??throw new InvalidOperationException("Choose a contact linked to this position's client.");
   }
-  var address=(recipientEmail??contact?.Email??"").Trim();
+  var address=(string.IsNullOrWhiteSpace(recipientEmail)?contact?.Email??apps[0].Position!.HiringManagerEmail:recipientEmail).Trim();
   var hasEmail=new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(address);
   if(address.Length>320||(address.Length>0&&!hasEmail))throw new InvalidOperationException("Enter a valid email address or leave it blank to generate a link.");
+  var key="client:"+clientId.ToString("N");
+  var position=apps[0].Position!;
+  var configured=await db.HiringReviewGrants.Where(g=>g.ClientId==clientId&&!g.Revoked&&
+    (g.PositionId==position.Id||(contactId!=null&&g.ContactId==contactId)||(g.PositionId==null&&g.ContactId==null)))
+    .OrderByDescending(g=>g.PositionId!=null).ThenByDescending(g=>g.ContactId!=null).FirstOrDefaultAsync();
+  if(configured is null&&contactId is null)configured=await db.HiringReviewGrants.Where(g=>g.ClientId==clientId&&!g.Revoked&&g.ContactId!=null&&db.ClientContacts.Any(c=>c.Id==g.ContactId&&c.PortalEnabled&&(address==""||c.Email==address))).FirstOrDefaultAsync();
+  if(position.WorkspaceId is Guid wid){
+    await SubscriptionLifecycle.ApplyDue(db,wid);
+    var workspace=await db.EmployerWorkspaces.SingleAsync(w=>w.Id==wid);
+    if(!await SubscriptionRules.PaidPortal(db,workspace)||configured is null||!await PortalGrantEnabled(db,configured))return await NotifyOnly(db,apps,address,uid);
+  }
+  await Preview(list);
   if(emailRequested==true&&(!hasEmail||!CanEmail))throw new InvalidOperationException("Email delivery needs a valid address, a public HTTPS ATS address, and working email settings.");
   var sendEmail=emailRequested??(hasEmail&&CanEmail);
-  var key="client:"+clientId.ToString("N");
-  var grant=await db.HiringReviewGrants.Where(g=>g.ClientId==clientId&&!g.Revoked).OrderBy(g=>g.CreatedUtc).FirstOrDefaultAsync();
+  var grant=configured;
   grant??=await db.HiringReviewGrants.SingleOrDefaultAsync(g=>g.EmailKey==key);
   string token;
 
@@ -132,7 +155,7 @@ public class HiringReviewService(IDbContextFactory<AtsDbContext> factory,Access 
 
   await db.SaveChangesAsync();updates.Publish();
 
-  var link=BaseUrl+"/review/access?token="+Uri.EscapeDataString(token);
+  var link=BaseUrl+"/review/access?token="+Uri.EscapeDataString(token)+(grant.PositionId is Guid scopedPosition?"&position="+scopedPosition:"");
 
   if(!sendEmail&&hasEmail&&emailRequested is null)return new(link,CanShareExternally?"Email Not Sent: email delivery is not configured. The review link was generated for copying.":"Email Not Sent: configure a public HTTPS ATS address first. The review link was generated for testing on this computer only.");
   if(!sendEmail)return new(link,CanShareExternally?"Review link generated. Copy it and paste it into WhatsApp or your preferred channel.":"Review link generated for testing on this computer. A public HTTPS ATS address is needed for clients to open it on their phones.");
@@ -156,6 +179,7 @@ public class HiringReviewService(IDbContextFactory<AtsDbContext> factory,Access 
   await using var db=await factory.CreateDbContextAsync();var hash=Hash(token);
 
   var grant=await db.HiringReviewGrants.AsNoTracking().SingleOrDefaultAsync(g=>g.TokenHash==hash&&!g.Revoked&&g.ExpiresUtc>DateTime.UtcNow);
+  if(grant is not null&&!await PortalGrantEnabled(db,grant))return null;
 
   if(grant?.ClientId is Guid clientId){try{await SubscriptionRules.RequireHiringReviews(db,await db.Clients.Where(c=>c.Id==clientId).Select(c=>c.WorkspaceId).SingleAsync());}catch(UnauthorizedAccessException){return null;}}
   return grant is null?null:(cookieProtector.Protect(grant.Id+":"+grant.TokenHash),grant.ExpiresUtc);
@@ -167,6 +191,7 @@ public class HiringReviewService(IDbContextFactory<AtsDbContext> factory,Access 
   Guid id;string hash;try{var values=cookieProtector.Unprotect(cookie??"").Split(':');id=Guid.Parse(values[0]);hash=values[1];}catch{throw new UnauthorizedAccessException("This review link is invalid or expired.");}
 
   var grant=await db.HiringReviewGrants.SingleOrDefaultAsync(g=>g.Id==id&&g.TokenHash==hash&&!g.Revoked&&g.ExpiresUtc>DateTime.UtcNow)??throw new UnauthorizedAccessException("This review link is invalid or expired.");
+  if(!await PortalGrantEnabled(db,grant))throw new UnauthorizedAccessException("This portal access has been disabled.");
   if(grant.ClientId is Guid clientId)await SubscriptionRules.RequireHiringReviews(db,await db.Clients.Where(c=>c.Id==clientId).Select(c=>c.WorkspaceId).SingleAsync());
   return grant;
 
@@ -174,7 +199,7 @@ public class HiringReviewService(IDbContextFactory<AtsDbContext> factory,Access 
 
  IQueryable<HiringSubmission> Visible(AtsDbContext db,HiringReviewGrant grant){
   if(grant.ClientId is Guid clientId)
-   return db.HiringSubmissions.Where(s=>!s.Revoked&&db.HiringReviewGrants.Any(g=>g.Id==s.GrantId&&g.ClientId==clientId&&!g.Revoked)&&db.Assessments.Any(a=>a.Id==s.AssessmentId&&a.State=="Saved"&&a.Stage!="Rejected"&&a.Position!.ClientId==clientId));
+   return db.HiringSubmissions.Where(s=>!s.Revoked&&db.HiringReviewGrants.Any(g=>g.Id==s.GrantId&&g.ClientId==clientId&&!g.Revoked)&&db.Assessments.Any(a=>a.Id==s.AssessmentId&&a.State=="Saved"&&a.Stage!="Rejected"&&a.Position!.ClientId==clientId&&(grant.PositionId==null||a.PositionId==grant.PositionId)&&(grant.PositionId!=null||grant.ContactId!=null||a.Position.IsAgencyPosition||a.Position.HiringManagerPortalEnabled||!db.EmployerWorkspaces.Any(w=>w.Id==a.Position.WorkspaceId&&w.Kind==AccountTypes.Employer))));
   var contactBound=grant.EmailKey.StartsWith("contact:",StringComparison.Ordinal);
   var contactId=contactBound&&Guid.TryParse(grant.EmailKey["contact:".Length..],out var parsed)?parsed:Guid.Empty;
   return db.HiringSubmissions.Where(s=>s.GrantId==grant.Id&&!s.Revoked&&db.Assessments.Any(a=>a.Id==s.AssessmentId&&a.State=="Saved"&&a.Stage!="Rejected"&&db.ClientContacts.Any(c=>c.Id==s.ContactId&&c.ClientId==a.Position!.ClientId&&((contactBound&&c.Id==contactId)||(!contactBound&&c.Email.Trim().ToLower()==grant.EmailKey)))));
@@ -185,16 +210,23 @@ public class HiringReviewService(IDbContextFactory<AtsDbContext> factory,Access 
 
   var rows=await (from s in Visible(db,grant) join a in db.Assessments on s.AssessmentId equals a.Id join p in db.Positions on a.PositionId equals p.Id orderby s.SubmittedUtc descending,s.Id select new{s,a,p}).AsNoTracking().ToListAsync();
 
-  var positions=rows.Select(x=>new HiringPosition(x.p.Id,x.p.Reference,x.p.Title)).DistinctBy(p=>p.Id).ToList();
+  var positions=rows.Select(x=>new HiringPosition(x.p.Id,x.p.Reference,x.p.Title,x.p.Location,x.p.Status,x.p.AssignedRecruiter)).DistinctBy(p=>p.Id).ToList();
+  if(grant.ClientId is Guid clientScope&&grant.ContactId is not null&&grant.PositionId is null){
+    var activeClientPositions=await db.Positions.AsNoTracking().Where(p=>p.ClientId==clientScope&&(p.Status=="Active"||p.Status=="On Hold")).Select(p=>new HiringPosition(p.Id,p.Reference,p.Title,p.Location,p.Status,p.AssignedRecruiter)).ToListAsync();
+    positions.AddRange(activeClientPositions.Where(p=>positions.All(existing=>existing.Id!=p.Id)));
+  }
+  if(grant.PositionId is Guid grantedPosition&&!positions.Any(p=>p.Id==grantedPosition)){
+    var assigned=await db.Positions.Where(p=>p.Id==grantedPosition&&p.ClientId==grant.ClientId).Select(p=>new HiringPosition(p.Id,p.Reference,p.Title,p.Location,p.Status,p.AssignedRecruiter)).SingleOrDefaultAsync();if(assigned is not null)positions.Add(assigned);
+  }
   if(requestedPositionId is Guid requestedId&&!positions.Any(p=>p.Id==requestedId)){
    var requested=grant.ClientId is Guid clientId
-    ? await db.Positions.AsNoTracking().Where(p=>p.Id==requestedId&&p.ClientId==clientId).Select(p=>new HiringPosition(p.Id,p.Reference,p.Title)).SingleOrDefaultAsync()
+    ? await db.Positions.AsNoTracking().Where(p=>p.Id==requestedId&&p.ClientId==clientId&&(grant.PositionId==null||p.Id==grant.PositionId)&&(grant.PositionId!=null||grant.ContactId!=null||p.IsAgencyPosition||p.HiringManagerPortalEnabled||!db.EmployerWorkspaces.Any(w=>w.Id==p.WorkspaceId&&w.Kind==AccountTypes.Employer))).Select(p=>new HiringPosition(p.Id,p.Reference,p.Title,p.Location,p.Status,p.AssignedRecruiter)).SingleOrDefaultAsync()
     : await (from s in Visible(db,grant) join a in db.Assessments on s.AssessmentId equals a.Id join p in db.Positions on a.PositionId equals p.Id where p.Id==requestedId select new HiringPosition(p.Id,p.Reference,p.Title)).AsNoTracking().Select(p=>new HiringPosition(p.Id,p.Reference,p.Title)).FirstOrDefaultAsync();
    if(requested is not null)positions.Add(requested);
   }
 
   var interviews=await db.InterviewBookings.AsNoTracking().Where(i=>rows.Select(x=>x.a.Id).Contains(i.AssessmentId)).ToListAsync();
-  return (grant.Name,rows.Select(x=>{var report=JsonSerializer.Deserialize<Assessment>(x.s.SharedReportJson)!;var snap=JsonSerializer.Deserialize<AssessmentSnapshot>(report.SnapshotJson)!;return new HiringRow(x.s.Id,x.p.Id,x.p.Reference,x.p.Title,snap.Profile.Name,report.MatchPercent,report.Decision,x.a.Stage,x.a.InterviewStatus,x.a.ClientStatus,x.s.Feedback,x.s.Remarks,x.s.SubmittedUtc,x.s.FeedbackUtc,x.s.AvailabilityStartUtc,x.s.DurationMinutes,x.s.TimeZone,x.s.InterviewMode,x.s.InterviewLocation,x.s.Revision,x.a.Revision,Lifecycle.Classify(x.a),report.MustHaveFit,x.s.RecruiterResponse,x.s.RecruiterResponseUtc,interviews.Where(i=>i.AssessmentId==x.a.Id).OrderByDescending(i=>i.CreatedUtc).Select(InterviewService.Summary).FirstOrDefault());}).ToList(),positions);
+  return (grant.Name,rows.Select(x=>{var report=JsonSerializer.Deserialize<Assessment>(x.s.SharedReportJson)!;var snap=JsonSerializer.Deserialize<AssessmentSnapshot>(report.SnapshotJson)!;return new HiringRow(x.s.Id,x.p.Id,x.p.Reference,x.p.Title,snap.Profile.Name,report.MatchPercent,report.Decision,x.a.Stage,x.a.InterviewStatus,x.a.ClientStatus,x.s.Feedback,x.s.Remarks,x.s.SubmittedUtc,x.s.FeedbackUtc,x.s.AvailabilityStartUtc,x.s.DurationMinutes,x.s.TimeZone,x.s.InterviewMode,x.s.InterviewLocation,x.s.Revision,x.a.Revision,Lifecycle.Classify(x.a),report.MustHaveFit,x.s.RecruiterResponse,x.s.RecruiterResponseUtc,interviews.Where(i=>i.AssessmentId==x.a.Id).OrderByDescending(i=>i.CreatedUtc).Select(InterviewService.Summary).FirstOrDefault()){Role=ReportService.ClientSafeText(snap.Profile.CurrentRole),Employer=ReportService.ClientSafeText(snap.Profile.CurrentCompany),City=ReportService.ClientSafeText(snap.Profile.City.Length>0?snap.Profile.City:snap.Profile.Location),Summary=ReportService.ClientSafeText(snap.Profile.Summary),Skills=ReportService.ClientSafeText(snap.Profile.Skills),Recruiter=x.p.AssignedRecruiter,ManualInterviewDateTimeUtc=x.a.InterviewDateTimeUtc,ManualInterviewTimeZone=x.a.InterviewTimeZone};}).ToList(),positions);
 
  }
 
@@ -293,7 +325,9 @@ public class HiringReviewService(IDbContextFactory<AtsDbContext> factory,Access 
 
   await using var db=await factory.CreateDbContextAsync();
 
-  return await (from s in db.HiringSubmissions.AsNoTracking() join g in db.HiringReviewGrants on s.GrantId equals g.Id where ids.Contains(s.AssessmentId)&&!s.Revoked&&!g.Revoked orderby s.SubmittedUtc descending select new RecruiterFeedback(s.Id,s.AssessmentId,g.Name,s.Feedback,s.Remarks,s.AvailabilityStartUtc,s.DurationMinutes,s.TimeZone,s.InterviewMode,s.InterviewLocation,s.Delivery)).ToListAsync();
+  var shared=await (from s in db.HiringSubmissions.AsNoTracking() join g in db.HiringReviewGrants on s.GrantId equals g.Id where ids.Contains(s.AssessmentId)&&!s.Revoked&&!g.Revoked orderby s.SubmittedUtc descending select new RecruiterFeedback(s.Id,s.AssessmentId,g.Name,s.Feedback,s.Remarks,s.AvailabilityStartUtc,s.DurationMinutes,s.TimeZone,s.InterviewMode,s.InterviewLocation,s.Delivery)).ToListAsync();
+  var notices=await (from s in db.EmployerProfileSubmissions.AsNoTracking() join a in db.Assessments on s.AssessmentId equals a.Id join p in db.Positions on a.PositionId equals p.Id where ids.Contains(a.Id)&&!db.HiringSubmissions.Any(h=>h.AssessmentId==a.Id&&!h.Revoked&&h.SubmittedUtc>=s.SubmittedUtc) select new RecruiterFeedback(s.Id,a.Id,p.HiringContact,s.Status,s.Remarks,null,30,"","","","Notification only")).ToListAsync();
+  return notices.Concat(shared).GroupBy(r=>r.AssessmentId).Select(g=>g.First()).ToList();
 
  }
 

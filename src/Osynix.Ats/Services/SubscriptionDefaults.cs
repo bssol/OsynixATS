@@ -14,7 +14,7 @@ public static class SubscriptionDefaults
                 var free=code=="free";var freelancer=category=="Freelancer";var growth=code is "growth" or "pro";
                 var terms=new SubscriptionTerms{PositionSlots=freelancer?code switch{"free"=>1,"starter"=>3,"growth"=>10,_=>25}:3,InternalSeats=freelancer?0:1,
                     MonthlyAssessments=freelancer?code switch{"free"=>20,"starter"=>50,"growth"=>200,_=>500}:null,MonthlyJdAnalyses=freelancer?code switch{"free"=>2,"starter"=>5,"growth"=>15,_=>30}:null,
-                    ApplicationsPerPosition=freelancer?code switch{"growth"=>15,"pro"=>null,_=>10}:null,Marketplace=freelancer&&!free,MasterPool=freelancer&&growth,MeetingIntegrations=freelancer&&growth,Reports=!freelancer||!free};
+                    ApplicationsPerPosition=freelancer?code switch{"growth"=>15,"pro"=>null,_=>10}:null,Marketplace=freelancer&&!free,MasterPool=freelancer&&growth,MeetingIntegrations=freelancer&&growth,Reports=!freelancer||!free,HiringManagerReviews=!free};
                 if(category=="Employer")terms=EmployerTerms(code);
                 var monthly=category=="Employer"?code switch{"starter"=>7500m,"growth"=>15000m,"pro"=>30000m,_=>0m}:0m;
                 var usd=category=="Employer"?code switch{"starter"=>25m,"growth"=>50m,"pro"=>99m,_=>0m}:0m;

@@ -1,0 +1,16 @@
+@inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment Env
+<!doctype html><html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><title>@ViewData["Title"] · Osynix ATS</title><link rel="stylesheet" href="/auth.css" asp-append-version="true" /></head>
+<body class="auth-body"><div class="auth-split">
+<section class="auth-showcase" aria-label="Osynix ATS Overview">
+<a class="auth-showcase-logo" href="/Account/Login"><img src="/images/osynix-group-logo.png" width="215" height="37" alt="Osynix Group" /></a>
+<div class="showcase-intro"><span class="auth-eyebrow">PEOPLE. POTENTIAL. PROGRESS.</span><h1>Great Teams<br />Start Here.</h1><p>A clearer way to manage positions, assess talent, and move hiring forward.</p></div>
+<div class="ats-preview" role="img" aria-label="Illustration of the Osynix recruitment dashboard">
+<div class="preview-sidebar"><span class="preview-mark">O</span><span class="preview-active">◫</span><span>▣</span><span>♙</span><span>↗</span></div>
+<div class="preview-workspace"><div class="preview-top"><img src="/images/osynix-group-logo.png" width="126" height="22" alt="" /><span>⌕ &nbsp; Search Your Workspace</span><i>OS</i></div>
+<div class="preview-content"><div class="preview-heading"><b>Your Hiring, In Focus</b><small>Osynix ATS · Dashboard Preview</small></div>
+<div class="preview-kpis"><div><i>▣</i><span>Active Positions</span><b>24</b></div><div><i>♙</i><span>Candidates</span><b>148</b></div><div><i>✓</i><span>Shortlisted</span><b>32</b></div></div>
+<div class="preview-charts"><div class="preview-funnel"><b>Hiring Funnel</b><div class="preview-bars"><i style="height:95%"></i><i style="height:72%"></i><i style="height:48%"></i><i style="height:28%"></i><i style="height:18%"></i></div><small>Screen &nbsp; Interview &nbsp; Offer &nbsp; Hire</small></div><div class="preview-mix"><b>AI Decision Mix</b><div class="preview-donut"></div><small>Match. Review. Decide.</small></div></div>
+<div class="preview-rows"><b>Recent Activity</b><span><i></i>Candidate Assessment Completed <em>Just Now</em></span><span><i></i>Interview Scheduled <em>Today</em></span></div></div></div></div>
+<div class="showcase-footer"><span>Designed For Freelance Recruiters, Employers &amp; Teams</span><span>Osynix Group</span></div></section>
+<section class="auth-form-panel"><div class="auth-form-content"><a href="/Account/Login" class="auth-form-logo"><img src="/images/osynix-group-logo.png" width="205" height="36" alt="Osynix Group" /></a>@RenderBody()</div><footer class="auth-footer">© @DateTime.UtcNow.Year Osynix Group <a href="mailto:support@osynix.com">Need Help?</a></footer></section>
+</div><script src="/auth.js" asp-append-version="true"></script></body></html>

@@ -1,6 +1,78 @@
+@implements IDisposable
+@inject RecruitmentUpdates Updates
+@using Microsoft.EntityFrameworkCore
+@inject Access Access
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider Auth
+@inject IDbContextFactory<Osynix.Ats.Data.AtsDbContext> Factory
 @inherits LayoutComponentBase
-<div class="shell">
-<aside><a class="brand" href="/">OSYNIX<span>APPLICANT TRACKING SYSTEM</span></a><div class="nav-label">WORKSPACE</div><nav><NavLink href="/" Match="NavLinkMatch.All">◫ &nbsp; Dashboard</NavLink><NavLink href="positions">▤ &nbsp; Manage positions</NavLink><NavLink href="clients">▤ &nbsp; Clients</NavLink><NavLink href="assessment">✦ &nbsp; Candidate assessment</NavLink><NavLink href="candidates">♙ &nbsp; Candidate Database</NavLink><NavLink href="talent">♙ &nbsp; Talent Pool</NavLink><NavLink href="pipeline">⇄ &nbsp; Recruitment pipeline</NavLink><AuthorizeView Roles="Admin"><NavLink href="settings">⚙ &nbsp; Settings &amp; users</NavLink><NavLink href="import">⇧ &nbsp; Import workbook</NavLink></AuthorizeView></nav><div class="side-footer">Building scalable organizations<br />through strategic people operations.</div></aside>
-<div class="workspace"><header><span>People. Potential. Progress.</span><AuthorizeView><Authorized><span>@context.User.Identity?.Name <a class="quiet" href="/Account/Logout">Sign out</a></span></Authorized></AuthorizeView></header><main><ErrorBoundary><ChildContent>@Body</ChildContent><ErrorContent><div class="error">The page could not load. <a href="/">Reload the workspace</a>.</div></ErrorContent></ErrorBoundary></main></div>
+<div class="shell @(collapsed ? "sidebar-collapsed" : "")">
+    <TopBar />
+    @if(!collapsed){<button class="sidebar-backdrop" aria-label="Close navigation" @onclick="ToggleSidebar"></button>}
+    <aside id="workspace-sidebar" class="workspace-sidebar" aria-label="Workspace navigation">
+                <div class="sidebar-heading">
+            @if(sidebarLogo.Length>0){<div class="sidebar-company-brand" title="@sidebarCompany"><img src="@sidebarLogo" alt="@(sidebarCompany+" Logo")" /></div>}else{<div class="nav-label">@((isAdmin||isSubAdmin)?"ADMINISTRATION":"WORKSPACE")</div>}
+            <button type="button" class="sidebar-collapse-control" @onclick="ToggleSidebar" aria-label="@(collapsed ? "Expand sidebar" : "Collapse sidebar")" aria-expanded="@(!collapsed)" aria-controls="workspace-sidebar" title="@(collapsed ? "Expand sidebar" : "Collapse sidebar")">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="@(collapsed ? "m9 5 7 7-7 7" : "m15 5-7 7 7 7")" /></svg>
+            </button>
+        </div>
+        <nav class="workspace-nav @(isAdmin||isSubAdmin ? "admin-nav" : "")">
+            @if(isAdmin){
+                <NavLink href="/" Match="NavLinkMatch.All" title="Admin Overview"><NavIcon Name="dashboard" /><span>Admin Overview</span></NavLink>
+                <NavLink href="/settings/employers" title="Workspaces & Subscriptions"><NavIcon Name="clients" /><span>Workspaces &amp; Subscriptions</span></NavLink>
+                <MessageNav />
+                <NavLink href="/master-talent" title="Osynix Master Talent Pool"><NavIcon Name="talent" /><span>Master Talent Pool</span></NavLink>
+                <NavLink href="/activity" title="Platform Activity"><NavIcon Name="clock" /><span>Platform Activity</span></NavLink>
+                <NavLink href="/import" title="Import Workbook"><NavIcon Name="import" /><span>Import Workbook</span></NavLink>
+                <NavLink href="/settings" class="@(SettingsRoute?"active":"")" Match="NavLinkMatch.All" title="Settings"><NavIcon Name="settings" /><span>Settings</span></NavLink>
+            }else if(isSubAdmin){
+                @if(canAdminWorkspaces){<NavLink href="/settings/employers" title="Workspaces & Subscriptions"><NavIcon Name="clients" /><span>Workspaces &amp; Subscriptions</span></NavLink>}
+                @if(canAdminMessages){<MessageNav />}
+                <NavLink href="/settings" class="@(SettingsRoute?"active":"")" Match="NavLinkMatch.All" title="Settings"><NavIcon Name="settings" /><span>Settings</span></NavLink>
+            }else{
+                <AuthorizeView Roles="Recruiter,Employer" Context="workspaceAuth">
+                    @if(employerMember){
+                        <NavLink href="/workspace-dashboard" title="Dashboard"><NavIcon Name="dashboard" /><span>Dashboard</span></NavLink>
+                        @if(showClients){<NavLink href="/clients"><NavIcon Name="clients" /><span>Clients</span></NavLink>}
+                        <NavLink href="/assessment"><NavIcon Name="assessment" /><span>Candidate Assessment</span></NavLink>
+                        <NavLink href="/talent"><NavIcon Name="talent" /><span>My Talent Pool</span></NavLink>
+                        <NavLink href="/attention"><NavIcon Name="clock" /><span>Team Tasks</span></NavLink>
+                        <MessageNav />
+                        <NavLink href="/pipeline"><NavIcon Name="pipeline" /><span>Recruitment Pipeline</span></NavLink>
+                        <a href="/my-work" class="workspace-return-link"><NavIcon Name="dashboard" /><span>Change Workspace</span></a>
+                    }else{
+                        <NavLink href="/" Match="NavLinkMatch.All" title="Dashboard"><NavIcon Name="dashboard" /><span>Dashboard</span></NavLink>
+                        @if(!employerAccount){<NavLink href="/my-work" title="Choose Your Workspace"><NavIcon Name="dashboard" /><span>My Workspace</span></NavLink>}
+                        <NavLink href="/positions" title="Manage Positions"><NavIcon Name="positions" /><span>Manage Positions</span></NavLink>
+                        @if(showClients){<NavLink href="/clients" title="Clients"><NavIcon Name="clients" /><span>Clients</span></NavLink>}
+                        <NavLink href="/assessment" title="Candidate Assessment"><NavIcon Name="assessment" /><span>Candidate Assessment</span></NavLink>
+                        <NavLink href="/talent" title="Workspace Talent Pool"><NavIcon Name="talent" /><span>My Talent Pool</span></NavLink>
+                        @if(masterGranted){<NavLink href="/master-talent" title="Osynix Master Talent Pool"><NavIcon Name="talent" /><span>Master Talent Pool</span></NavLink>}else{<span class="workspace-nav-locked" role="link" aria-disabled="true" title="Locked — Admin Has Not Granted Master Talent Pool Access"><NavIcon Name="talent" /><span>Master Talent Pool 🔒</span></span>}
+                        <NavLink href="/attention" title="My Tasks"><NavIcon Name="clock" /><span>My Tasks</span></NavLink>
+                        <MessageNav />
+                        <NavLink href="/pipeline" title="Recruitment Pipeline"><NavIcon Name="pipeline" /><span>Recruitment Pipeline</span></NavLink>
+                        @if(owner){
+                            @if(employerAccount){<NavLink href="/employer/team" title="My Team"><NavIcon Name="talent" /><span>My Team</span></NavLink>}
+                        }
+                    }
+                    <NavLink href="/settings" class="@(SettingsRoute?"active":"")" Match="NavLinkMatch.All" title="Settings"><NavIcon Name="settings" /><span>Settings</span></NavLink>
+                </AuthorizeView>
+            }
+        <AuthorizeView Roles="Candidate"><NavLink href="/Account/Portal">My Account</NavLink><MessageNav /><NavLink href="/settings" class="@(SettingsRoute?"active":"")" Match="NavLinkMatch.All"><NavIcon Name="settings" /><span>Settings</span></NavLink></AuthorizeView>
+        </nav>
+        <div class="side-footer">Building scalable organizations<br />through strategic people operations.</div>
+    </aside>
+    <div class="workspace"><main><ErrorBoundary><ChildContent>@Body</ChildContent><ErrorContent><div class="error">The page could not load. <a href="/">Reload the workspace</a>.</div></ErrorContent></ErrorBoundary></main></div>
 </div>
 <div id="blazor-error-ui">The connection was interrupted. <a href="">Reload</a></div>
+@code {
+    bool SettingsRoute{get{var path=new Uri(Navigation.Uri).AbsolutePath;return path is "/settings" or "/profile" or "/employer/subscriptions"||path.StartsWith("/employer/company",StringComparison.Ordinal)||path.StartsWith("/settings/email-templates",StringComparison.Ordinal);}}
+    string sidebarLogo="",sidebarCompany="";
+    bool employerMember,collapsed,owner,employerAccount,isAdmin,isSubAdmin,canAdminWorkspaces,canAdminMessages,masterGranted,showClients;
+    protected override async Task OnInitializedAsync(){Updates.Changed+=AccessChanged;var user=(await Auth.GetAuthenticationStateAsync()).User;isAdmin=user.IsInRole("Admin");isSubAdmin=user.IsInRole("SubAdmin");canAdminWorkspaces=isSubAdmin&&await Access.CanAdmin("admin.workspaces.view");canAdminMessages=isAdmin||isSubAdmin&&await Access.CanAdmin("admin.requests.review");showClients=isAdmin||await Access.Can("Clients.View");masterGranted=isAdmin||await Access.Can("Talent.Master");if(!isAdmin&&!isSubAdmin&&user.Identity?.IsAuthenticated==true&&(user.IsInRole("Employer")||user.IsInRole("Recruiter"))){try{var active=await Access.Context();owner=active?.Owner==true;employerMember=active?.Membership is not null;if(owner){await using var db=await Factory.CreateDbContextAsync();var kind=(await db.EmployerWorkspaces.FindAsync(active!.Id))?.Kind;employerAccount=kind!=AccountTypes.Freelance;showClients=await Access.Can("Clients.View");}}catch(UnauthorizedAccessException){}}await LoadBrand();}
+
+    void AccessChanged()=>_=InvokeAsync(async()=>{canAdminWorkspaces=isSubAdmin&&await Access.CanAdmin("admin.workspaces.view");canAdminMessages=isAdmin||isSubAdmin&&await Access.CanAdmin("admin.requests.review");masterGranted=await Access.Can("Talent.Master");showClients=await Access.Can("Clients.View");await LoadBrand();StateHasChanged();});
+    async Task LoadBrand(){sidebarLogo=sidebarCompany="";if(isAdmin||isSubAdmin)return;try{var user=(await Auth.GetAuthenticationStateAsync()).User;if(user.Identity?.IsAuthenticated!=true||!(user.IsInRole("Employer")||user.IsInRole("Recruiter")))return;var active=await Access.Context();if(active?.Id is not Guid id)return;await using var db=await Factory.CreateDbContextAsync();var company=await db.EmployerWorkspaces.AsNoTracking().SingleOrDefaultAsync(w=>w.Id==id);if(company?.LogoContent is {Length:>0}&&company.LogoContentType is "image/png" or "image/jpeg"){sidebarCompany=company.CompanyName;sidebarLogo="data:"+company.LogoContentType+";base64,"+Convert.ToBase64String(company.LogoContent);}}catch(UnauthorizedAccessException){}}
+    public void Dispose()=>Updates.Changed-=AccessChanged;
+    void ToggleSidebar() => collapsed = !collapsed;
+}

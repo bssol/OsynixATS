@@ -1,16 +1,112 @@
 @page "/pipeline"
-@attribute [Authorize(Roles="Admin,Recruiter")]
+
+@attribute [Authorize(Roles="Admin,Recruiter,Employer")]
+
 @inherits PageBase
+
+@inject NavigationManager Navigation
+@inject InterviewService Interviews
+@inject RecruiterActionService Actions
 @inject AtsService Ats
-<PageTitle>Recruitment pipeline · Osynix ATS</PageTitle>
-<div class="page-heading"><div><div class="eyebrow">APPLICATION PROGRESS</div><h1>Recruitment pipeline</h1></div></div><Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
-<div class="toolbar"><input aria-label="Search pipeline" placeholder="Search candidate or position…" @bind="search" @bind:event="oninput" /><select aria-label="Recruitment stage" @bind="Stage"><option value="">All stages</option>@foreach(var s in Choices.Stages){<option>@s</option>}</select><select aria-label="Lifecycle queue" @bind="Queue"><option value="">All lifecycle queues</option>@foreach(var q in new[]{"Shortlisted","On Hold","In Interview","Pending Decision","Hired","Rejected"}){<option>@q</option>}</select><label class="check"><input type="checkbox" @bind="ActiveOnly" /> Active positions only</label></div><section class="panel table-wrap"><table><thead><tr><th>Candidate / position</th><th>AI decision</th><th>Lifecycle queue</th><th>Stage</th><th>Interview</th><th>Client</th><th></th></tr></thead><tbody>
-@foreach(var a in records.Where(a=>(!ActiveOnly||a.Position?.Status=="Active")&&(string.IsNullOrEmpty(Queue)||Lifecycle.Classify(a)==Queue)&&(string.IsNullOrEmpty(Stage)||a.Stage==Stage)&&$"{a.CandidateName} {a.Position?.Title}".Contains(search,StringComparison.OrdinalIgnoreCase))){<tr><td><a href="@($"/candidates?id={a.CandidateId}")"><b>@a.CandidateName</b></a><small>@a.Position?.Title · #@a.Position?.Reference</small></td><td><DecisionBadge Value="@a.Decision" /></td><td>@Lifecycle.Classify(a)</td><td>@a.Stage</td><td>@a.InterviewStatus</td><td>@a.ClientStatus</td><td><button class="secondary" @onclick="()=>edit=a">Update</button></td></tr>}
-</tbody></table></section>
-@if(edit is not null){<div class="overlay"><section class="drawer" role="dialog" aria-modal="true" aria-label="Recruitment progress"><div class="drawer-head"><h2>@edit.CandidateName</h2><button class="secondary" @onclick="()=>edit=null">Close</button></div><LifecycleEditor Application="edit" OnSaved="Saved" /></section></div>}
+@inject Access Access
+@inject RecruitmentAttributionService AttributionService
+
+@inject WorkspaceService Workspace
+
+@inject HiringReviewService Review
+
+@inject RecruitmentUpdates Updates
+@inject IJSRuntime JS
+
+@implements IDisposable
+
+<PageTitle>Recruitment Pipeline · Osynix ATS</PageTitle>
+
+<div class="page-heading"><div><div class="eyebrow">APPLICATION PROGRESS</div><h1>Recruitment Pipeline</h1></div><div class="pipeline-submit-actions">@if(canShare){<button disabled="@(Busy||selected.Count==0)" @onclick="OpenForward">Submit To Hiring Manager (@selected.Count)</button>}else{<a class="button secondary" href="/employer/subscriptions">Upgrade for Hiring Manager links</a>}</div></div><Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
+
+@if(!string.IsNullOrEmpty(InterviewFilter)){<p class="muted">Interview status: @InterviewFilter <a href="/pipeline?active=true">Clear filter</a></p>}
+
+@if(!string.IsNullOrEmpty(PositionReference)){<p class="muted">Applications for Position #@PositionReference <a href="/pipeline">Show All Positions</a></p>}
+
+<div class="toolbar pipeline-filters"><input aria-label="Search Pipeline" placeholder="Search Candidate Or Position…" @bind="search" @bind:event="oninput" @bind:after="ResetPage" /><select aria-label="Client" @bind="clientFilter" @bind:after="ClientChanged"><option value="">@(employerName.Length>0?employerName:"All Clients")</option>@foreach(var c in positions.Select(p=>p.Client).Where(c=>!string.IsNullOrWhiteSpace(c)).Distinct().Order()){<option>@c</option>}</select><select aria-label="Position" @bind="PositionReference" @bind:after="PositionChanged"><option value="">All Positions</option>@foreach(var p in positions.Where(p=>string.IsNullOrEmpty(clientFilter)||p.Client==clientFilter)){<option value="@p.Reference">@p.Title · #@p.Reference</option>}</select><label class="check"><input type="checkbox" @bind="ActiveOnly" @bind:after="ResetPage" /> Active Positions Only</label></div>
+<div class="pipeline-kpis" aria-label="Pipeline KPIs">
+@foreach(var card in Cards){<button class="pipeline-kpi @(kpiFilter==card.Key?"selected":"") @card.Tone" aria-pressed="@(kpiFilter==card.Key)" @onclick="()=>SelectKpi(card.Key)"><span class="pipeline-kpi-label"><NavIcon Name="@card.Icon" />@card.Label</span><strong>@Scope.Count(a=>MatchesKpi(a,card.Key))</strong><small>@(card.Key=="submitted"?$"{Scope.Count(a=>MatchesKpi(a,card.Key)&&Source(a)=="Internal")} Internal · {Scope.Count(a=>MatchesKpi(a,card.Key)&&Source(a)=="External")} External":card.Hint)</small></button>}
+</div>
+<div class="section-heading"><h2>@(kpiFilter.Length>0?Cards.First(c=>c.Key==kpiFilter).Label:"All Applications")</h2><div class="pipeline-submit-actions"><select aria-label="Outcome Filter" @bind="outcomeFilter" @bind:after="OutcomeChanged"><option value="">All Outcomes</option><option>Not Submitted</option><option>Offer Requested</option><option>Offer Sent</option><option>Rejected</option><option>Hired</option></select>@if(kpiFilter.Length>0||!string.IsNullOrEmpty(Stage)||!string.IsNullOrEmpty(Queue)||DecisionOnly||outcomeFilter.Length>0||!string.IsNullOrEmpty(InterviewFilter)){<button class="secondary" @onclick="ClearStatus">Show All Applications</button>}</div></div>
+@if(kpiFilter=="offer-sent"||outcomeFilter=="Offer Sent"){<p class="muted pipeline-offer-notice">These Candidates Remain In Recruitment Pipeline Until You Record Hired Or Rejected. Sending An Offer Does Not Close The Application.</p>}
+<section class="panel table-wrap"><table class="pipeline-table"><thead><tr><th>Select</th><th>Candidate / Position</th><th>Source / Submitted By</th><th>ATS Match</th><th>Current Status</th><th>Latest Feedback</th><th>Next Action</th></tr></thead><tbody>
+@foreach(var a in PageRecords){var latest=feedback.FirstOrDefault(f=>f.AssessmentId==a.Id);var interview=Booking(a);<tr><td><input type="checkbox" aria-label="@($"Select {a.CandidateName}")" checked="@selected.Contains(a.Id)" disabled="@(a.Stage is "Hired" or "Rejected"||selected.Any(id=>records.Any(r=>r.Id==id&&r.PositionId!=a.PositionId)))" @onchange="e=>Toggle(a,(bool)e.Value!)" /></td><td><a href="@($"/candidates?id={a.CandidateId}")"><b>@a.CandidateName</b></a><small>@a.Position?.Title · @a.Position?.Client</small></td><td><span class="badge">@Source(a)</span><small>@Submitter(a)</small></td><td><b>@(a.MatchPercent is int match?$"{match}%":"Unavailable")</b><small>@a.Decision</small></td><td><span class="badge">@Status(a)</span>@if(interview is not null&&interview.Status is "Confirmed" or "Awaiting Confirmation"){<small>@InterviewService.When(interview.StartUtc,interview.TimeZone)</small>}else if(interview is null&&(a.InterviewStatus is "Scheduled" or "New Time Proposed" or "Cancelled")&&a.InterviewDateTimeUtc is DateTime manualDate){<small>@InterviewService.When(manualDate,a.InterviewTimeZone)</small>@if(a.InterviewStatus=="Scheduled"){<small>Awaiting candidate response outside ATS</small>}}</td><td>@if(latest is not null){<b>@latest.Feedback</b><small class="pipeline-feedback-text">@latest.Remarks</small>}else{<span class="muted">Not Submitted</span>}</td><td><button class="secondary" @onclick="()=>edit=a">@NextAction(a)</button></td></tr>}
+</tbody></table>@if(Filtered.Count==0){<p class="empty">No Applications Match These Filters.</p><button class="secondary" @onclick="ClearStatus">Show All Applications In This Client / Position</button>}</section><div class="toolbar" aria-label="Pipeline Pagination"><span class="muted">@(Filtered.Count==0?0:(CurrentPage-1)*PageSize+1)–@Math.Min(CurrentPage*PageSize,Filtered.Count) Of @Filtered.Count Records · Page @CurrentPage Of @PageCount</span><button class="secondary" disabled="@(CurrentPage<=1)" @onclick="()=>page=CurrentPage-1">Previous</button><button class="secondary" disabled="@(CurrentPage>=PageCount)" @onclick="()=>page=CurrentPage+1">Next</button></div>
+
+@if(edit is not null){<div class="overlay"><section class="drawer pipeline-action-drawer" role="dialog" aria-modal="true" aria-label="Recruitment progress"><div class="drawer-head"><h2>@edit.CandidateName</h2><button class="secondary" @onclick="()=>edit=null">Close</button></div><PipelineProgress @key="edit.Revision" Application="edit" OnSaved="Saved" /></section></div>}
+
+@if(forwardOpen){<div class="overlay"><section class="drawer wide" role="dialog" aria-modal="true" aria-label="Forward Profiles"><div class="drawer-head"><h2>Submit To Hiring Manager</h2><button class="secondary" @onclick="()=>forwardOpen=false">Close</button></div><Feedback Error="@Error" Notice="@Notice" Busy="Busy" /><p>@selected.Count Selected Profiles · @records.FirstOrDefault(a=>selected.Contains(a.Id))?.Position?.Title</p><label>Client Contact / Hiring Manager<select @bind="contactId" @bind:after="RecipientChanged"><option value="">Choose Client Contact Or Hiring Manager</option>@foreach(var c in Contacts){<option value="@c.Id">@c.Name @(c.Email.Length>0?"· "+c.Email:c.Phone.Length>0?"· "+c.Phone:"· Link Sharing")</option>}</select></label>@if(Contacts.Count==0){<p class="muted">Add a hiring manager in the position details, or select a saved client contact. Portal access is controlled by its checkbox.</p>}<label>Email Address (Optional)<input type="email" maxlength="320" @bind="recipientEmail" @bind:after="ClearLink" placeholder="Type an email if not saved in contacts" /></label><p class="muted small">Portal access is controlled in the client contact or position details. Without portal access, only a count-based activity email is queued; no profile, report or assessment is shared.</p>@if(awaitingPortalPreview&&recipientEmail.Length>0&&!Review.CanEmail){<p role="status" class="muted">Email Cannot Be Sent Yet. Configure A Public HTTPS ATS Address And Email Delivery First.</p>}<label>Message<textarea @bind="forwardMessage" rows="4" maxlength="5000"></textarea></label><p class="muted">When portal access is enabled, the manager can review client-safe profiles. Candidate CVs, contact details, and internal notes are excluded.</p>@if(awaitingPortalPreview){<a class="button secondary" target="_blank" rel="noopener noreferrer" href="@("/review/preview?ids="+string.Join(',',selected))">Preview Shared Reports</a>}<p></p>@if(!Review.CanShareExternally){<p class="muted">This link currently works only on this computer. A public ATS address is needed for a client to open it through WhatsApp or email.</p>}<button disabled="@(Busy||selected.Count==0)" @onclick="Forward">Submit Profiles</button>@if(forwardLink.Length>0){<label>Private Portal Access Link<input id="hiring-review-link" readonly value="@forwardLink" onfocus="this.select()" /></label><button class="secondary" type="button" @onclick="CopyLink">Copy Link</button><p class="muted small">Paste the link into WhatsApp. Keep it private and share it only with the selected contact.</p>}</section></div>}
+
 @code{
-[SupplyParameterFromQuery(Name="active")]public bool ActiveOnly{get;set;}[SupplyParameterFromQuery(Name="queue")]public string? Queue{get;set;}[SupplyParameterFromQuery(Name="stage")]public string? Stage{get;set;}List<Assessment> records=[];Assessment? edit;string search="";
-protected override Task OnInitializedAsync()=>Run(Load);
-async Task Load()=>records=(await Ats.Assessments()).Where(x=>x.State=="Saved").ToList();
-async Task Saved(){await Load();edit=null;Notice="Recruitment progress saved.";}
+
+[SupplyParameterFromQuery(Name="view")] public string? PipelineView{get;set;}
+[SupplyParameterFromQuery(Name="ref")] public string? PositionReference {get;set;}
+
+[SupplyParameterFromQuery(Name="interview")] public string? InterviewFilter {get;set;}
+
+[SupplyParameterFromQuery(Name="active")]public bool ActiveOnly{get;set;}[SupplyParameterFromQuery(Name="queue")]public string? Queue{get;set;}[SupplyParameterFromQuery(Name="stage")]public string? Stage{get;set;}List<Position> positions=[];const int PageSize=10;int page=1;
+int PageCount=>Math.Max(1,(Filtered.Count+PageSize-1)/PageSize);
+int CurrentPage=>Math.Min(page,PageCount);
+IEnumerable<Assessment> PageRecords=>Filtered.Skip((CurrentPage-1)*PageSize).Take(PageSize);
+void ResetPage()=>page=1;
+void PositionChanged(){ResetPage();selected.Clear();forwardLink="";}
+[SupplyParameterFromQuery(Name="decisionOnly")]public bool DecisionOnly{get;set;}
+[SupplyParameterFromQuery(Name="application")]public Guid? ApplicationId{get;set;}
+Guid? openedApplication;
+protected override void OnParametersSet(){kpiFilter=Cards.Any(c=>c.Key==PipelineView)?PipelineView!:"";if(ApplicationId is Guid id&&openedApplication!=id){edit=records.FirstOrDefault(a=>a.Id==id);if(edit is not null)openedApplication=id;}}
+List<Assessment> records=[];Dictionary<Guid,SubmissionAttribution> attribution=[];Assessment? edit;string search="",employerName="";
+string Source(Assessment a)=>attribution.TryGetValue(a.Id,out var value)?value.Source:"Unknown";
+string Submitter(Assessment a)=>attribution.TryGetValue(a.Id,out var value)?value.Submitter:"";
+[SupplyParameterFromQuery(Name="client")] public string? clientFilter{get;set;}="";
+void ClientChanged(){PositionReference=null;PositionChanged();}
+
+HashSet<Guid> selected=[];List<RecruiterFeedback> feedback=[];List<Client> clients=[];bool forwardOpen;bool awaitingPortalPreview;string recipientEmail="";Guid? contactId;string forwardMessage="",forwardLink="";
+
+record PipelineCard(string Key,string Label,string Icon,string Tone,string Hint);
+static readonly PipelineCard[] Cards=[new("submitted","Profiles Submitted","mail","blue","Unique Candidate–Position Submissions"),new("action","Action Needed","flag","orange","Requests Requiring Attention"),new("decision","Awaiting Decision","clock","purple","Waiting For Hiring Manager Feedback"),new("hold","On Hold","archive","amber","Retained For A Later Decision"),new("confirmation","Awaiting Confirmation","message","teal","Waiting For Candidate Response"),new("upcoming","Upcoming Interviews","check","green","Confirmed Future Interviews"),new("offer-requested","Offer Requested","mail","purple","Hiring Manager Approved An Offer"),new("offer-sent","Offer Sent / Awaiting Decision","clock","teal","Pending Hired Or Rejected"),new("hired","Hired","check","green","Final Hiring Outcomes"),new("rejected","Rejected","cancel","orange","Final Rejection Outcomes")];
+string kpiFilter="",outcomeFilter="";List<InterviewSummary> interviews=[];HashSet<Guid> actionIds=[];
+InterviewSummary? Booking(Assessment a)=>interviews.FirstOrDefault(i=>i.AssessmentId==a.Id);
+bool Submitted(Assessment a)=>feedback.Any(f=>f.AssessmentId==a.Id);
+string Status(Assessment a)=>PipelineWorkflow.CurrentStatus(a,Submitted(a),Booking(a));
+string NextAction(Assessment a)=>a.Stage is "Rejected" or "Hired"?"View Outcome":a.Stage=="Offer Sent"?"Record Final Decision":a.Stage=="Offer Requested"?"Prepare Offer":a.Stage=="Information Requested"?"Respond":Booking(a)?.Status=="New Time Proposed"||a.InterviewStatus=="New Time Proposed"?"View Proposed Time":Booking(a)?.Status=="Declined"||a.InterviewStatus=="Cancelled"?"Rearrange Interview":a.InterviewStatus=="Scheduled"?"View Interview":a.Stage=="Interview Requested"?"Invite To Interview":Booking(a)?.Status=="Confirmed"?"View Interview":Booking(a)?.Status=="Awaiting Confirmation"?"View Invitation":"Review / Update";
+bool MatchesKpi(Assessment a,string key)=>PipelineWorkflow.MatchesCard(a,Booking(a),key,Submitted(a),actionIds.Contains(a.Id));
+List<Assessment> Scope=>records.Where(a=>(string.IsNullOrEmpty(clientFilter)||a.Position?.Client==clientFilter)&&(!ActiveOnly||a.Position?.Status=="Active")&&(string.IsNullOrEmpty(PositionReference)||a.Position?.Reference==PositionReference)&&$"{a.CandidateName} {a.Position?.Title}".Contains(search,StringComparison.OrdinalIgnoreCase)).ToList();
+List<Assessment> Filtered=>Scope.Where(a=>MatchesKpi(a,kpiFilter)&&(outcomeFilter.Length==0||Status(a)==outcomeFilter)&&(!DecisionOnly||a.Stage!="Awaiting Client Feedback")&&(string.IsNullOrEmpty(InterviewFilter)||a.InterviewStatus==InterviewFilter)&&(string.IsNullOrEmpty(Queue)||Lifecycle.Classify(a)==Queue)&&(string.IsNullOrEmpty(Stage)||a.Stage==Stage)).ToList();
+void SelectKpi(string key)=>SetKpi(kpiFilter==key?"":key);
+void SetKpi(string key){kpiFilter=key;outcomeFilter="";Stage=Queue=InterviewFilter=null;DecisionOnly=false;ResetPage();selected.Clear();UpdateViewUrl(key);}
+void UpdateViewUrl(string key)=>Navigation.NavigateTo(Navigation.GetUriWithQueryParameters(new Dictionary<string,object?>{["view"]=key.Length==0?null:key,["stage"]=null,["queue"]=null,["interview"]=null,["decisionOnly"]=null,["client"]=string.IsNullOrWhiteSpace(clientFilter)?null:clientFilter,["ref"]=string.IsNullOrWhiteSpace(PositionReference)?null:PositionReference,["active"]=ActiveOnly?true:null}));
+void OutcomeChanged(){kpiFilter="";Stage=Queue=InterviewFilter=null;DecisionOnly=false;ResetPage();selected.Clear();UpdateViewUrl("");}
+void ClearStatus(){kpiFilter=outcomeFilter="";Stage=Queue=InterviewFilter=null;DecisionOnly=false;ResetPage();UpdateViewUrl("");}
+
+List<ClientContact> Contacts=>clients.Where(c=>c.Id==records.FirstOrDefault(a=>selected.Contains(a.Id))?.Position?.ClientId).SelectMany(c=>c.Contacts).Where(c=>!string.IsNullOrWhiteSpace(c.Name)).ToList();
+
+string Slot(RecruiterFeedback f){try{return TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(f.AvailabilityStartUtc!.Value,DateTimeKind.Utc),TimeZoneInfo.FindSystemTimeZoneById(f.TimeZone)).ToString("dddd, dd MMM yyyy · HH:mm")+" · "+f.TimeZone;}catch{return f.AvailabilityStartUtc+" UTC";}}
+
+void Toggle(Assessment a,bool value){if(value)selected.Add(a.Id);else selected.Remove(a.Id);}
+
+async Task OpenForward(){awaitingPortalPreview=await Review.PortalAllowed(records.FirstOrDefault(a=>selected.Contains(a.Id))?.Position?.WorkspaceId);contactId=null;recipientEmail=records.FirstOrDefault(a=>selected.Contains(a.Id))?.Position?.HiringManagerEmail??"";forwardMessage=forwardLink="";Error=Notice="";forwardOpen=true;}
+void RecipientChanged(){recipientEmail=Contacts.FirstOrDefault(c=>c.Id==contactId)?.Email??"";forwardLink="";}
+void ClearLink(){forwardLink="";}
+Task CopyLink()=>Run(async()=>{var copied=await JS.InvokeAsync<bool>("osynixCopyReviewLink",forwardLink);Notice=copied?"Link Copied. Paste It Into WhatsApp.":"Select the link and press Ctrl+C to copy it.";});
+
+Task Forward()=>Run(async()=>{var result=await Review.Forward(contactId,selected,forwardMessage,recipientEmail);forwardLink=result.Link;Notice=result.Message;await Load();});
+
+Task Revoke(Guid id)=>Run(async()=>{await Review.Revoke(id);await Load();Notice="Profile sharing revoked.";});
+
+protected override Task OnInitializedAsync(){Updates.Changed+=OnChange;return Run(Load);}
+
+void OnChange()=>_=InvokeAsync(async()=>{try{await Load();StateHasChanged();}catch{Error="Reload the pipeline to check your current access.";StateHasChanged();}});
+
+public void Dispose()=>Updates.Changed-=OnChange;
+
+bool canShare;
+async Task Load(){canShare=true;var active=await Access.Context();employerName=active?.Membership is not null?(await Ats.Allowance())?.WorkspaceName??"Employer Workspace":"";positions=await Ats.Positions();records=(await Ats.Assessments()).Where(x=>x.State=="Saved").ToList();attribution=await AttributionService.Attribution(records);feedback=await Review.Inbox();interviews=await Interviews.List();actionIds=(await Actions.Inbox(true)).Select(t=>t.Action.AssessmentId).ToHashSet();clients=await Workspace.Clients();selected.RemoveWhere(id=>!records.Any(a=>a.Id==id));if(ApplicationId is Guid appId&&openedApplication!=appId){edit=records.FirstOrDefault(a=>a.Id==appId);if(edit is not null)openedApplication=appId;}}
+
+async Task Saved(){var id=edit?.Id;await Load();edit=records.FirstOrDefault(a=>a.Id==id);if(edit is not null){var status=Status(edit);var target=status switch{"Offer Requested"=>"offer-requested","Offer Sent"=>"offer-sent","Hired"=>"hired","Rejected"=>"rejected",_=>""};if(target.Length>0){SetKpi(target);Notice=status=="Offer Sent"?"Offer Sent. Candidate Remains In Recruitment Pipeline Awaiting Hired Or Rejected.":$"{status}. The Relevant Pipeline Card Has Been Opened.";return;}}Notice="Pipeline Updated.";}
+
 }

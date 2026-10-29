@@ -1,16 +1,9 @@
 @page "/"
-@attribute [Authorize(Roles="Admin,Recruiter")]
-@inherits PageBase
-@inject AtsService Ats
-<PageTitle>Dashboard · Osynix ATS</PageTitle>
-<div class="page-heading"><div><div class="eyebrow">ACTIVE RECRUITMENT</div><h1>Recruitment dashboard</h1><p class="muted">Application KPIs cover currently active positions.</p></div><a class="button" href="assessment">+ Assess candidates</a></div><Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
-<div class="kpis"><a class="kpi" href="positions?status=Active"><span>Active positions</span><strong>@active.Count</strong></a><div class="kpi"><span>Active-position applications</span><strong>@saved.Count</strong></div>@foreach(var q in new[]{"Shortlisted","In Interview","Pending Decision","Hired"}){<a class="kpi" href="@($"/pipeline?active=true&queue={Uri.EscapeDataString(q)}")"><span>@q</span><strong>@saved.Count(x=>Lifecycle.Classify(x)==q)</strong></a>}</div>
-<div class="two-col"><section class="panel"><h2>Hiring funnel</h2>@foreach(var group in saved.GroupBy(x=>x.Stage).OrderByDescending(x=>x.Count())){<a class="bar-row" href="@($"/pipeline?active=true&stage={Uri.EscapeDataString(group.Key)}")"><span>@group.Key</span><div class="bar-track"><div style="@($"width:{100d*group.Count()/Math.Max(1,saved.Count):0.##}%")"></div></div><b>@group.Count()</b></a>}</section><section class="panel"><h2>AI decision mix</h2>@foreach(var group in saved.GroupBy(x=>x.Decision).OrderByDescending(x=>x.Count())){<div class="bar-row"><DecisionBadge Value="@group.Key" /><div class="bar-track"><div style="@($"width:{100d*group.Count()/Math.Max(1,saved.Count):0.##}%")"></div></div><b>@group.Count()</b></div>}</section></div>
-<section class="panel"><h2>Pending actions</h2><div class="toolbar"><a class="button secondary" href="/pipeline?active=true&queue=Pending%20Decision">Pending decisions (@saved.Count(x=>Lifecycle.Classify(x)=="Pending Decision"))</a><a class="button secondary" href="/pipeline?active=true&queue=On%20Hold">On hold (@saved.Count(x=>Lifecycle.Classify(x)=="On Hold"))</a><a class="button secondary" href="positions?status=Active&unscreened=true">Positions without screening (@active.Count(x=>!saved.Any(a=>a.PositionId==x.Id)))</a><a class="button secondary" href="positions?status=Active&priority=High">High priority (@active.Count(x=>x.Priority=="High"))</a></div></section>
-<section class="panel table-wrap"><h2>Hiring activity by client</h2><table><thead><tr><th>Client</th><th>Active positions</th><th>Applications</th><th>Shortlisted</th><th>Interviews</th><th>Offers</th><th>Hired</th></tr></thead><tbody>@foreach(var g in active.GroupBy(x=>x.Client)){var ids=g.Select(x=>x.Id).ToHashSet();var applications=saved.Where(x=>ids.Contains(x.PositionId)).ToList();<tr><td>@g.Key</td><td>@g.Count()</td><td>@applications.Count</td><td>@applications.Count(x=>Lifecycle.Classify(x)=="Shortlisted")</td><td>@applications.Count(x=>Lifecycle.Classify(x)=="In Interview")</td><td>@applications.Count(x=>x.Stage=="Offer Sent")</td><td>@applications.Count(x=>Lifecycle.Classify(x)=="Hired")</td></tr>}</tbody></table></section>
-<div class="two-col"><section class="panel"><h2>Active positions</h2>@foreach(var p in active.OrderBy(x=>Array.IndexOf(Choices.Priorities,x.Priority))){<a class="recent" href="@($"/positions?ref={p.Reference}")"><span><b>#@p.Reference — @p.Title</b><small>@p.Client · @p.Priority · Target @p.HiringTarget</small></span><b>@saved.Count(x=>x.PositionId==p.Id) screened</b></a>}</section><section class="panel"><h2>Recent candidate activity</h2>@foreach(var a in saved.OrderByDescending(x=>x.UpdatedUtc).Take(8)){<a class="recent" href="@($"/candidates?id={a.CandidateId}")"><span><b>@a.CandidateName</b><small>#@a.Position?.Reference · @a.Stage</small></span><DecisionBadge Value="@a.Decision" /></a>}</section></div>
-@if(active.Count==0){<p class="empty">Create or import positions to begin.</p>}
-@code{
-List<Position> active=[];List<Assessment> saved=[];
-protected override Task OnInitializedAsync()=>Run(async()=>{active=(await Ats.Positions()).Where(x=>x.Status=="Active").ToList();var ids=active.Select(x=>x.Id).ToHashSet();saved=(await Ats.Assessments()).Where(x=>x.State=="Saved"&&ids.Contains(x.PositionId)).ToList();});
-}
+@attribute [Authorize(Roles="Admin,SubAdmin,Recruiter,Employer")]
+<AuthorizeView Roles="Admin">
+    <Authorized><AdminDashboard /></Authorized>
+</AuthorizeView>
+<AuthorizeView Roles="SubAdmin"><Authorized><section class="panel"><h1>Admin Panel Access</h1><p class="muted">Open Settings to view the Admin sections assigned to your account.</p><a class="button" href="/settings">Open Settings</a></section></Authorized></AuthorizeView>
+<AuthorizeView Roles="Recruiter,Employer">
+    <Authorized><AccountDashboard /></Authorized>
+</AuthorizeView>

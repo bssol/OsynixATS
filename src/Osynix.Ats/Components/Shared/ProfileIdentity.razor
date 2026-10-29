@@ -1,0 +1,12 @@
+@inherits PageBase
+@inject SelfProfileService Profiles
+<Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
+@if(profile is not null){<div class="editable-profile-identity"><div class="editable-profile-photo"><img class="profile-avatar-large" src="@profile.Image" alt="Your Profile Picture" /><label class="profile-pencil photo-pencil" title="Edit Profile Picture"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m15 4 5 5M4 20l4-1L20 7a2 2 0 0 0-4-4L4 15z" /></svg><InputFile OnChange="Upload" accept="image/png,image/jpeg" aria-label="Edit Profile Picture" disabled="@Busy" /></label></div><small>PNG Or JPEG · Up To 1 MB</small><div class="editable-profile-name">@if(editing){<label>Name<input aria-label="Profile Name" maxlength="100" @bind="name" /></label><div class="toolbar"><button disabled="@Busy" @onclick="SaveName">Save Name</button><button class="secondary" disabled="@Busy" @onclick="()=>editing=false">Cancel</button></div>}else{<h2>@profile.Name</h2><button class="secondary profile-pencil" aria-label="Edit Name" title="Edit Name" @onclick="Edit"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m15 4 5 5M4 20l4-1L20 7a2 2 0 0 0-4-4L4 15z" /></svg></button>}</div></div>}
+@code{[Parameter]public EventCallback Changed{get;set;}
+SelfProfile? profile;bool editing;string name="";
+protected override Task OnInitializedAsync()=>Run(Load);
+async Task Load()=>profile=await Profiles.Get();
+void Edit(){name=profile!.Name;editing=true;Error=Notice="";}
+Task SaveName()=>Run(async()=>{await Profiles.UpdateName(name,profile!.Revision);editing=false;await Load();Notice="Name Updated.";await Changed.InvokeAsync();});
+Task Upload(InputFileChangeEventArgs args)=>Run(async()=>{if(args.File.Size>1024*1024)throw new InvalidOperationException("Choose A Profile Photo Up To 1 MB.");await using var stream=args.File.OpenReadStream(1024*1024);using var output=new MemoryStream();await stream.CopyToAsync(output);await Profiles.UpdateImage(output.ToArray(),profile!.Revision);await Load();Notice="Profile Picture Updated.";await Changed.InvokeAsync();});
+}

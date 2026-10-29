@@ -1,0 +1,19 @@
+@{var palette=CareersBranding.Palette(Workspace.CareersColorScheme);}
+<div class="career-preview" style="@($"--preview-primary:{palette.Primary};--preview-deep:{palette.Deep};--preview-tint:{palette.Tint}")" aria-label="Careers page live preview">
+    <div class="preview-cover">@if(Cover.Length>0){<img src="@Cover" alt="Selected cover" />}<div><small>EXPLORE CAREERS WITH @Workspace.CompanyName</small><h2>Find Your Next Opportunity</h2></div></div>
+    <div class="preview-content">
+        <div class="preview-identity">@if(Workspace.LogoContent is {Length:>0}){<img src="@($"data:{Workspace.LogoContentType};base64,{Convert.ToBase64String(Workspace.LogoContent)}")" alt="Company Logo" />}<h3>@Workspace.CompanyName</h3></div>
+        @if(!string.IsNullOrWhiteSpace(Workspace.AboutUs)){<h4>About Us</h4><p class="preview-about">@Workspace.AboutUs</p>}
+        @if(Workspace.Website.Length>0){<p class="muted">@Workspace.Website</p>}
+        @if(Workspace.ShowBusinessContacts){<p class="muted">@Workspace.BusinessEmail @Workspace.ContactNumber</p>}
+        <div class="preview-jobs-heading"><h3>Open Positions</h3><small>@Jobs.Count Opportunities</small></div>
+        @if(Jobs.Count==0){<p class="muted">No published active positions yet.</p>}
+        @foreach(var job in Jobs){<article class="preview-job"><div><b>@job.Title</b><small>@job.Location · @job.EmploymentType @job.WorkArrangement</small>@if(job.Department.Length>0){<small>@job.Department</small>}</div><span class="preview-apply">Apply Now</span></article>}
+        @if(!Workspace.CareersPublished){<p class="preview-unpublished">Your careers page is currently unpublished. This preview is visible only in Settings.</p>}
+    </div>
+</div>
+@code{
+    [Parameter,EditorRequired] public EmployerWorkspace Workspace {get;set;}=default!;
+    [Parameter] public List<PublicCareerJob> Jobs {get;set;}=[];
+    string Cover=>Workspace.CareersCoverMode=="None"?"":Workspace.CareersCoverMode=="Stock"?CareersBranding.StockPath(Workspace.CareersStockCover):Workspace.CareersCoverContent is {Length:>0}?$"data:{Workspace.CareersCoverContentType};base64,{Convert.ToBase64String(Workspace.CareersCoverContent)}":"";
+}

@@ -1,0 +1,28 @@
+@page "/search"
+@attribute [Authorize(Roles="Admin,Recruiter,Employer")]
+@inherits PageBase
+@inject AtsService Ats
+<PageTitle>Search · Osynix ATS</PageTitle>
+<div class="page-heading"><div><div class="eyebrow">WORKSPACE SEARCH</div><h1>Search Results</h1><p class="muted">@(!string.IsNullOrWhiteSpace(Query) ? $"Results for “{Query}”" : "Enter a candidate name, job title, client, or keyword in the search bar.")</p></div></div>
+<Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
+@if(!string.IsNullOrWhiteSpace(Query) && !Busy) {
+<section class="panel"><h2>Candidates <span class="muted">(@candidates.Count)</span></h2>
+@if(candidates.Count==0){<p class="muted">No matching candidates.</p>}
+@foreach(var c in candidates){<a class="search-result" href="@($"/candidates?id={c.Id}")"><strong>@c.Name</strong><small>@c.CurrentRole · @c.CurrentCompany · @c.Location</small></a>}
+</section>
+<section class="panel"><h2>Jobs <span class="muted">(@positions.Count)</span></h2>
+@if(positions.Count==0){<p class="muted">No matching jobs.</p>}
+@foreach(var p in positions){<a class="search-result" href="@($"/positions?ref={Uri.EscapeDataString(p.Reference)}")"><strong>@p.Title</strong><small>@p.Client · #@p.Reference · @p.Status</small></a>}
+</section>
+}
+@code {
+    [SupplyParameterFromQuery(Name="q")] public string? Query {get;set;}
+    List<Candidate> candidates=[]; List<Position> positions=[];
+    protected override Task OnParametersSetAsync()=>Run(async()=>{
+        candidates=[]; positions=[];
+        if(string.IsNullOrWhiteSpace(Query))return;
+        var term=Query.Trim();
+        candidates=(await Ats.Candidates()).Where(c=>$"{c.Name} {c.LegacyId} {c.CurrentRole} {c.CurrentCompany} {c.Skills} {c.Industry}".Contains(term,StringComparison.OrdinalIgnoreCase)).ToList();
+        positions=(await Ats.Positions()).Where(p=>$"{p.Title} {p.Client} {p.Reference}".Contains(term,StringComparison.OrdinalIgnoreCase)).ToList();
+    });
+}

@@ -11,6 +11,10 @@ public abstract class Record
 }
 public class Position : Record
 {
+    public bool IsAgencyPosition{get;set;}
+    public bool CareersPublished { get; set; }
+    public string PublicJobDescription { get; set; } = "";
+    public Guid? WorkspaceId {get;set;}
     [Required, MaxLength(30)] public string Reference { get; set; } = "";
     [Required, MaxLength(200)] public string Title { get; set; } = "";
     [Required, MaxLength(200)] public string Client { get; set; } = "";
@@ -31,9 +35,23 @@ public class Position : Record
     public string JdHash { get; set; } = "";
     public Guid? JdDocumentId { get; set; }
     public string PositionSummary { get; set; } = "";
+    public string Industry { get; set; } = "";
+    public string Seniority { get; set; } = "";
+    public string JobDescriptionHtml { get; set; } = "";
+    public string JdNeedsAttentionJson { get; set; } = "[]";
     public string InternalNotes { get; set; } = "";
     public string Location { get; set; } = "";
     public string SalaryRange { get; set; } = "";
+    public string Department{get;set;}="";
+    public string WorkArrangement{get;set;}="On-Site";
+    public decimal? SalaryMinimum{get;set;}
+    public decimal? SalaryMaximum{get;set;}
+    public string SalaryCurrency{get;set;}="PKR";
+    public string SalaryPeriod{get;set;}="Monthly";
+    public bool ShowSalaryPublicly{get;set;}
+    public string HiringManagerEmail{get;set;}="";
+    public string HiringManagerPhone{get;set;}="";
+    public bool HiringManagerPortalEnabled { get; set; }
     public string EmploymentType { get; set; } = "Full-time";
     public string Status { get; set; } = "Active";
     public string JobDescription { get; set; } = "";
@@ -41,6 +59,10 @@ public class Position : Record
     public string ClosureReason { get; set; } = "";
     public Guid? HiredCandidateId { get; set; }
     public bool CriteriaLocked { get; set; }
+    public string DraftAnalysisSignature { get; set; } = "";
+    public string DraftWorkflowStep { get; set; } = "";
+    public bool DraftSourceReviewed { get; set; }
+    public bool DraftCriteriaReviewed { get; set; }
     public List<Criterion> Criteria { get; set; } = [];
 }
 public class Criterion : Record
@@ -56,13 +78,17 @@ public class Criterion : Record
 }
 public class Candidate : Record
 {
+    public Guid? WorkspaceId {get;set;}
+    public Guid? PersonId {get;set;}
     public string LegacyId { get; set; } = "";
     [Required] public string Name { get; set; } = "";
     public string NormalizedName { get; set; } = "";
     public string Email { get; set; } = "";
     public string Phone { get; set; } = "";
+    public string LinkedInUrl { get; set; } = "";
     public string NormalizedPhone { get; set; } = "";
     public string Location { get; set; } = "";
+    public string City { get; set; } = "";
     public string CurrentRole { get; set; } = "";
     public string CurrentCompany { get; set; } = "";
     public double? TotalExperience { get; set; }
@@ -83,6 +109,8 @@ public class Candidate : Record
     public List<CandidateEmployment> EmploymentHistory { get; set; } = [];
     public List<CandidateEducation> EducationHistory { get; set; } = [];
     public string TalentStatus { get; set; } = "Active";
+    public string CvProfileStatus { get; set; } = "Not Requested";
+    public string CvProfileError { get; set; } = "";
     public string Notes { get; set; } = "";
     public string LegacyCvLink { get; set; } = "";
     public Guid? DocumentId { get; set; }
@@ -107,6 +135,8 @@ public class Assessment : Record
     public string Decision { get; set; } = "";
     public string Stage { get; set; } = "HR Screening";
     public string InterviewStatus { get; set; } = "";
+    public DateTime? InterviewDateTimeUtc { get; set; }
+    public string InterviewTimeZone { get; set; } = "";
     public string ClientStatus { get; set; } = "";
     public string ExpectedSalary { get; set; } = "";
     public string CurrentCompensation { get; set; } = "";
@@ -124,6 +154,8 @@ public class Assessment : Record
     public string SourceFileName { get; set; } = "";
     public Guid? SourceCandidateId { get; set; }
     public bool RefreshProfile { get; set; }
+    public string AutoAssessmentStatus { get; set; } = "Not Requested";
+    public string AutoAssessmentError { get; set; } = "";
 }
 public class StoredDocument : Record
 {
@@ -164,12 +196,12 @@ public record AssessmentSnapshot(Candidate Profile, double? RelevantExperience, 
 public record ScoringResult(int Match, string MustHave, double Core, double Confidence, string Decision, List<ScoredCriterion> Criteria);
 public static class Choices
 {
-    public static readonly string[] PositionStatuses = ["Active", "On Hold", "Closed", "Filled", "Cancelled"];
+    public static readonly string[] PositionStatuses = ["Draft", "Active", "On Hold", "Closed", "Filled", "Cancelled"];
     public static readonly string[] Priorities = ["High", "Medium", "Low"];
-    public static readonly string[] Stages = ["Applied", "HR Screening", "Background Check", "Consider", "Shortlisted", "Technical Interview", "Final Interview", "Client Interview", "Offer Sent", "Hired", "Hold", "Rejected"];
+    public static readonly string[] Stages = ["Applied", "HR Screening", "Background Check", "Consider", "Shortlisted", "Awaiting Client Feedback", "Awaiting Employer Review", "Information Requested", "Interview Requested", "Technical Interview", "Final Interview", "Client Interview", "Offer Requested", "Offer Sent", "Hired", "Hold", "Rejected"];
     public static readonly string[] Decisions = ["Priority Shortlist", "Shortlist", "Consider", "Hold", "Reject", "Insufficient Evidence"];
-    public static readonly string[] Interviews = ["Not Scheduled", "Scheduled", "Completed", "No Show", "Reschedule Required", "Not Required"];
-    public static readonly string[] ClientStatuses = ["Not Submitted", "Submitted", "Under Review", "Client Shortlisted", "Client Rejected", "Client Interview", "Offer", "Hired"];
+    public static readonly string[] Interviews = ["Not Scheduled", "Scheduled", "New Time Proposed", "Cancelled", "Completed", "No Show", "Reschedule Required", "Not Required"];
+    public static readonly string[] ClientStatuses = ["Not Submitted", "Submitted", "Under Review", "Client Shortlisted", "Client Rejected", "Information Requested", "Interview Requested", "Client Interview", "Offer Requested", "Offer", "Hired"];
     public static readonly string[] TalentStatuses = ["Active", "Priority Talent", "Passive", "Placed", "Archived", "Do Not Contact"];
     public static readonly string[] FilledSources = ["Osynix Recruiter", "Client Direct Hire", "Other"];
     public static string Tone(string decision) => decision.Contains("Shortlist", StringComparison.OrdinalIgnoreCase) || decision is "Hired" or "Placed" ? "green" : decision is "Consider" or "Partial" or "Hold" or "Pending Decision" or "In Interview" ? "yellow" : "red";
@@ -179,6 +211,9 @@ public static class Choices
 
 public class Client : Record
 {
+    public bool CareersPublished { get; set; }
+    public string PublicJobDescription { get; set; } = "";
+    public Guid? WorkspaceId {get;set;}
     public string Name { get; set; } = "";
     public string NormalizedName { get; set; } = "";
     public string Industry { get; set; } = "";
@@ -190,6 +225,7 @@ public class Client : Record
 }
 public class ClientContact : Record
 {
+    public bool PortalEnabled { get; set; }
     public Guid ClientId { get; set; }
     public string Name { get; set; } = "";
     public string Title { get; set; } = "";

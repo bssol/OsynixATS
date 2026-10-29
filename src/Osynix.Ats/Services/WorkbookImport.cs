@@ -70,7 +70,7 @@ public class WorkbookImport(IDbContextFactory<AtsDbContext> factory,Access acces
         var sheets=wb.Worksheets.ToDictionary(x=>x.Name,Rows,StringComparer.OrdinalIgnoreCase);
         foreach(var sheet in sheets.Where(x=>x.Key is not ("User Sessions" or "Trusted Devices")))
             foreach(var row in sheet.Value) db.ImportRows.Add(new ImportRow{FileHash=preview.Hash,Sheet=sheet.Key,RowNumber=row.Number,Json=JsonSerializer.Serialize(row.Values)});
-        var clients=await db.Clients.ToListAsync();var positions=new Dictionary<string,Position>();
+        var clients=await db.Clients.Where(c=>c.WorkspaceId==null).ToListAsync();var positions=new Dictionary<string,Position>();
         foreach(var (row,r) in sheets["Positions Master"]) {
             var reference=Ref(V(r,"Ref #"));if(reference.Length==0) continue;
             if(positions.ContainsKey(reference)) throw new InvalidOperationException("Duplicate position Ref # "+reference);
@@ -98,6 +98,7 @@ public class WorkbookImport(IDbContextFactory<AtsDbContext> factory,Access acces
             c.CreatedUtc=SourceUtc(c.FirstScreenedDate)??c.CreatedUtc;c.UpdatedUtc=SourceUtc(Date(source,row,"Last Updated"))??c.UpdatedUtc;
             CandidateProfile.ReadStructuredHistory(c);people.Add(c);db.Candidates.Add(c);
         }
+        await TalentIdentity.AttachMany(db,people);
         var applications=sheets.GetValueOrDefault("Candidates")??[];var pairs=new HashSet<string>();var evidenceRecords=0;
         foreach(var (row,r) in applications) {
             var name=V(r,"Candidate Name");var reference=Ref(V(r,"Ref #"));if(name.Length==0) continue;
@@ -167,12 +168,12 @@ public class WorkbookImport(IDbContextFactory<AtsDbContext> factory,Access acces
             }
         }
         AtsService.Audit(db,user.Identity!.Name!,"Workbook imported",preview.Hash,$"{positions.Count} positions; {people.Count} people; {pairs.Count} applications; {evidenceRecords} detailed evidence records");
-        await db.SaveImportedChangesAsync();await tx.CommitAsync();
+        await db.SaveImportedChangesAsync();await tx.CommitAsync();await WorkspaceUpgrade.Apply(db);
         return $"Imported {positions.Count} positions, {people.Count} candidates, {pairs.Count} applications and {evidenceRecords} detailed evidence records. Review criteria and settings before screening.";
     }
     static Candidate Profile(Dictionary<string,string> r)
     {
         var name=V(r,"Candidate Name");var phone=V(r,"Mobile / Phone Number","Phone");
-        return new Candidate{LegacyId=V(r,"Candidate ID"),Name=name,NormalizedName=Choices.MatchKey(name),Email=CandidateIdentity.Email(V(r,"Email ID","Email")),Phone=phone,NormalizedPhone=CandidateIdentity.Phone(phone),Location=V(r,"Location"),CurrentRole=V(r,"Current / Latest Designation","Current Designation"),CurrentCompany=V(r,"Current / Latest Company","Current Company"),TotalExperience=Number(V(r,"Total Experience (Yrs)")),Function=V(r,"Primary Function"),Specialization=V(r,"Secondary Function / Specialization"),Industry=V(r,"Industries / Domains"),Skills=V(r,"Core Skills"),Seniority=V(r,"Seniority Level"),Systems=V(r,"Systems / Tools"),Markets=V(r,"Geographic / Market Exposure"),Summary=V(r,"Professional Summary"),CareerSummary=V(r,"Career Profile Summary"),Employment=V(r,"Employment / Career History"),Education=V(r,"Education"),TalentStatus=V(r,"Talent Pool Status").Length>0?V(r,"Talent Pool Status"):"Active",Notes=V(r,"Talent Pool Notes"),LegacyCvLink=V(r,"Source CV / File","CV / File Link")};
+        return new Candidate{LegacyId=V(r,"Candidate ID"),Name=name,NormalizedName=Choices.MatchKey(name),Email=CandidateIdentity.Email(V(r,"Email ID","Email")),Phone=phone,NormalizedPhone=CandidateIdentity.Phone(phone),LinkedInUrl=CandidateLinks.NormalizeLinkedIn(V(r,"LinkedIn Profile","LinkedIn URL","LinkedIn")),Location=V(r,"Location"),CurrentRole=V(r,"Current / Latest Designation","Current Designation"),CurrentCompany=V(r,"Current / Latest Company","Current Company"),TotalExperience=Number(V(r,"Total Experience (Yrs)")),Function=V(r,"Primary Function"),Specialization=V(r,"Secondary Function / Specialization"),Industry=V(r,"Industries / Domains"),Skills=V(r,"Core Skills"),Seniority=V(r,"Seniority Level"),Systems=V(r,"Systems / Tools"),Markets=V(r,"Geographic / Market Exposure"),Summary=V(r,"Professional Summary"),CareerSummary=V(r,"Career Profile Summary"),Employment=V(r,"Employment / Career History"),Education=V(r,"Education"),TalentStatus=V(r,"Talent Pool Status").Length>0?V(r,"Talent Pool Status"):"Active",Notes=V(r,"Talent Pool Notes"),LegacyCvLink=V(r,"Source CV / File","CV / File Link")};
     }
 }

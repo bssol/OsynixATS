@@ -38,6 +38,8 @@ public static class DatabaseInitializer
             }
             await db.Database.MigrateAsync(token);
             await Backfill(db,token);
+            await Osynix.Ats.Services.SubscriptionDefaults.Initialize(db,token);
+            await BackfillSubscriptionRenewalDates(db,token);
         } finally { try {await db.Database.CloseConnectionAsync();} finally {Gate.Release();} }
     }
 
@@ -91,7 +93,7 @@ public static class DatabaseInitializer
     static async Task Backfill(AtsDbContext db,CancellationToken token)
     {
         // Each backfill is idempotent and preserves real historical timestamps.
-        var people=await db.Candidates.Include(x=>x.EmploymentHistory).Include(x=>x.EducationHistory).ToListAsync(token);
+        var people=await db.Candidates.Include(x=>x.EmploymentHistory).Include(x=>x.EducationHistory).AsSplitQuery().ToListAsync(token);
         var usedIds=people.Select(x=>x.LegacyId).ToList();
         foreach(var c in people) {
             if(c.LegacyId.Length==0) {c.LegacyId=CandidateIdentity.NextDisplayId(usedIds);usedIds.Add(c.LegacyId);}
@@ -103,8 +105,8 @@ public static class DatabaseInitializer
         var clients=await db.Clients.ToListAsync(token);
         foreach(var p in await db.Positions.Where(x=>x.ClientId==null).ToListAsync(token)) {
             var key=Choices.MatchKey(p.Client); if(key.Length==0) continue;
-            var client=clients.FirstOrDefault(x=>x.NormalizedName==key);
-            if(client is null) {client=new Client{Name=p.Client,NormalizedName=key};clients.Add(client);db.Clients.Add(client);}
+            var client=clients.FirstOrDefault(x=>x.WorkspaceId==p.WorkspaceId&&x.NormalizedName==key);
+            if(client is null) {client=new Client{WorkspaceId=p.WorkspaceId,Name=p.Client,NormalizedName=key};clients.Add(client);db.Clients.Add(client);}
             p.ClientId=client.Id;
         }
         var versions=await db.AssessmentVersions.Select(x=>x.AssessmentId).Distinct().ToListAsync(token);
@@ -121,6 +123,16 @@ public static class DatabaseInitializer
             foreach(var (list,items) in lists) for(var i=0;i<items.Length;i++) db.ReferenceOptions.Add(new ReferenceOption{List=list,Value=items[i],Order=i});
         }
         await db.SaveImportedChangesAsync(token);
+    }
+
+    static async Task BackfillSubscriptionRenewalDates(AtsDbContext db,CancellationToken token)
+    {
+        TimeZoneInfo zone;
+        try{zone=TimeZoneInfo.FindSystemTimeZoneById("Asia/Karachi");}
+        catch(TimeZoneNotFoundException){zone=TimeZoneInfo.FindSystemTimeZoneById("Pakistan Standard Time");}
+        var workspaces=await db.EmployerWorkspaces.Where(w=>w.SubscriptionName!="Free"&&w.SubscriptionRenewalDate==null&&w.SubscriptionActivatedUtc!=null).ToListAsync(token);
+        foreach(var w in workspaces){var activated=DateTime.SpecifyKind(w.SubscriptionActivatedUtc!.Value,DateTimeKind.Utc);var local=TimeZoneInfo.ConvertTimeFromUtc(activated,zone);var date=DateOnly.FromDateTime(local);w.SubscriptionRenewalDate=w.SubscriptionBilling=="Annual"?date.AddYears(1):date.AddMonths(1);}
+        if(workspaces.Count>0)await db.SaveChangesAsync(token);
     }
 
     public static AssessmentVersion VersionOf(Assessment a) => new() {AssessmentId=a.Id,Number=a.VersionNumber,SnapshotJson=a.SnapshotJson,MatchPercent=a.MatchPercent,MustHaveFit=a.MustHaveFit,CoreRoleFit=a.CoreRoleFit,EvidenceStrength=a.EvidenceStrength,Decision=a.Decision,Model=a.Model,DocumentId=a.DocumentId,PolicyJson=a.PolicyJson,CreatedUtc=a.LastAssessedDate??a.DateScreened??a.CreatedUtc,UpdatedUtc=a.LastAssessedDate??a.DateScreened??a.UpdatedUtc};

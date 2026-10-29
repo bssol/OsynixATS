@@ -1,0 +1,23 @@
+@page "/my-work"
+@attribute [Authorize(Roles="Recruiter,Employer")]
+@inherits PageBase
+@inject RecruiterWorkService Work
+@inject RecruitmentUpdates Updates
+@implements IDisposable
+<PageTitle>My Workspace · Osynix ATS</PageTitle>
+<div class="page-heading"><div><div class="eyebrow">YOUR RECRUITMENT SPACES</div><h1>My Workspace</h1><p class="muted">Choose Your Independent Business Or An Employer Team.</p></div></div>
+<Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
+@if(data is not null){
+<div class="workspace-card-grid">
+@if(data.PersonalWorkspace is not null){<section class="panel workspace-choice-card"><span class="kpi-icon icon-blue"><NavIcon Name="clients" /></span><h2>Freelance Recruiter</h2><p>Your Independent Business</p><p class="muted">Your Clients And Personal Positions</p><WorkOpenButton WorkspaceId="data.PersonalWorkspace.Value" Path="/workspace-dashboard" Text="Open My Workspace" /></section>}
+@foreach(var team in data.Teams){<section class="panel workspace-choice-card"><span class="kpi-icon icon-violet"><NavIcon Name="positions" /></span><h2>@team.Name</h2><p class="muted">Employer Workspace · Active Team Membership</p><p>@data.Positions.Count(p=>p.WorkspaceId==team.Id) Assigned Positions</p><WorkOpenButton WorkspaceId="team.Id" Path="/workspace-dashboard" Text="Open Employer Workspace" /></section>}
+</div>
+<section class="panel"><h2>Pending Employer Invitations (@data.Invitations.Count)</h2><p class="muted">Accept An Invitation To Add Its Employer Workspace. Positions Appear After The Employer Assigns Them To You.</p>@foreach(var invite in data.Invitations){<div class="section-heading"><h3>@invite.Employer</h3><a class="button secondary" href="@invite.Link" data-enhance-nav="false">Review Invitation</a></div>}@if(data.Invitations.Count==0){<p class="empty">No Pending Invitations.</p>}</section>
+}
+@code{
+RecruiterWorkOverview? data;
+protected override Task OnInitializedAsync(){Updates.Changed+=Changed;return Run(Load);}
+async Task Load()=>data=await Work.Overview();
+void Changed()=>_=InvokeAsync(async()=>{try{await Load();}catch(UnauthorizedAccessException){data=null;Error="Your Access Changed. Refresh To Check Available Workspaces.";}StateHasChanged();});
+public void Dispose()=>Updates.Changed-=Changed;
+}

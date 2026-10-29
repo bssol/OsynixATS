@@ -1,0 +1,12 @@
+@page "/candidate-accounts"
+@attribute [Authorize(Roles="Admin")]
+@inherits PageBase
+@using Microsoft.EntityFrameworkCore
+@using Osynix.Ats.Data
+@inject IDbContextFactory<AtsDbContext> Factory
+@inject Access Access
+<PageTitle>Candidate Database · Osynix ATS</PageTitle>
+<div class="page-heading"><div><h1>Candidate Database</h1><p class="muted">Self-Registered Candidate Accounts. Uploaded Recruitment Profiles Stay In The Talent Pools.</p></div></div>
+<Feedback Error="@Error" Busy="Busy" />
+<section class="panel table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Email Verified</th></tr></thead><tbody>@foreach(var candidate in accounts){<tr><td>@candidate.FullName</td><td>@candidate.Email</td><td>@candidate.Status</td><td>@(candidate.EmailConfirmed?"Yes":"No")</td></tr>}</tbody></table>@if(accounts.Count==0){<p class="empty">No Candidate Accounts Yet. The Candidate Profile Portal Will Be Developed Separately.</p>}</section>
+@code{List<AtsUser> accounts=[];protected override Task OnInitializedAsync()=>Run(async()=>{await Access.Require(true);await using var db=await Factory.CreateDbContextAsync();accounts=await db.Users.AsNoTracking().Where(u=>db.UserRoles.Any(ur=>ur.UserId==u.Id&&db.Roles.Any(r=>r.Id==ur.RoleId&&r.Name=="Candidate"))).OrderBy(u=>u.FullName).ToListAsync();});}

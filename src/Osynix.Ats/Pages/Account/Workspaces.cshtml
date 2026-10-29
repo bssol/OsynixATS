@@ -1,0 +1,7 @@
+@page
+@model Osynix.Ats.Pages.Account.WorkspacesModel
+@{Layout="_AuthLayout";ViewData["Title"]="Choose Workspace";}
+<div class="auth-title"><h1>Choose Your Workspace</h1><p>Your Clients, Positions, Talent Pool And Permissions Stay Separate In Each Workspace.</p></div>
+@if(Model.Workspaces.Count==0){<p>No Active Workspaces. Ask Your Employer To Activate Your Membership.</p>}
+@foreach(var workspace in Model.Workspaces){<form method="post"><input type="hidden" name="WorkspaceId" value="@workspace.Id"/><button class="auth-primary" type="submit">@workspace.Name <small>@workspace.Role</small></button></form>}
+<p class="auth-switch"><a href="/profile">My Profile</a> · <a href="/Account/Login">Sign In</a></p>

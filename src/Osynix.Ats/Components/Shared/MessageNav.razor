@@ -1,0 +1,13 @@
+@inject MarketplaceMessages MarketplaceInbox
+@inject SupportInboxService SupportInbox
+@inject RecruitmentUpdates Updates
+@inject AuthenticationStateProvider Auth
+@implements IDisposable
+<NavLink href="/messages" title="Messages"><NavIcon Name="message" /><span>Messages @if(unread>0){<span class="message-nav-badge">@unread</span>}</span></NavLink>
+@code{
+    int unread;
+    protected override async Task OnInitializedAsync(){Updates.Changed+=Changed;await Load();}
+    async Task Load(){try{var principal=(await Auth.GetAuthenticationStateAsync()).User;unread=await SupportInbox.Unread();if(principal.IsInRole("Employer")||principal.IsInRole("Recruiter"))try{unread+=await MarketplaceInbox.Unread();}catch(UnauthorizedAccessException){}}catch(UnauthorizedAccessException){unread=0;}}
+    void Changed()=>_=InvokeAsync(async()=>{await Load();StateHasChanged();});
+    public void Dispose()=>Updates.Changed-=Changed;
+}

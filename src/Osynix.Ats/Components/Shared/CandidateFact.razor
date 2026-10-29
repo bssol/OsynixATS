@@ -1,0 +1,2 @@
+<div class="candidate-fact"><NavIcon Name="@Icon" /><div><small>@Label</small><span>@(string.IsNullOrWhiteSpace(Value)?"Not Provided":Value)</span></div></div>
+@code{[Parameter]public string Icon{get;set;}="talent";[Parameter]public string Label{get;set;}="";[Parameter]public string? Value{get;set;}}

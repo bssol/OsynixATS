@@ -1,0 +1,109 @@
+@inject SubscriptionService Subscriptions
+@inject RecruiterWorkService Work
+@inject RecruiterActionService Actions
+@inject RecruitmentUpdates Updates
+@inject MarketplaceMessages Inbox
+@inject SupportInboxService SupportInbox
+@inject AuthenticationStateProvider Auth
+@implements IDisposable
+
+<details class="header-menu notification-menu">
+    <summary aria-label="Notifications" title="Invitations And Work Updates">
+        <svg width="23" height="23" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
+        @if (data.Invitations.Count + data.Assignments.Count + actions.Count + messages.Sum(m=>m.Unread) + supportMessages.Sum(m=>m.Unread) + subscriptionNotices.Count > 0)
+        {
+            <span class="work-notification-count">@(data.Invitations.Count + data.Assignments.Count + actions.Count + messages.Sum(m=>m.Unread) + supportMessages.Sum(m=>m.Unread) + subscriptionNotices.Count)</span>
+        }
+    </summary>
+    <div class="header-popover work-notifications">
+        <h2>Notifications</h2>
+        @foreach(var subscription in subscriptionNotices){<div class="work-notification-item"><b>@subscription.Title: @subscription.Status</b><small>@subscription.Message</small>@if(subscription.RequestId is Guid requestId){<a href="@($"/messages?request={requestId}")">Open Messages</a>}else{<a href="/employer/subscriptions">View subscription</a>}</div>}
+        @foreach(var conversation in supportMessages.Where(m=>m.Unread>0).Take(5)){<a class="work-notification-item" href="@($"/messages?support={conversation.Id}")"><b>@conversation.Unread New Message(s) · @conversation.Name</b><small>@conversation.Context</small></a>}
+        @foreach(var conversation in messages.Where(m=>m.Unread>0).Take(5)){
+            <a class="work-notification-item" href="@($"/messages?conversation={conversation.Id}")"><b>@conversation.Unread New Message(s) · @conversation.Name</b><small>@conversation.Context</small></a>
+        }
+        @foreach (var action in actions.Take(5))
+        {
+            <div class="work-notification-item">
+                <b>@(action.Action.Type == "Review Feedback" ? action.Action.Feedback + " Feedback Received" : action.Action.Title)</b>
+                <small>@action.Candidate · @action.Client · @action.Position</small>
+                @if (action.WorkspaceId is Guid wid)
+                {
+                    <WorkOpenButton WorkspaceId="wid" Mode="@(action.Agency ? "Agency" : "Employer")" Path="@(action.Action.Type == "Review Feedback" ? $"/pipeline?application={action.Action.AssessmentId}" : $"/attention?task={action.Action.Id}")" Text="@(action.Action.Type == "Review Feedback" ? "View Feedback" : "Open Task")" />
+                }
+                else
+                {
+                    <a href="@(action.Action.Type == "Review Feedback" ? $"/pipeline?application={action.Action.AssessmentId}" : $"/attention?task={action.Action.Id}")">@(action.Action.Type == "Review Feedback" ? "View Feedback" : "Open Task")</a>
+                }
+                @if (action.Action.Type == "Review Feedback")
+                {
+                    <button class="secondary" @onclick="() => Read(action)">Mark As Read</button>
+                }
+            </div>
+        }
+        @foreach (var invitation in data.Invitations.Take(5))
+        {
+            <a class="work-notification-item" href="@invitation.Link" data-enhance-nav="false"><b>Employer Invitation</b><small>@invitation.Employer · Review And Accept</small></a>
+        }
+        @foreach (var assignment in data.Assignments)
+        {
+            <div class="work-notification-item"><b>@assignment.Title</b><small>Assigned By @assignment.Employer</small><WorkOpenButton WorkspaceId="assignment.WorkspaceId" Path="@($"/positions?ref={Uri.EscapeDataString(assignment.Reference)}")" Text="View Assignment" /></div>
+        }
+        @if (data.Invitations.Count == 0 && data.Assignments.Count == 0 && actions.Count == 0 && messages.All(m=>m.Unread==0)&&supportMessages.All(m=>m.Unread==0)&&subscriptionNotices.Count==0)
+        {
+            <p class="muted">No Pending Invitations Or Assigned Work Updates.</p>
+        }
+        <a href="/attention">Open Tasks</a>
+    </div>
+</details>
+
+@code {
+    List<SubscriptionNotice> subscriptionNotices=[];
+    List<RecruiterActionItem> actions = [];
+    List<ConversationSummary> messages = [];
+    List<SupportConversationSummary> supportMessages=[];
+    WorkNotifications data = new([], []);
+
+    protected override async Task OnInitializedAsync()
+    {
+        Updates.Changed += Refresh;
+        await Load();
+    }
+
+    async Task Load()
+    {
+        try{subscriptionNotices=await Subscriptions.Notifications();}catch(UnauthorizedAccessException){subscriptionNotices=[];}
+        try{messages=await Inbox.Inbox();}catch(UnauthorizedAccessException){messages=[];}
+        try{supportMessages=await SupportInbox.Inbox();}catch(UnauthorizedAccessException){supportMessages=[];}
+        try
+        {
+            data = await Work.Notifications();
+            actions = await Actions.Notifications();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            data = new([], []);
+            actions = [];
+        }
+    }
+
+    async Task Read(RecruiterActionItem item)
+    {
+        try
+        {
+            await Actions.Acknowledge(item.Action.Id, item.Action.Revision, true);
+            await Load();
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
+        {
+            await Load();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            await Load();
+        }
+    }
+
+    void Refresh() => _ = InvokeAsync(async () => { await Load(); StateHasChanged(); });
+    public void Dispose() => Updates.Changed -= Refresh;
+}

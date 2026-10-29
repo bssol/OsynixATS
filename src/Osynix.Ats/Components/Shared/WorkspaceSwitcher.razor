@@ -1,0 +1,9 @@
+@using System.Security.Claims
+@using Microsoft.EntityFrameworkCore
+@using Osynix.Ats.Data
+@inject AuthenticationStateProvider Auth
+@inject IDbContextFactory<AtsDbContext> Factory
+@if(choices.Count>0){<details class="workspace-picker"><summary><span>@current?.Name</span><small>@current?.Role</small><span aria-hidden="true">⌄</span></summary><div class="workspace-picker-menu">@foreach(var item in choices){<form method="post" action="/Account/Workspaces" data-enhance="false"><AntiforgeryToken /><input type="hidden" name="WorkspaceId" value="@item.Id"/><button type="submit" class="secondary"><b>@item.Name</b><small>@item.Role</small></button></form>}<a href="/Account/Workspaces" data-enhance-nav="false">All Workspaces</a></div></details>}
+else if(operational){<a class="button secondary" href="/Account/Workspaces" data-enhance-nav="false">Choose Workspace</a>}
+@code{List<WorkspaceChoice> choices=[];WorkspaceChoice? current;bool operational;
+protected override async Task OnInitializedAsync(){var principal=(await Auth.GetAuthenticationStateAsync()).User;operational=principal.Identity?.IsAuthenticated==true&&!principal.IsInRole("Admin")&&!principal.IsInRole("Candidate");if(!operational)return;await using var db=await Factory.CreateDbContextAsync();choices=await WorkspaceContext.Choices(db,principal);try{var active=await WorkspaceContext.Resolve(db,principal);current=choices.FirstOrDefault(c=>c.Id==active.Id);}catch(UnauthorizedAccessException){}current??=choices.FirstOrDefault();}}

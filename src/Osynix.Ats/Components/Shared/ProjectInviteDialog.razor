@@ -1,0 +1,28 @@
+@inherits PageBase
+@inject MarketplaceMessages Messages
+<div class="overlay" @onkeydown="KeyDown">
+<section class="drawer project-invite-drawer" role="dialog" aria-modal="true" aria-label="Invite Freelancer To Project">
+    <div class="drawer-head"><div><h2>Invite @FreelancerName To A Project</h2><p class="muted">Share the assignment and start a conversation.</p></div><button class="secondary" disabled="@Busy" @onclick="Close">Close</button></div>
+    <Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
+    <label>Assignment Type<select @bind="kind"><option>Recruitment Position</option><option>Project Brief</option></select></label>
+    @if(kind=="Recruitment Position"){
+        <label>Position <span class="required">*</span><select @bind="positionId"><option value="">Choose An Open Position</option>@foreach(var p in positions){<option value="@p.Id">@p.Title · #@p.Reference</option>}</select></label>
+        @if(positions.Count==0){<p class="muted">No open positions in this working profile. Choose Project Brief to discuss future work.</p>}
+    }else{<label>Project Title <span class="required">*</span><input maxlength="250" @bind="title" /></label>}
+    <div class="form-grid"><label>Expected Start<input maxlength="200" @bind="start" /></label><label>Expected Duration<select @bind="duration"><option>To be discussed</option><option>Short-term project</option><option>Ongoing assignment</option></select></label></div>
+    <label>Project Summary <span class="required">*</span><textarea rows="4" maxlength="5000" @bind="summary" placeholder="Describe the scope, hiring timeline, and expected support."></textarea></label>
+    <label>Message To @FreelancerName<textarea rows="4" maxlength="10000" @bind="note"></textarea></label>
+    <label class="check"><input type="checkbox" @bind="notify" /> Send An Email Notification</label>
+    <p class="muted small">The invitation is delivered in Messages. Email notifications require working email settings and a public HTTPS ATS address. Discuss commercial terms directly with the freelancer.</p>
+    <div class="toolbar"><button disabled="@Busy" @onclick="Send">Send Invitation</button><button class="secondary" disabled="@Busy" @onclick="Close">Cancel</button></div>
+</section></div>
+@code{
+    [Parameter,EditorRequired] public string FreelancerId{get;set;}="";
+    [Parameter,EditorRequired] public string FreelancerName{get;set;}="";
+    [Parameter] public EventCallback Close{get;set;}
+    [Parameter] public EventCallback<Guid> Sent{get;set;}
+    string kind="Recruitment Position",positionId="",title="",start="To be agreed",duration="To be discussed",summary="",note="";bool notify=true;List<Position> positions=[];
+    protected override Task OnInitializedAsync()=>Run(async()=>{positions=await Messages.Positions();note=$"Hello {FreelancerName}, your recruitment experience looks relevant to our requirements. Would you be available to discuss this assignment?";});
+    Task Send()=>Run(async()=>{Guid? pid=null;if(kind=="Recruitment Position"){if(!Guid.TryParse(positionId,out var parsed))throw new InvalidOperationException("Select an open position.");pid=parsed;}var id=await Messages.Invite(FreelancerId,new(pid,title,summary,note,start,duration,notify));await Sent.InvokeAsync(id);});
+    Task KeyDown(KeyboardEventArgs e)=>e.Key=="Escape"&&!Busy?Close.InvokeAsync():Task.CompletedTask;
+}

@@ -1,0 +1,33 @@
+@page "/workspace-dashboard"
+@attribute [Authorize(Roles="Recruiter,Employer")]
+@inherits PageBase
+@inject Access Access
+@inject AtsService Ats
+@inject RecruiterWorkService Work
+@inject RecruitmentUpdates Updates
+@inject NavigationManager Nav
+@implements IDisposable
+<PageTitle>Workspace Dashboard · Osynix ATS</PageTitle>
+<div class="page-heading"><div><div class="eyebrow">SELECTED WORKSPACE</div><h1>@name</h1><p class="muted">@scope</p></div><a class="button secondary" href="/my-work">Change Workspace</a></div>
+<Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
+@if(loaded){
+<div class="toolbar"><label>Client<select aria-label="Workspace Client" @bind="client"><option value="">All Clients In This Workspace</option>@foreach(var c in positions.Select(p=>p.Client).Where(c=>!string.IsNullOrWhiteSpace(c)).Distinct().Order()){<option>@c</option>}</select></label></div>
+<div class="kpis">
+@foreach(var k in Cards){<button class="kpi" @onclick="()=>Open(k.Path)"><span class="@($"kpi-icon {k.Tone}")"><NavIcon Name="@k.Icon" /></span><span>@k.Label</span><strong>@k.Count</strong></button>}
+</div>
+
+<section class="panel table-wrap"><div class="section-heading"><h2>@(client.Length==0?"Workspace Positions":client+" Positions")</h2><a class="button secondary" href="/pipeline">Open Recruitment Pipeline</a></div><table><thead><tr><th>Client</th><th>Position</th><th>Status</th><th>Profiles Submitted</th><th>Pending Decision</th><th></th></tr></thead><tbody>@foreach(var p in ScopedPositions){<tr><td>@p.Client</td><td>@p.Title<small>#@p.Reference</small></td><td>@p.Status</td><td>@Sent.Count(s=>s.Reference==p.Reference)</td><td>@Applications.Count(a=>a.PositionId==p.Id&&Lifecycle.Classify(a)=="Pending Decision"&&a.Stage!="Awaiting Client Feedback")</td><td><a class="button secondary" href="@($"/pipeline?ref={Uri.EscapeDataString(p.Reference)}")">Open Pipeline</a></td></tr>}</tbody></table>@if(!ScopedPositions.Any()){<p class="empty">No Positions In This View. Employer Work Shows Only Positions Assigned To You.</p>}</section>
+}
+@code{
+string name="Workspace Dashboard",scope="",client="";bool loaded;Guid? workspaceId;List<Position> positions=[];List<Assessment> applications=[];List<WorkSubmission> submissions=[];
+IEnumerable<Position> ScopedPositions=>positions.Where(p=>client.Length==0||p.Client==client);
+List<Assessment> Applications=>applications.Where(a=>ScopedPositions.Any(p=>p.Id==a.PositionId)).ToList();
+List<WorkSubmission> Sent=>submissions.Where(s=>client.Length==0||s.Client==client).ToList();
+record Card(string Label,int Count,string Icon,string Tone,string Path);
+IEnumerable<Card> Cards=>new Card[]{new("Active Positions",ScopedPositions.Count(p=>p.Status=="Active"),"positions","icon-blue","/positions"),new("Profiles Submitted",Sent.Select(s=>s.AssessmentId).Distinct().Count(),"assessment","icon-violet","/pipeline"),new("Awaiting Client Feedback",Applications.Count(a=>a.Stage=="Awaiting Client Feedback"),"clock","icon-amber","/pipeline?stage=Awaiting%20Client%20Feedback"),new("Pending Decision",Applications.Count(a=>Lifecycle.Classify(a)=="Pending Decision"&&a.Stage!="Awaiting Client Feedback"),"clock","icon-violet","/pipeline?queue=Pending%20Decision&decisionOnly=true"),new("Upcoming Interviews",Applications.Count(a=>a.InterviewStatus=="Scheduled"&&Lifecycle.Classify(a) is not("Hired" or "Rejected")),"clock","icon-teal","/pipeline?interview=Scheduled"),new("Rejected",Applications.Count(a=>Lifecycle.Classify(a)=="Rejected"),"cancel","icon-amber","/pipeline?queue=Rejected"),new("Hold",Applications.Count(a=>Lifecycle.Classify(a)=="On Hold"),"clock","icon-violet","/pipeline?queue=On%20Hold"),new("Hired",Applications.Count(a=>Lifecycle.Classify(a)=="Hired"),"check","icon-teal","/pipeline?queue=Hired")};
+void Open(string path)=>Nav.NavigateTo(path+(client.Length>0?(path.Contains('?')?"&":"?")+"client="+Uri.EscapeDataString(client):""));
+protected override Task OnInitializedAsync(){Updates.Changed+=Changed;return Run(Load);}
+async Task Load(){loaded=false;var active=await Access.Context()??throw new UnauthorizedAccessException();workspaceId=active.Id;var overview=await Work.Overview();name=active.Owner?"Freelance Recruiter Workspace":overview.Teams.FirstOrDefault(t=>t.Id==workspaceId)?.Name??"Employer Workspace";scope=active.Owner?"Your Independent Client Work":"Employer Work · Only Your Assigned Positions";positions=await Ats.Positions();applications=(await Ats.Assessments()).Where(a=>a.State=="Saved").ToList();submissions=overview.Submissions.Where(s=>s.WorkspaceId==workspaceId).ToList();loaded=true;}
+void Changed()=>_=InvokeAsync(async()=>{try{await Load();}catch(UnauthorizedAccessException){positions=[];applications=[];submissions=[];loaded=false;Error="Workspace Access Changed. Choose An Active Workspace.";}StateHasChanged();});
+public void Dispose()=>Updates.Changed-=Changed;
+}

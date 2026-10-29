@@ -1,0 +1,39 @@
+@inject IJSRuntime JS
+
+<div class="jd-rich-editor">
+    <div class="jd-rich-toolbar" role="toolbar" aria-label="Job description formatting">
+        <button type="button" title="Undo" aria-label="Undo" @onmousedown:preventDefault="true" @onclick='()=>Command("undo")'>↶</button>
+        <button type="button" title="Redo" aria-label="Redo" @onmousedown:preventDefault="true" @onclick='()=>Command("redo")'>↷</button>
+        <span class="jd-toolbar-divider" aria-hidden="true"></span>
+        <button type="button" title="Bold" aria-label="Bold" @onmousedown:preventDefault="true" @onclick='()=>Format("bold")'><b>B</b></button>
+        <button type="button" title="Italic" aria-label="Italic" @onmousedown:preventDefault="true" @onclick='()=>Format("italic")'><i>I</i></button>
+        <button type="button" title="Heading" aria-label="Heading" @onmousedown:preventDefault="true" @onclick='()=>Format("heading")'>H</button>
+        <button type="button" title="Bulleted list" aria-label="Bulleted list" @onmousedown:preventDefault="true" @onclick='()=>Format("insertUnorderedList")'>• List</button>
+        <button type="button" title="Numbered list" aria-label="Numbered list" @onmousedown:preventDefault="true" @onclick='()=>Format("insertOrderedList")'>1. List</button>
+    </div>
+    <div @ref="editor" class="jd-rich-editor-content" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Formatted job description" @oninput="Changed">@((MarkupString)InitialHtml)</div>
+</div>
+
+@code {
+    [Parameter] public string InitialHtml { get; set; } = "";
+    [Parameter] public EventCallback<string> HtmlChanged { get; set; }
+    ElementReference editor;
+    bool initialized;
+
+    // The browser owns the editable DOM and selection. A new JD gets a new component key.
+    protected override bool ShouldRender() => !initialized;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        initialized = true;
+        await JS.InvokeVoidAsync("osynixJdEditor.initialize", editor);
+    }
+    async Task Changed()
+    {
+        var value = await JS.InvokeAsync<EditorValue>("osynixJdEditor.read", editor);
+        await HtmlChanged.InvokeAsync(value.Html);
+    }
+    Task Command(string command) => JS.InvokeVoidAsync($"osynixJdEditor.{command}", editor).AsTask();
+    Task Format(string command) => JS.InvokeVoidAsync("osynixJdEditor.command", editor, command).AsTask();
+    sealed record EditorValue(string Html, string Text);
+}

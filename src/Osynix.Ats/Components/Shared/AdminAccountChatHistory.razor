@@ -1,0 +1,41 @@
+@inherits PageBase
+@inject SupportInboxService SupportInbox
+@inject RecruitmentUpdates Updates
+@implements IDisposable
+<section class="detail-card account-chat-history">
+    <div class="chat-history-heading"><div><h2>Chat History</h2><p>Support conversations linked to this user account, including ended sessions.</p></div><button class="secondary" disabled="@Busy" @onclick="()=>Run(Reload)">Refresh</button></div>
+    <Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
+    @if(selected is null){
+        <div class="chat-history-filters"><input aria-label="Search chat sessions" placeholder="Search subject, issue or request reference…" @bind="search" @bind:event="oninput" @bind:after="ResetPage" /><select aria-label="Session status" @bind="status" @bind:after="ResetPage"><option value="">All sessions</option><option>Open</option><option>Closed</option></select></div>
+        <div class="table-wrap"><table><thead><tr><th>Session</th><th>Started (UTC)</th><th>Last message (UTC)</th><th>Status</th><th></th></tr></thead><tbody>
+        @foreach(var session in Filtered.Skip((page-1)*10).Take(10)){
+            <tr><td><b>@session.Context</b><small>@session.IssueType</small>@if(session.RequestId is Guid request){<small>Request @request.ToString("N")[..8]</small>}</td><td>@session.StartedUtc.ToString("dd MMM yyyy HH:mm")</td><td>@session.UpdatedUtc.ToString("dd MMM yyyy HH:mm")</td><td><span class="chat-session-status">@session.Status</span></td><td><button class="secondary" disabled="@Busy" @onclick="()=>Open(session.Id)">View session</button></td></tr>
+        }
+        </tbody></table></div>
+        @if(!Filtered.Any()){<p class="chat-history-empty">@(sessions.Count==0?"No support conversations for this account yet.":"No sessions match your filters.")</p>}
+        @if(Filtered.Count()>10){<div class="chat-history-pagination"><button class="secondary" disabled="@(page<=1)" @onclick="()=>page--">Previous</button><span>Page @(page) of @Math.Max(1,(int)Math.Ceiling(Filtered.Count()/10d))</span><button class="secondary" disabled="@(page*10>=Filtered.Count())" @onclick="()=>page++">Next</button></div>}
+    }else{
+        <div class="chat-session-heading"><button class="secondary" @onclick="()=>selected=null">← All sessions</button><a class="button secondary" href="@($"/messages/support-transcript/{selected.Id}")" download>Download transcript</a></div>
+        <div class="chat-session-summary"><h3>@selected.Subject</h3><p>@selected.IssueType · @selected.Status</p><small>Started @selected.StartedUtc.ToString("dd MMM yyyy HH:mm") UTC @if(selected.ClosedUtc is DateTime closed){<span> · Ended @closed.ToString("dd MMM yyyy HH:mm") UTC</span>}</small>@if(selected.RequestId is Guid request){<p>Linked request: @request.ToString("N")[..8]</p>}</div>
+        <div class="account-chat-transcript">
+        @if(selected.Messages.Count==0){<p class="chat-history-empty">No messages in this session.</p>}
+        @foreach(var message in selected.Messages){<article class="account-chat-message @(message.SenderId==selected.UserId?"from-user":"from-admin")"><header><b>@message.SenderName</b><span>@(message.SenderId==selected.UserId?"Account user":"Admin")</span><time>@message.SentUtc.ToString("dd MMM yyyy HH:mm") UTC</time></header>@if(message.Body.Length>0){<p>@message.Body</p>}@if(message.AttachmentName.Length>0){<a href="@($"/messages/support-attachments/{message.Id}")" target="_blank" rel="noopener">Attachment: @message.AttachmentName</a>}</article>}
+        </div>
+    }
+</section>
+@code {
+    [Parameter] public Guid WorkspaceId{get;set;}
+    [Parameter] public Guid? InitialSessionId{get;set;}
+    Guid? loadedWorkspace,loadedSession;
+    List<SupportConversationSummary> sessions=[];
+    SupportConversationDetail? selected;
+    string search="",status="";int page=1;bool disposed;
+    IEnumerable<SupportConversationSummary> Filtered=>sessions.Where(s=>(status==""||s.Status==status)&&$"{s.Context} {s.IssueType} {s.RequestId:N}".Contains(search,StringComparison.OrdinalIgnoreCase));
+    protected override void OnInitialized()=>Updates.Changed+=Changed;
+    protected override async Task OnParametersSetAsync(){if(loadedWorkspace!=WorkspaceId){loadedWorkspace=WorkspaceId;loadedSession=null;selected=null;search=status="";page=1;await Run(Reload);}if(InitialSessionId is Guid id&&loadedSession!=id){loadedSession=id;await Open(id);}}
+    void ResetPage()=>page=1;
+    async Task Reload(){sessions=await SupportInbox.AccountHistory(WorkspaceId);page=Math.Clamp(page,1,Math.Max(1,(int)Math.Ceiling(Filtered.Count()/10d)));if(selected is not null)selected=await SupportInbox.AccountSession(WorkspaceId,selected.Id);}
+    Task Open(Guid id)=>Run(async()=>selected=await SupportInbox.AccountSession(WorkspaceId,id));
+    void Changed(){if(!disposed)_=InvokeAsync(async()=>{if(!Busy)await Run(Reload);StateHasChanged();});}
+    public void Dispose(){disposed=true;Updates.Changed-=Changed;}
+}

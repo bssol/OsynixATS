@@ -27,3 +27,35 @@
         else if (!event.shiftKey && (document.activeElement === items.at(-1) || !overlay.contains(document.activeElement))) { event.preventDefault(); items[0].focus(); }
     });
 })();
+// Header menus: close on outside click or Escape, and keep one open at a time.
+document.addEventListener('click', event => {
+    document.querySelectorAll('.header-menu[open]').forEach(menu => {
+        if (!menu.contains(event.target)) menu.removeAttribute('open');
+    });
+});
+document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    document.querySelectorAll('.header-menu[open]').forEach(menu => {
+        menu.removeAttribute('open');
+        menu.querySelector('summary').focus();
+    });
+});
+// Read the user's device-local time rather than the server's time zone.
+window.osynixLocalClock = () => {
+    const now = new Date();
+    return { hour: now.getHours(), date: now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' }) };
+};
+
+window.osynixCopyReviewLink = async value => {
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(value);
+            return true;
+        }
+    } catch { /* Keep a manual-copy fallback for restricted browsers. */ }
+    const field = document.getElementById('hiring-review-link');
+    if (!field) return false;
+    field.focus();
+    field.select();
+    try { return document.execCommand('copy'); } catch { return false; }
+};

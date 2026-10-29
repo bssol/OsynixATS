@@ -1,58 +1,174 @@
 using System.Net;
+
 using System.Text;
+
 using System.Text.Json;
+
+using System.Text.Json.Nodes;
+
+using System.Text.RegularExpressions;
+
 using Microsoft.Playwright;
+
 using Osynix.Ats.Domain;
+
 namespace Osynix.Ats.Services;
+
 public class ReportService(IConfiguration config,IWebHostEnvironment env)
+
 {
-    static string H(string? s)=>WebUtility.HtmlEncode(s??"").Replace("\n","<br>");
+
+    static string H(string? s)=>WebUtility.HtmlEncode(Redact(s??"")).Replace("\n","<br>");
+
+    public static string ClientSafeText(string text)=>Redact(text);
+    static string Redact(string text){
+
+        text=Regex.Replace(text,@"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}","[Contact Removed]",RegexOptions.CultureInvariant);
+
+        text=Regex.Replace(text,@"https?://[^\s<>]+","[Link Removed]",RegexOptions.IgnoreCase);
+
+        return Regex.Replace(text,@"(?<!\w)\+?\d[\d ()\-.]{5,}\d(?!\w)",m=>m.Value.Count(char.IsDigit)>=8&&!Regex.IsMatch(m.Value,@"^(\d{4}\s*[-–]\s*\d{4}|\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.]\d{4})$")?"[Contact Removed]":m.Value);
+
+    }
+
+    public string HiringManagerHtml(IEnumerable<Assessment> records){
+
+        var safe=new List<Assessment>();
+
+        foreach(var item in records){
+
+            var source=JsonSerializer.Deserialize<AssessmentSnapshot>(item.SnapshotJson)??throw new InvalidOperationException("Missing report snapshot.");
+
+            var node=JsonNode.Parse(item.SnapshotJson)!;
+
+            void Clean(JsonNode? current){
+
+                if(current is JsonObject obj)foreach(var key in obj.Select(x=>x.Key).ToArray()){
+
+                    if(key=="Id"||key.EndsWith("Id",StringComparison.Ordinal)||key=="Revision"||key.EndsWith("Utc",StringComparison.Ordinal)||key.EndsWith("Date",StringComparison.Ordinal))continue;
+
+                    if(obj[key] is JsonValue v&&v.TryGetValue<string>(out var value)){
+
+                        if(source.Profile.Email.Length>0)value=value.Replace(source.Profile.Email,"[Contact Removed]",StringComparison.OrdinalIgnoreCase);
+
+                        if(source.Profile.Phone.Length>0)value=value.Replace(source.Profile.Phone,"[Contact Removed]",StringComparison.OrdinalIgnoreCase);
+
+                        obj[key]=Redact(value);
+
+                    }else Clean(obj[key]);
+
+                }
+
+                else if(current is JsonArray array)foreach(var child in array)Clean(child);
+
+            }
+
+            Clean(node);
+
+            safe.Add(new Assessment{SnapshotJson=node.ToJsonString(),MatchPercent=item.MatchPercent,MustHaveFit=item.MustHaveFit,CoreRoleFit=item.CoreRoleFit,EvidenceStrength=item.EvidenceStrength,Decision=item.Decision});
+
+        }
+
+        return Html(safe);
+
+    }
+
     public string Html(IEnumerable<Assessment> records)
+
     {
+
         var selected=records.ToList();
-        var html=new StringBuilder("<!doctype html><html><head><meta charset='utf-8'><title>Osynix Candidate Assessment Report</title><style>@page{size:A4;margin:16mm}body{font:12px Arial;color:#24324b;margin:0}h1,h2{color:#1c1e66}h1{font-size:23px}h2{font-size:15px;margin-top:22px}.report{break-after:page}.report:last-child{break-after:auto}.kpis{display:flex;gap:10px}.kpi{background:#eff4ff;border:1px solid #dce5f5;padding:12px;flex:1}.kpi b{display:block;font-size:22px;color:#175aff}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border:1px solid #dde4ef;text-align:left;padding:8px;vertical-align:top}thead{display:table-header-group}tr,.kpi{break-inside:avoid}.muted{color:#667085}.green{background:#e9f8ee}.yellow{background:#fff7dd}.red{background:#fff0ef}.logo{width:165px;height:auto;object-fit:contain}footer{margin-top:20px;border-top:1px solid #ddd;padding-top:10px;font-size:10px}p{line-height:1.6;orphans:3;widows:3}h1,h2{break-after:avoid}</style></head><body>");
+
+        var html=new StringBuilder("<!doctype html><html><head><meta charset='utf-8'><title>Osynix Candidate Assessment Report</title><style>@page{size:A4;margin:16mm}body{font:12px Arial;color:#24324b;margin:0}h1,h2{color:#1c1e66}h1{font-size:23px}h2{font-size:15px;margin-top:22px}.report{break-after:page}.report:last-child{break-after:auto}.kpis{display:flex;gap:10px}.kpi{background:#eff4ff;border:1px solid #dce5f5;padding:12px;flex:1}.kpi b{display:block;font-size:22px;color:#175aff}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border:1px solid #dde4ef;text-align:left;padding:8px;vertical-align:top}thead{display:table-header-group}tr,.kpi{break-inside:avoid}.muted{color:#667085}.green{background:#e9f8ee}.yellow{background:#fff7dd}.red{background:#fff0ef}.logo{width:165px;height:auto;object-fit:contain}footer{margin-top:20px;border-top:1px solid #ddd;padding-top:10px;font-size:10px}p{line-height:1.6;orphans:3;widows:3}h1,h2{break-after:avoid}@media screen{body{padding:20px}}</style></head><body>");
+
         string? logo=null;
+
         var configured=config["Branding:LogoPath"];
+        var original=Path.Combine(string.IsNullOrWhiteSpace(env.WebRootPath)?Path.Combine(env.ContentRootPath,"wwwroot"):env.WebRootPath,"images","osynix-group-logo.png");
+        if(string.IsNullOrWhiteSpace(configured)||!File.Exists(Path.GetFullPath(configured,env.ContentRootPath)))configured=original;
+
         if(!string.IsNullOrWhiteSpace(configured)) {
+
             var path=Path.GetFullPath(configured,env.ContentRootPath);
+
             if(File.Exists(path) && new FileInfo(path).Length<2_000_000 && Path.GetExtension(path).ToLowerInvariant() is ".png" or ".jpg" or ".jpeg") logo="data:"+(Path.GetExtension(path).ToLowerInvariant()==".png"?"image/png":"image/jpeg")+";base64,"+Convert.ToBase64String(File.ReadAllBytes(path));
+
         }
+
         if(selected.Count>1) {
-            html.Append("<section class='report'><h1>Candidate Comparison</h1><table><thead><tr><th>Candidate</th><th>Position</th><th>ATS match</th><th>Must-have</th><th>Recommendation</th></tr></thead><tbody>");
+
+            html.Append("<section class='report'><h1>Candidate Comparison</h1><table><thead><tr><th>Candidate</th><th>Position</th><th>ATS Match</th><th>Must-have</th><th>Recommendation</th></tr></thead><tbody>");
+
             foreach(var a in selected) {var snap=JsonSerializer.Deserialize<AssessmentSnapshot>(a.SnapshotJson)!;html.Append("<tr><td>").Append(H(snap.Profile.Name)).Append("</td><td>").Append(H(snap.PositionTitle)).Append(" · #").Append(H(snap.Reference)).Append("</td><td>").Append(Metric(a.MatchPercent,"%")).Append("</td><td>").Append(H(a.MustHaveFit)).Append("</td><td>").Append(H(a.Decision)).Append("</td></tr>");}
+
             html.Append("</tbody></table></section>");
+
         }
+
         foreach(var a in selected) {
+
             var s=JsonSerializer.Deserialize<AssessmentSnapshot>(a.SnapshotJson)??throw new InvalidOperationException("Missing report snapshot.");
+
             html.Append("<section class='report'>");
+
             if(logo is not null) html.Append("<img class='logo' alt='Osynix Group' src='").Append(logo).Append("'>");
+
             else html.Append("<h2>OSYNIX GROUP</h2><p class='muted'>Draft report — original logo not configured</p>");
-            html.Append("<h1>Candidate Assessment Report</h1><p class='muted'>").Append(H(s.Client)).Append(" · ").Append(H(s.PositionTitle)).Append(" · Ref #").Append(H(s.Reference)).Append("</p><h2>").Append(H(s.Profile.Name)).Append("</h2><p>").Append(H(s.Profile.CurrentRole)).Append(" · ").Append(H(s.Profile.CurrentCompany)).Append(" · ").Append(H(s.Profile.Location)).Append("</p><div class='kpis'><div class='kpi'><b>").Append(Metric(a.MatchPercent,"%")).Append("</b>ATS match</div><div class='kpi'><b>").Append(H(a.MustHaveFit)).Append("</b>Must-have fit</div><div class='kpi'><b>").Append(Metric(a.CoreRoleFit,"/10")).Append("</b>Core role fit</div><div class='kpi'><b>").Append(Metric(a.EvidenceStrength,"/10")).Append("</b>Evidence strength</div></div><h2 class='").Append(Choices.Tone(a.Decision)).Append("'>Recommendation: ").Append(H(a.Decision)).Append("</h2>");
-            foreach(var (title,text) in new[]{("Executive assessment",s.Summary),("Key strengths",s.Strengths),("Risks and gaps",s.Gaps)}) html.Append("<h2>").Append(title).Append("</h2><p>").Append(H(text)).Append("</p>");
-            html.Append("<h2>Requirement-by-requirement evaluation</h2><table><thead><tr><th>Requirement</th><th>Weight</th><th>Score</th><th>Confidence</th><th>Evidence / rationale</th></tr></thead><tbody>");
+
+            html.Append("<h1>Candidate Assessment Report</h1><p class='muted'>").Append(H(s.Client)).Append(" · ").Append(H(s.PositionTitle)).Append(" · Ref #").Append(H(s.Reference)).Append("</p><h2>").Append(H(s.Profile.Name)).Append("</h2><p>").Append(H(s.Profile.CurrentRole)).Append(" · ").Append(H(s.Profile.CurrentCompany)).Append(" · ").Append(H(s.Profile.Location)).Append("</p><div class='kpis'><div class='kpi'><b>").Append(Metric(a.MatchPercent,"%")).Append("</b>ATS Match</div><div class='kpi'><b>").Append(H(a.MustHaveFit)).Append("</b>Must-Have Fit</div><div class='kpi'><b>").Append(Metric(a.CoreRoleFit,"/10")).Append("</b>Core Role Fit</div><div class='kpi'><b>").Append(Metric(a.EvidenceStrength,"/10")).Append("</b>Evidence Strength</div></div><h2 class='").Append(Choices.Tone(a.Decision)).Append("'>Recommendation: ").Append(H(a.Decision)).Append("</h2>");
+
+            foreach(var (title,text) in new[]{("Executive Assessment",s.Summary),("Key Strengths",s.Strengths),("Risks And Gaps",s.Gaps)}) html.Append("<h2>").Append(title).Append("</h2><p>").Append(H(text)).Append("</p>");
+
+            html.Append("<h2>Requirement-By-Requirement Evaluation</h2><table><thead><tr><th>Requirement</th><th>Weight</th><th>Score</th><th>Confidence</th><th>Evidence / rationale</th></tr></thead><tbody>");
+
             foreach(var c in s.Criteria) html.Append("<tr><td>").Append(H(c.Name)).Append(c.Knockout?" (must-have)":"").Append("</td><td>").Append(c.Weight).Append("%</td><td>").Append(Metric(c.Score,"/10")).Append("<br>").Append(H(c.Status)).Append("</td><td>").Append(Metric(c.Confidence,"/10")).Append("</td><td>").Append(H(c.Found)).Append("<br>").Append(H(c.Rationale)).Append("</td></tr>");
+
             html.Append("</tbody></table>");
+
             if(s.Criteria.Count==0) html.Append("<p>Historical assessment: no criterion results were stored in the original source. Missing scores and evidence are unavailable.</p>");
-            html.Append("<h2>Interview focus areas</h2><ul>");
+
+            html.Append("<h2>Interview Focus Areas</h2><ul>");
+
             foreach(var c in s.Criteria.Where(c=>c.Score<6||c.Confidence<6)) html.Append("<li>Verify ").Append(H(c.Name)).Append(" with specific examples and supporting evidence.</li>");
+
             html.Append("<li>Verify employment dates, responsibilities, and role-relevant credentials.</li></ul><footer>Confidential — Osynix Group. Screening is based on supplied CV evidence and configured job criteria. Findings require human review and verification; this report is not a hiring decision. Candidate phone and email are excluded.</footer></section>");
+
         }
+
         return html.Append("</body></html>").ToString();
+
     }
+
     static string Metric(double? value,string suffix)=>value is null?"Unavailable":$"{value:0.#}{suffix}";
+
     public async Task<byte[]> Pdf(string html)
+
     {
+
         using var playwright=await Playwright.CreateAsync();
+
         IBrowser browser;
+
         var channel=config["Reports:BrowserChannel"];
+
         try {browser=await playwright.Chromium.LaunchAsync(new(){Headless=true,Channel=string.IsNullOrWhiteSpace(channel)?null:channel});}
+
         catch(PlaywrightException) when(string.IsNullOrWhiteSpace(channel)&&OperatingSystem.IsWindows()&&File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),"Microsoft/Edge/Application/msedge.exe")))
+
         {browser=await playwright.Chromium.LaunchAsync(new(){Headless=true,Channel="msedge"});}
+
         await using var ownedBrowser=browser;
+
         var page=await browser.NewPageAsync();
+
         // Reports contain only escaped text and embedded local logo bytes; block any network fetch.
+
         await page.RouteAsync("**/*",route=>route.AbortAsync());
+
         await page.SetContentAsync(html);
+
         return await page.PdfAsync(new(){Format="A4",PrintBackground=true,PreferCSSPageSize=true,DisplayHeaderFooter=true,HeaderTemplate="<div></div>",FooterTemplate="<div style='width:100%;text-align:center;font-size:8px;color:#667085'>Osynix ATS · Page <span class='pageNumber'></span> of <span class='totalPages'></span></div>"});
+
     }
+
 }

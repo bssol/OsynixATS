@@ -1,0 +1,20 @@
+@page "/activity"
+@attribute [Authorize(Roles="Admin,Recruiter,Employer")]
+@inherits PageBase
+@inject WorkspaceService Workspace
+<PageTitle>Recent Activity · Osynix ATS</PageTitle>
+<div class="page-heading"><div><div class="eyebrow">WORKSPACE HISTORY</div><h1>Recent Activity</h1><p class="muted">Candidate assessments, profile updates, notes, and recruitment progress.</p></div><a class="button secondary" href="/">Back to dashboard</a></div>
+<Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
+<section class="panel">
+@if(events.Count==0 && !Busy){<p class="empty">No Candidate Activity Recorded Yet.</p>}
+@foreach(var activity in events){var item = activity.Event;<div class="activity-item"><span class="activity-icon"><NavIcon Name="assessment" /></span><div><b>@activity.CandidateName</b><small>@item.Action
+@if(!string.IsNullOrWhiteSpace(activity.Role)){<span> · @activity.Role</span>}</small>@if(item.CandidateId is not null){<a class="small" href="@($"/candidates?id={item.CandidateId}")">View candidate</a>}</div><small class="activity-time">@item.CreatedUtc.ToString("dd MMM yyyy · HH:mm") UTC</small></div>}
+<div class="pager"><span>Page @(page+1)</span><button class="secondary" disabled="@(page==0 || Busy)" @onclick="Previous">Previous</button><button class="secondary" disabled="@(events.Count<25 || Busy)" @onclick="Next">Next</button></div>
+</section>
+@code {
+    List<CandidateActivity> events=[]; int page;
+    protected override Task OnInitializedAsync()=>Run(Load);
+    async Task Load()=>events=await Workspace.RecentActivity(page,25);
+    Task Previous()=>Run(async()=>{page--;await Load();});
+    Task Next()=>Run(async()=>{page++;await Load();});
+}

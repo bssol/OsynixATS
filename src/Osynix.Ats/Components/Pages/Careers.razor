@@ -1,0 +1,70 @@
+@page "/careers/{WorkspaceId:guid}"
+@page "/careers/{WorkspaceId:guid}/jobs/{JobId:guid}"
+@attribute [AllowAnonymous]
+@layout CareersLayout
+@inject EmployerService EmployerService
+<PageTitle>@(selected?.Title??company?.CompanyName??"Careers") · Osynix ATS</PageTitle>
+@if(company is null){<div class="careers-site"><main class="career-unavailable"><NavIcon Name="positions" /><h1>Careers Page Unavailable</h1><p>This Company’s Careers Page Is Not Published.</p></main></div>}
+else{
+<div class="careers-site" style="@ThemeStyle">
+<header class="career-header"><div class="career-container career-nav"><a class="career-company-brand" href="@HomeLink">@if(company.LogoContent is {Length:>0}){<img src="@($"data:{company.LogoContentType};base64,{Convert.ToBase64String(company.LogoContent)}")" alt="@company.CompanyName" />}else{<span class="career-brand-mark"><NavIcon Name="clients" /></span><b>@company.CompanyName</b>}</a><nav aria-label="Careers Navigation"><a href="@(HomeLink+"#career-about")">About Us</a><a class="active" href="@(HomeLink+"#open-positions")">Open Positions</a></nav></div></header>
+<main>
+<section class="career-hero @(JobId is not null?"career-hero-detail":"")">
+@if(CoverLink.Length>0){<img class="career-cover" src="@CoverLink" alt="" fetchpriority="high" />}
+<div class="career-hero-art" aria-hidden="true"></div>
+<div class="career-container career-hero-content"><div class="career-eyebrow">EXPLORE CAREERS WITH @company.CompanyName</div><h1>@(JobId is null?"Find Your Next Opportunity":selected?.Title??"Position Unavailable")</h1><p>Discover Opportunities To Grow, Make An Impact, And Do Your Best Work.</p>
+@if(JobId is null){
+<form class="career-search" @onsubmit="Search" @onsubmit:preventDefault>
+<label><span>Job Title Or Keywords</span><input aria-label="Search Open Positions" placeholder="e.g. Analyst, Recruiter, Sales" @bind="search" @bind:event="oninput" /></label>
+<label><span>Location</span><input aria-label="Search Location" placeholder="e.g. Lahore, Remote" @bind="locationSearch" @bind:event="oninput" /></label>
+<label><span>Employment Type</span><select aria-label="Employment Type" @bind="employment"><option value="">Any Type</option>@foreach(var type in EmploymentTypes){<option>@type</option>}</select></label>
+<button type="submit">Search Positions <span aria-hidden="true">→</span></button>
+</form>
+}else{<a class="career-back" href="@HomeLink">← All Open Positions</a>}
+</div></section>
+<div class="career-container career-body">
+<aside class="career-sidebar" id="career-about"><section><h2>About @company.CompanyName</h2><p class="career-about-text">@(company.AboutUs.Length>0?company.AboutUs:"Explore Current Opportunities With Our Team.")</p>
+@if(company.ShowBusinessContacts){<div class="career-business-contacts">@if(company.BusinessEmail.Length>0){<p>@company.BusinessEmail</p>}@if(company.ContactNumber.Length>0){<p>@company.ContactNumber</p>}@if(Uri.TryCreate(company.Website,UriKind.Absolute,out var url)&&url.Scheme is "https" or "http"){<a href="@company.Website" target="_blank" rel="noopener noreferrer">Visit Company Website ↗</a>}</div>}
+</section>
+@if(JobId is null){<section class="career-filter"><h3>Employment Type</h3><label><input type="radio" name="career-employment" checked="@(employment=="")" @onchange='()=>{employment="";page=1;}' /> All Types</label>@foreach(var type in EmploymentTypes){<label><input type="radio" name="career-employment" checked="@(employment==type)" @onchange="()=>{employment=type;page=1;}" /> @type</label>}</section>
+<section class="career-filter"><h3>Location</h3><label><input type="radio" name="career-location" checked="@(location=="")" @onchange='()=>{location="";page=1;}' /> All Locations</label>@foreach(var place in Locations){<label><input type="radio" name="career-location" checked="@(location==place)" @onchange="()=>{location=place;page=1;}" /> @place</label>}</section>
+<button class="career-reset" @onclick="Reset">Clear Filters</button>
+}else if(selected is not null){<section class="career-filter"><h3>Position Overview</h3><p><b>Location</b><br/>@(selected.Location.Length>0?selected.Location:"Not Specified")</p><p><b>Employment Type</b><br/>@selected.EmploymentType</p>@if(selected.WorkArrangement.Length>0){<p><b>Work Arrangement</b><br/>@selected.WorkArrangement</p>}@if(selected.Department.Length>0){<p><b>Department</b><br/>@selected.Department</p>}@if(selected.SalaryRange.Length>0){<p><b>Salary Range</b><br/>@selected.SalaryRange</p>}</section>}
+</aside>
+<section class="career-results" id="open-positions">
+@if(JobId is null){<div class="career-results-heading"><div><h2>Open Positions</h2><p>@Filtered.Count @(Filtered.Count==1?"Opportunity":"Opportunities") · Find The Right Role For You</p></div><label>Sort By<select aria-label="Sort Positions" @bind="sort"><option value="newest">Newest First</option><option value="title">Job Title</option></select></label></div>
+@foreach(var job in Filtered.Skip((Page-1)*10).Take(10)){
+<article class="career-job"><span class="career-job-icon"><NavIcon Name="positions" /></span><div class="career-job-copy"><h3>@job.Title</h3><p>@Summary(job.Description)</p><div class="career-job-meta">@if(job.Location.Length>0){<span>⌖ @job.Location</span>}<span class="career-type"><NavIcon Name="positions" /> @job.EmploymentType</span>@if(job.SalaryRange.Length>0){<span>@job.SalaryRange</span>}</div></div><a class="career-view" href="@($"{HomeLink}/jobs/{job.Id}")">Apply Now <span aria-hidden="true">→</span></a></article>
+}
+@if(Filtered.Count==0){<div class="career-empty"><NavIcon Name="positions" /><h3>@(jobs.Count==0?"New Opportunities Are On Their Way":"No Matching Positions")</h3><p>@(jobs.Count==0?"Check Back Soon For Our Latest Open Positions.":"Try Another Keyword, Location Or Employment Type.")</p>@if(jobs.Count>0){<button @onclick="Reset">Clear Filters</button>}</div>}
+@if(Pages>1){<div class="career-pagination"><button disabled="@(Page<=1)" @onclick="()=>page=Page-1">Previous</button><span>Page @Page Of @Pages</span><button disabled="@(Page>=Pages)" @onclick="()=>page=Page+1">Next</button></div>}
+}else if(selected is null){<div class="career-empty"><h2>Position Unavailable</h2><p>This Position Is No Longer Published.</p><a class="career-view" href="@HomeLink">Browse Open Positions →</a></div>}
+else{<article class="career-description"><span class="career-type">@selected.EmploymentType</span><h2>Job Description</h2><div class="career-description-text">@selected.Description</div>@if(!applyOpen&&!applicationSubmitted){<div class="career-apply-cta"><div><h3>Ready To Apply?</h3><p>Share Your Details And CV To Apply For This Position.</p></div><button class="career-apply-button" @onclick="()=>applyOpen=true">Apply Now <span aria-hidden="true">→</span></button></div>}
+@if(applicationSubmitted){<div class="career-application-success" role="status"><span class="career-application-success-icon">✓</span><div><h3>Application Submitted</h3><p>Your application for @selected.Title has been received. The hiring team will review it.</p></div></div>}
+@if(applyOpen&&!applicationSubmitted){<form class="career-application-form" @onsubmit="SubmitApplication" @onsubmit:preventDefault><div class="career-application-heading"><div><span class="career-eyebrow">YOUR APPLICATION</span><h3>Apply For @selected.Title</h3><p>Your details and CV will be shared with the hiring team.</p></div><button type="button" class="career-application-close" aria-label="Close application form" @onclick="()=>applyOpen=false">×</button></div>
+@if(applicationError.Length>0){<div class="career-application-error" role="alert">@applicationError</div>}
+<div class="career-application-fields"><label>Full Name <span>*</span><input required autocomplete="name" maxlength="200" @bind="applicantName" /></label><label>Phone Number <span>*</span><input required type="tel" autocomplete="tel" maxlength="50" @bind="applicantPhone" /></label><label>Email Address <span>*</span><input required type="email" autocomplete="email" maxlength="320" @bind="applicantEmail" /></label><label>City <span>*</span><input required autocomplete="address-level2" maxlength="100" @bind="applicantCity" /></label><label class="career-cv-upload">Upload CV <span>*</span><InputFile OnChange="ChooseCv" accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" disabled="@submitting" /><small>@(cvName.Length>0?$"{cvName} · {cvBytes?.Length/1024d:0.#} KB":"PDF, DOCX Or TXT · Up To 10 MB")</small></label></div>
+<div class="career-application-actions"><span class="career-privacy-note">Your information is used to review this application.</span><button type="button" @onclick="SubmitApplication" disabled="@submitting">@(submitting?"Submitting…":"Submit Application") <span aria-hidden="true">→</span></button></div></form>}</article>}
+</section></div>
+</main>
+<footer class="career-footer"><div class="career-container"><span>@company.CompanyName</span><a href="@(HomeLink+"#open-positions")">Open Positions</a><span class="career-powered">Powered By <img src="/images/osynix-group-logo.png" alt="Osynix Group" /> ATS</span></div></footer>
+</div>
+}
+@code{
+[Parameter]public Guid WorkspaceId{get;set;}
+[Parameter]public Guid? JobId{get;set;}
+EmployerWorkspace? company;List<PublicCareerJob> jobs=[];PublicCareerJob? selected;string search="",employment="",location="",locationSearch="",sort="newest";int page=1;
+string applicantName="",applicantPhone="",applicantEmail="",applicantCity="",cvName="",applicationError="";byte[]? cvBytes;bool applyOpen,submitting,applicationSubmitted;
+string HomeLink=>$"/careers/{WorkspaceId}";
+string ThemeStyle{get{var palette=CareersBranding.Palette(company!.CareersColorScheme);return $"--career-primary:{palette.Primary};--career-deep:{palette.Deep};--career-tint:{palette.Tint}";}}
+string CoverLink=>company!.CareersCoverMode switch{"Stock"=>CareersBranding.StockPath(company.CareersStockCover),"Upload" when company.CareersCoverContent is {Length:>0}=>$"{HomeLink}/cover?v={company.Revision}",_=>""};
+IEnumerable<string> EmploymentTypes=>jobs.Select(j=>j.EmploymentType).Where(x=>x.Length>0).Distinct().Order();
+IEnumerable<string> Locations=>jobs.Select(j=>j.Location).Where(x=>x.Length>0).Distinct().Order();
+List<PublicCareerJob> Filtered{get{var query=jobs.Where(j=>(employment.Length==0||j.EmploymentType==employment)&&(location.Length==0||j.Location==location)&&(search.Trim().Length==0||(j.Title+" "+j.Description).Contains(search.Trim(),StringComparison.OrdinalIgnoreCase))&&(locationSearch.Trim().Length==0||j.Location.Contains(locationSearch.Trim(),StringComparison.OrdinalIgnoreCase)));return (sort=="title"?query.OrderBy(j=>j.Title):query).ToList();}}
+int Pages=>Math.Max(1,(Filtered.Count+9)/10);int Page=>Math.Clamp(page,1,Pages);
+static string Summary(string text){var compact=System.Text.RegularExpressions.Regex.Replace(text,@"\s+"," ").Trim();return compact.Length>135?compact[..135]+"…":compact;}
+void Search(){page=1;}void Reset(){search=employment=location=locationSearch="";page=1;}
+protected override async Task OnParametersSetAsync(){company=await EmployerService.PublicCompany(WorkspaceId);jobs=company is null?[]:await EmployerService.PublicJobs(WorkspaceId);selected=jobs.SingleOrDefault(j=>j.Id==JobId);page=1;}
+async Task ChooseCv(InputFileChangeEventArgs e){applicationError="";var file=e.File;if(file.Size>10*1024*1024){cvBytes=null;cvName="";applicationError="Choose A CV Up To 10 MB.";return;}try{await using var stream=file.OpenReadStream(10*1024*1024);using var buffer=new MemoryStream();await stream.CopyToAsync(buffer);cvBytes=buffer.ToArray();cvName=file.Name;}catch(Exception ex){cvBytes=null;cvName="";applicationError=ex.Message;}}
+async Task SubmitApplication(){applicationError="";if(string.IsNullOrWhiteSpace(applicantName)){applicationError="Enter Your Full Name.";return;}if(string.IsNullOrWhiteSpace(applicantPhone)){applicationError="Enter Your Phone Number.";return;}if(string.IsNullOrWhiteSpace(applicantEmail)||!new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(applicantEmail)){applicationError="Enter A Valid Email Address.";return;}if(string.IsNullOrWhiteSpace(applicantCity)){applicationError="Enter Your City.";return;}if(cvBytes is null){applicationError="Upload Your CV To Submit This Application.";return;}if(selected is null)return;submitting=true;try{await EmployerService.ApplyPublic(WorkspaceId,selected.Id,applicantName,applicantEmail,applicantPhone,applicantCity,cvName,cvBytes);applicationSubmitted=true;applyOpen=false;cvBytes=null;}catch(Exception ex){applicationError=ex.Message;}finally{submitting=false;}}
+}

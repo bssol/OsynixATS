@@ -15,3 +15,7 @@ TestResults/
 
 # Standalone database snapshot included in version control
 !/database/osynix-ats.db
+# Allow tracking of osynix-ats database inside App_Data
+!/App_Data/osynix-ats.db
+!/App_Data/osynix-ats.db-shm
+!/App_Data/osynix-ats.db-wal

@@ -12,3 +12,6 @@ TestResults/
 
 # Local build output
 **/artifacts/
+
+# Standalone database snapshot included in version control
+!/database/osynix-ats.db

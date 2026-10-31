@@ -234,7 +234,13 @@ public class GoogleMeetService(IDbContextFactory<AtsDbContext> factory,IDataProt
   await InterviewService.ApplyGoogleResponse(db,i,a,response.Value.Status,response.Value.Comment);return true;
  }
  public async Task<string> CalendarLink(Guid id){await using var db=await factory.CreateDbContextAsync();return (await db.GoogleInterviewEvents.FindAsync(id))?.CalendarUrl??"";}
- public static string? MeetingLink(JsonElement e){if(e.TryGetProperty("hangoutLink",out var link)&&Uri.TryCreate(link.GetString(),UriKind.Absolute,out var uri)&&uri.Scheme=="https"&&uri.Host=="meet.google.com")return uri.AbsoluteUri;return null;}
+ public static string? MeetingLink(JsonElement e){
+  static string? Valid(JsonElement value)=>value.ValueKind==JsonValueKind.String&&Uri.TryCreate(value.GetString(),UriKind.Absolute,out var uri)&&uri.Scheme=="https"&&uri.Host=="meet.google.com"?uri.AbsoluteUri:null;
+  if(e.TryGetProperty("hangoutLink",out var link)&&Valid(link) is string direct)return direct;
+  if(e.TryGetProperty("conferenceData",out var conference)&&conference.ValueKind==JsonValueKind.Object&&conference.TryGetProperty("entryPoints",out var entries)&&entries.ValueKind==JsonValueKind.Array)
+   foreach(var entry in entries.EnumerateArray())if(entry.TryGetProperty("entryPointType",out var type)&&type.GetString()=="video"&&entry.TryGetProperty("uri",out var url)&&Valid(url) is string video)return video;
+  return null;
+ }
  public async Task<string?> Status(Guid id){await using var db=await factory.CreateDbContextAsync();return (await db.GoogleInterviewEvents.FindAsync(id))?.Error;}
 }
 public class GoogleMeetWorker(IServiceScopeFactory scopes,ILogger<GoogleMeetWorker> logger):BackgroundService {

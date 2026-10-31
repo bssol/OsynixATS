@@ -4,20 +4,22 @@
 @inject RecruitmentUpdates Updates
 @inject MarketplaceMessages Inbox
 @inject SupportInboxService SupportInbox
+@inject HiringReviewService Review
 @inject AuthenticationStateProvider Auth
 @implements IDisposable
 
 <details class="header-menu notification-menu">
     <summary aria-label="Notifications" title="Invitations And Work Updates">
         <svg width="23" height="23" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
-        @if (data.Invitations.Count + data.Assignments.Count + actions.Count + messages.Sum(m=>m.Unread) + supportMessages.Sum(m=>m.Unread) + subscriptionNotices.Count > 0)
+        @if (data.Invitations.Count + data.Assignments.Count + actions.Count + messages.Sum(m=>m.Unread) + supportMessages.Sum(m=>m.Unread) + portalMessages.Sum(m=>m.Unread) + subscriptionNotices.Count > 0)
         {
-            <span class="work-notification-count">@(data.Invitations.Count + data.Assignments.Count + actions.Count + messages.Sum(m=>m.Unread) + supportMessages.Sum(m=>m.Unread) + subscriptionNotices.Count)</span>
+            <span class="work-notification-count">@(data.Invitations.Count + data.Assignments.Count + actions.Count + messages.Sum(m=>m.Unread) + supportMessages.Sum(m=>m.Unread) + portalMessages.Sum(m=>m.Unread) + subscriptionNotices.Count)</span>
         }
     </summary>
     <div class="header-popover work-notifications">
         <h2>Notifications</h2>
         @foreach(var subscription in subscriptionNotices){<a class="work-notification-item" href="@(subscription.RequestId is Guid requestId?$"/messages?request={requestId}":"/employer/subscriptions")"><b>@subscription.Title: @subscription.Status</b><small>@subscription.Message</small></a>}
+        @foreach(var conversation in portalMessages.Where(m=>m.Unread>0).Take(5)){<a class="work-notification-item" href="@($"/messages?portal={conversation.Id}")"><b>@conversation.Unread New Message(s) · @conversation.Name</b><small>Hiring manager / client portal · @conversation.Preview</small></a>}
         @foreach(var conversation in supportMessages.Where(m=>m.Unread>0).Take(5)){<a class="work-notification-item" href="@($"/messages?support={conversation.Id}")"><b>@conversation.Unread New Message(s) · @conversation.Name</b><small>@conversation.Context</small></a>}
         @foreach(var conversation in messages.Where(m=>m.Unread>0).Take(5)){
             <a class="work-notification-item" href="@($"/messages?conversation={conversation.Id}")"><b>@conversation.Unread New Message(s) · @conversation.Name</b><small>@conversation.Context</small></a>
@@ -50,7 +52,7 @@
         {
             <WorkOpenButton WorkspaceId="assignment.WorkspaceId" Path="@($"/positions?ref={Uri.EscapeDataString(assignment.Reference)}")" CssClass="work-notification-item work-notification-link"><b>@assignment.Title</b><small>Assigned by @assignment.Employer</small></WorkOpenButton>
         }
-        @if (data.Invitations.Count == 0 && data.Assignments.Count == 0 && actions.Count == 0 && messages.All(m=>m.Unread==0)&&supportMessages.All(m=>m.Unread==0)&&subscriptionNotices.Count==0)
+        @if (data.Invitations.Count == 0 && data.Assignments.Count == 0 && actions.Count == 0 && messages.All(m=>m.Unread==0)&&supportMessages.All(m=>m.Unread==0)&&portalMessages.All(m=>m.Unread==0)&&subscriptionNotices.Count==0)
         {
             <p class="muted">No Pending Invitations Or Assigned Work Updates.</p>
         }
@@ -63,6 +65,7 @@
     List<RecruiterActionItem> actions = [];
     List<ConversationSummary> messages = [];
     List<SupportConversationSummary> supportMessages=[];
+    List<PortalConversation> portalMessages=[];
     WorkNotifications data = new([], []);
 
     protected override async Task OnInitializedAsync()
@@ -75,6 +78,7 @@
     {
         try{subscriptionNotices=await Subscriptions.Notifications();}catch(UnauthorizedAccessException){subscriptionNotices=[];}
         try{messages=await Inbox.Inbox();}catch(UnauthorizedAccessException){messages=[];}
+        try{portalMessages=await Review.PortalInbox();}catch(UnauthorizedAccessException){portalMessages=[];}
         try{supportMessages=await SupportInbox.Inbox();}catch(UnauthorizedAccessException){supportMessages=[];}
         try
         {

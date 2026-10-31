@@ -279,7 +279,7 @@ public partial class HiringReviewService(IDbContextFactory<AtsDbContext> factory
 
   if(sub.Revision!=input.Revision||a.Revision!=input.ApplicationRevision)throw new DbUpdateConcurrencyException("The profile changed. Reload it before submitting feedback.");
 
-  if(a.Stage=="Hired"||a.ClientStatus=="Hired"||a.Stage=="Offer Sent")throw new InvalidOperationException("This application has progressed beyond review. Contact your Recruiter.");
+  if(a.Stage is "Hired" or "Rejected" or "Offer Sent"||a.ClientStatus=="Hired")throw new InvalidOperationException("This application has progressed beyond review. Contact your Recruiter.");
 
   var position=await db.Positions.SingleAsync(p=>p.Id==a.PositionId);if(position.Status is not("Active" or "On Hold"))throw new InvalidOperationException("This Position Is Closed. Contact Your Recruiter Before Sending More Feedback.");
   var normalizedZone=start is null?"":input.TimeZone;var normalizedMode=start is null?"":input.Mode;var normalizedLocation=start is null?"":input.Location.Trim();
@@ -287,15 +287,16 @@ public partial class HiringReviewService(IDbContextFactory<AtsDbContext> factory
   if(input.InterviewRevision is Guid interviewRevision&&(booking is null||booking.Revision!=interviewRevision))throw new DbUpdateConcurrencyException("The Candidate Response Or Interview Changed. Reopen The Profile Before Evaluating.");
   if(input.InterviewCompleted){
    if(booking is null||input.InterviewRevision is null||booking.Status is not("Confirmed" or "Completed"))throw new InvalidOperationException("Only A Confirmed Interview Can Be Evaluated As Completed.");
+   if(booking.Status!="Completed"&&booking.StartUtc>DateTime.UtcNow)throw new InvalidOperationException("The interview has not finished yet. Record completion after the interview has started and you have conducted it.");
    if(booking.Status!="Completed"){
     booking.Status="Completed";a.InterviewStatus="Completed";
     AtsService.Audit(db,"HiringManager","Interview completion confirmed",booking.Id.ToString(),"Interviewer Confirmed The Interview Took Place",a.CandidateId,a.Id);db.Audit.Local.Last().ActorName="Submitted Through Client Review Link";
    }
   }
-  if(booking is not null&&(booking.Status is "Awaiting Confirmation" or "Confirmed" or "New Time Proposed")&&input.Status is not("Reject" or "Hold"))throw new InvalidOperationException("Confirm That The Interview Took Place Before Choosing Its Next Step. Pending Time Proposals Must Be Resolved First.");
+  if(booking is not null&&(booking.Status is "Awaiting Confirmation" or "Confirmed" or "New Time Proposed" or "Response Requires Review")&&input.Status is not("Reject" or "Hold" or "Request Interview"))throw new InvalidOperationException("Confirm That The Interview Took Place Before Choosing Its Next Step. Pending Time Proposals Must Be Resolved First.");
   if(input.Status is "Recommend Hire" or "Send Offer"&&booking?.Status!="Completed")throw new InvalidOperationException("Complete The Interview Before Requesting An Offer.");
   if(input.Status=="Send Offer"&&input.InterviewRevision is null)throw new InvalidOperationException("Reopen The Interview Evaluation Before Requesting An Offer.");
-  if(booking is not null&&(booking.Status is not("Completed" or "Cancelled"))&&(input.Status is "Reject" or "Hold")){
+  if(booking is not null&&(booking.Status is not("Completed" or "Cancelled"))&&(input.Status is "Reject" or "Hold" or "Request Interview")){
    await new InterviewService(factory,access,protection,config,email,updates,googleMeet).CancelForFeedback(db,booking,a);
   }
   if(sub.Feedback==input.Status&&sub.Remarks==input.Remarks.Trim()&&sub.AvailabilityStartUtc==start&&sub.TimeZone==normalizedZone&&sub.InterviewMode==normalizedMode&&sub.InterviewLocation==normalizedLocation&&sub.DurationMinutes==input.DurationMinutes&&!input.InterviewCompleted)return;

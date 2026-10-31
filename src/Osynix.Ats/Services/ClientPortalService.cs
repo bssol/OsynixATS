@@ -155,7 +155,7 @@ public partial class HiringReviewService
         var grant=await db.HiringReviewGrants.SingleOrDefaultAsync(g=>g.Id==grantId)??throw new UnauthorizedAccessException();
         var messages=await db.ClientPortalMessages.Where(m=>m.GrantId==grantId&&ids.Contains(m.PositionId)).OrderBy(m=>m.CreatedUtc).Take(500).ToListAsync();
         if(messages.Count==0)throw new UnauthorizedAccessException("This client conversation is not assigned to you.");
-        foreach(var m in messages.Where(m=>m.FromClient&&m.ReadUtc==null))m.ReadUtc=DateTime.UtcNow;await db.SaveChangesAsync();
+        var unread=messages.Where(m=>m.FromClient&&m.ReadUtc==null).ToList();foreach(var m in unread)m.ReadUtc=DateTime.UtcNow;await db.SaveChangesAsync();if(unread.Count>0)updates.Publish();
         return new(grant.Id,grant.Name,positions.Where(p=>messages.Any(m=>m.PositionId==p.Id)).Select(p=>new HiringPosition(p.Id,p.Reference,p.Title)).ToList(),messages.Select(m=>MessageView(m,positions.Select(p=>new HiringPosition(p.Id,p.Reference,p.Title)).ToList())).ToList());
     }
     public async Task PortalReply(Guid grantId,Guid positionId,string body)

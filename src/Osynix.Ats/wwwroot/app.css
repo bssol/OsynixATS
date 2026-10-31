@@ -264,10 +264,18 @@ a.kpi::after,button.kpi::after{top:12px;right:12px;font-size:15px}
 .jd-analysis-actions small{font-size:11px}
 @media(max-width:700px){.position-section-nav button{padding:9px 10px;font-size:11px}}
 .position-editor select{padding-right:32px}
-.original-jd-card{display:flex;gap:14px;padding:18px;background:#edf3ff;border:1px solid #dce6fb;border-radius:12px;margin-bottom:20px}
-.original-jd-card>svg{flex-shrink:0;color:#175aff}
+.original-jd-card{display:block;padding:18px;background:#edf3ff;border:1px solid #dce6fb;border-radius:12px;margin-bottom:20px}
+.original-jd-card>summary{display:flex;align-items:center;gap:10px;font-weight:700;cursor:pointer;list-style:none}
+.original-jd-card>summary::-webkit-details-marker{display:none}
+.original-jd-card>summary svg{flex-shrink:0;color:#175aff}
 .original-jd-card>div{min-width:0;display:flex;flex-direction:column;gap:7px}
+.original-jd-card[open]>div{padding:14px 0 0 28px}
 .original-jd-card a{overflow-wrap:anywhere;font-size:12px}
+.jd-collapsible-section,.career-listing-preview{display:block;border:1px solid var(--border);border-radius:12px;padding:16px;margin:14px 0;background:#fff}
+.jd-collapsible-section>summary,.career-listing-preview>summary{font-weight:700;cursor:pointer;list-style:none}
+.jd-collapsible-section>summary::-webkit-details-marker,.career-listing-preview>summary::-webkit-details-marker{display:none}
+.career-listing-preview>summary{font-size:1rem}
+.career-listing-preview[open]>summary,.jd-collapsible-section[open]>summary{margin-bottom:14px}
 .jd-original-text{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.85;font-size:13px;background:#fcfdff;border:1px solid var(--border);border-radius:10px;padding:20px;margin:15px 0 22px}
 .criteria-card-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start;margin:18px 0}
 .position-form-section .criteria-card-grid .criterion-editor{margin:0;background:#f8faff;padding:14px}

@@ -32,14 +32,13 @@
             }else{
                 <AuthorizeView Roles="Recruiter,Employer" Context="workspaceAuth">
                     @if(employerMember){
-                        <NavLink href="/workspace-dashboard" title="Dashboard"><NavIcon Name="dashboard" /><span>Dashboard</span></NavLink>
-                        @if(showClients){<NavLink href="/clients"><NavIcon Name="clients" /><span>Clients</span></NavLink>}
+                        <NavLink href="/workspace-dashboard" title="My Work"><NavIcon Name="dashboard" /><span>My Work</span></NavLink>
+                        <NavLink href="/positions" title="Assigned Positions"><NavIcon Name="positions" /><span>Assigned Positions</span></NavLink>
                         <NavLink href="/assessment"><NavIcon Name="assessment" /><span>Candidate Assessment</span></NavLink>
-                        <NavLink href="/talent"><NavIcon Name="talent" /><span>My Talent Pool</span></NavLink>
-                        <NavLink href="/attention"><NavIcon Name="clock" /><span>Team Tasks</span></NavLink>
+                        <NavLink href="/pipeline"><NavIcon Name="pipeline" /><span>My Pipeline</span></NavLink>
+                        <NavLink href="/attention"><NavIcon Name="clock" /><span>Tasks</span></NavLink>
                         <MessageNav />
-                        <NavLink href="/pipeline"><NavIcon Name="pipeline" /><span>Recruitment Pipeline</span></NavLink>
-                        <a href="/my-work" class="workspace-return-link"><NavIcon Name="dashboard" /><span>Change Workspace</span></a>
+                        <a href="/my-work" class="workspace-return-link"><NavIcon Name="dashboard" /><span>Switch Workspace</span></a>
                     }else{
                         <NavLink href="/" Match="NavLinkMatch.All" title="Dashboard"><NavIcon Name="dashboard" /><span>Dashboard</span></NavLink>
                         @if(!employerAccount){<NavLink href="/my-work" title="Choose Your Workspace"><NavIcon Name="dashboard" /><span>My Workspace</span></NavLink>}
@@ -55,7 +54,7 @@
                             @if(employerAccount){<NavLink href="/employer/team" title="My Team"><NavIcon Name="talent" /><span>My Team</span></NavLink>}
                         }
                     }
-                    <NavLink href="/settings" class="@(SettingsRoute?"active":"")" Match="NavLinkMatch.All" title="Settings"><NavIcon Name="settings" /><span>Settings</span></NavLink>
+                    @if(!employerMember){<NavLink href="/settings" class="@(SettingsRoute?"active":"")" Match="NavLinkMatch.All" title="Settings"><NavIcon Name="settings" /><span>Settings</span></NavLink>}
                 </AuthorizeView>
             }
         <AuthorizeView Roles="Candidate"><NavLink href="/Account/Portal">My Account</NavLink><MessageNav /><NavLink href="/settings" class="@(SettingsRoute?"active":"")" Match="NavLinkMatch.All"><NavIcon Name="settings" /><span>Settings</span></NavLink></AuthorizeView>

@@ -97,7 +97,7 @@ else{<h2>@allowance.Used / @allowance.Limit Shared Position Slots Used</h2><p cl
 <p class="muted small">After checking the JD and hiring requirements, continue to review the assessment criteria.</p>
 <button disabled="@(Busy||!DraftIsCurrent||!HasJdText||!DetailsReady)" @onclick="ReviewJdCriteria">Next: Review Assessment Criteria</button>
 }else{
-<div class="original-jd-card"><NavIcon Name="import" /><div><b>Original Job Description</b>
+<details class="original-jd-card"><summary><NavIcon Name="import" /> Original Job Description</summary><div>
 @if(edit.JdDocumentId is not null){
     @if(!string.IsNullOrEmpty(originalJdName)){<small>@originalJdName</small>}
     <div class="jd-document-actions">
@@ -108,13 +108,22 @@ else{<h2>@allowance.Used / @allowance.Limit Shared Position Slots Used</h2><p cl
 }
 else if(Uri.TryCreate(edit.LegacyJdLink,UriKind.Absolute,out var original)&&original.Scheme=="https"){<a class="button secondary" href="@original" target="_blank" rel="noopener">View JD</a>}
 else{<small>No original file linked.</small>}
-</div></div>
+</div></details>
 @if(!string.IsNullOrEmpty(jdReadNotice)){<p class="muted small">@jdReadNotice</p>}
-<h3>Full Job Description</h3>
+<details class="jd-collapsible-section"><summary>Full Job Description</summary>
 @if(!string.IsNullOrWhiteSpace(originalJdText)){<div class="jd-original-text">@originalJdText</div>}
 else{<p class="muted">No readable JD text is available. Use the original document link above.</p>}
-@if(edit.ClientNotes.Length>0){<h3>@(companyForm?"Additional Hiring Requirements":"Client-Specific Assessment Requirements")</h3><p class="preserve">@edit.ClientNotes</p>}
-@if(edit.PositionSummary.Length>0){<h3>Position Summary</h3><p class="preserve">@edit.PositionSummary</p>}
+ </details>
+@if(edit.ClientNotes.Length>0){<details class="jd-collapsible-section"><summary>@(companyForm?"Additional Hiring Requirements":"Client-Specific Assessment Requirements")</summary><p class="preserve">@edit.ClientNotes</p></details>}
+@if(edit.PositionSummary.Length>0){<details class="jd-collapsible-section"><summary>Position Summary</summary><p class="preserve">@edit.PositionSummary</p></details>}
+}
+@if(!DraftWorkflow&&(canAssign&&edit.WorkspaceId is not null||isEmployer)){
+<details class="panel career-listing-preview"><summary>Career Page Listing Preview</summary>
+<p class="muted">Only Active Positions You Publish Appear. Review The Public Description Before Publishing; Internal Hiring Notes Stay Private. Use The Publish Button Beside Open In The Position List To Publish Or Unpublish.</p>
+<label>Public Job Description <small>Pre-filled from the approved JD. Review it for internal details before publishing.</small><textarea rows="8" @bind="edit.PublicJobDescription" placeholder="The approved job description will appear here for your review."></textarea></label>
+@if(companyForm){<details class="employer-public-preview"><summary>Preview Public Job Posting</summary><article><small>@allowance?.WorkspaceName</small><h3>@edit.Title</h3><p>@edit.Location · @edit.WorkArrangement · @edit.EmploymentType</p>@if(edit.ShowSalaryPublicly&&(edit.SalaryMinimum.HasValue||edit.SalaryMaximum.HasValue)){<p>@edit.SalaryCurrency @edit.SalaryMinimum?.ToString("N0") – @edit.SalaryMaximum?.ToString("N0") / @edit.SalaryPeriod</p>}<div class="preserve">@(string.IsNullOrWhiteSpace(edit.PublicJobDescription)?"Add Your Reviewed Public Job Description To Preview It Here.":edit.PublicJobDescription)</div></article></details>}
+@if(edit.CareersPublished){<p class="notice">This Position Is Published. Use The Unpublish Button Beside Open To Remove It From The Careers Page.</p>}<small>Closing, Filling Or Putting A Position On Hold Removes It From The Public Page. Reopening Requires Publishing Again.</small>
+</details>
 }
 </section>
 <section class="position-form-section" id="position-criteria" role="tabpanel" aria-labelledby="position-tab-criteria" hidden="@(editorTab!="criteria")"><div class="position-section-heading"><span class="section-number">03</span><div><h3>Assessment Criteria</h3><p>Edit the criteria and weights, then save. Existing assessment results keep their original criteria.</p></div></div>
@@ -131,13 +140,6 @@ else{<p class="muted">No readable JD text is available. Use the original documen
 <section class="position-form-section" id="position-status" role="tabpanel" aria-labelledby="position-tab-status" hidden="@(editorTab!="status")"><div class="position-section-heading"><span class="section-number">04</span><div><h3>@(DraftWorkflow?"Review & Save":companyForm?"Hiring Team":"Status & Closure")</h3><p>@(companyForm&&!DraftWorkflow?"Assign internal and external recruiters and manage hiring manager portal access.":"Manage the position’s status and record closure details when needed.")</p></div></div>
 @if(DraftWorkflow){<div class="jd-draft-review"><h3>Final Review</h3><div class="form-grid"><div><b>Vacancy</b><p>@edit.Title · @edit.Location</p></div><div><b>@(companyForm?"Company":"Client")</b><p>@edit.Client</p></div><div><b>JD Text</b><p>@(sourceReviewed?"Verified":"Verification Required")</p></div><div><b>Assessment Criteria</b><p>@CriteriaFrameworkSummary · @(CriteriaApproved?"Approved":"Approval Required")</p></div></div></div>}
 @if(companyForm){<section class="employer-hiring-team"><h3>Internal Team Member</h3><p class="muted">Assign An Internal Recruiter Or Leave Unassigned To Manage This Vacancy Yourself.</p><label>Internal Recruiter<select @bind="edit.AssignedRecruiter" disabled="@(!canAssign)"><option value="">Unassigned</option>@if(edit.AssignedRecruiter.Length>0&&!InternalRecruiters.Any(r=>r.Username==edit.AssignedRecruiter)){<option value="@edit.AssignedRecruiter">@edit.AssignedRecruiter (Existing Assignment)</option>}@foreach(var person in InternalRecruiters){<option value="@person.Username">@person.Name · @person.Username</option>}</select></label><h3>External Freelance Recruiters</h3><p class="muted">Select Accepted, Active External Partners. External Recruiters Do Not Use Your Internal Team Seat.</p>@foreach(var member in teamMembers.Where(m=>m.External&&m.Status=="Active")){<label class="check"><input type="checkbox" checked="@externalRecruiters.Contains(member.Id)" disabled="@(!canAssign)" @onchange="e=>ToggleExternal(member.Id,(bool)e.Value!)" /> @member.Name</label>}@if(!teamMembers.Any(m=>m.External&&m.Status=="Active")){<p class="muted">No Active External Recruiters Yet. Invite Them From My Team; You Can Assign Them Later.</p>}<h3>Hiring Manager Portal</h3><p class="muted">Enable portal access beside the hiring manager details in Vacancy Details. Contacts can be recorded on every plan.</p>@if(edit.HiringManagerPortalEnabled&&edit.ClientId is Guid reviewClient){<ClientPortalAccessPanel ClientId="reviewClient" PositionId="edit.Id" />}</section>}
-@if(canAssign&&edit.WorkspaceId is not null||isEmployer){
-<div class="panel"><h3>Public Careers Listing</h3><p class="muted">Only Active Positions You Publish Appear. @(companyForm?"Only Your Reviewed Public Job Description And Optional Published Salary Are Shown. Internal Hiring Notes Stay Private.":"Review Public Text To Remove Client Names And Private Details Before Publishing.") Use The Publish Button Beside Open In The Position List To Publish Or Unpublish.</p>
-<label>Public Job Description <small>Pre-filled from the approved JD. Review it for internal details before publishing.</small><textarea rows="8" @bind="edit.PublicJobDescription" placeholder="The approved job description will appear here for your review."></textarea></label>
-@if(companyForm){<details class="employer-public-preview"><summary>Preview Public Job Posting</summary><article><small>@allowance?.WorkspaceName</small><h3>@edit.Title</h3><p>@edit.Location · @edit.WorkArrangement · @edit.EmploymentType</p>@if(edit.ShowSalaryPublicly&&(edit.SalaryMinimum.HasValue||edit.SalaryMaximum.HasValue)){<p>@edit.SalaryCurrency @edit.SalaryMinimum?.ToString("N0") – @edit.SalaryMaximum?.ToString("N0") / @edit.SalaryPeriod</p>}<div class="preserve">@(string.IsNullOrWhiteSpace(edit.PublicJobDescription)?"Add Your Reviewed Public Job Description To Preview It Here.":edit.PublicJobDescription)</div></article></details>}
-@if(edit.CareersPublished){<p class="notice">This Position Is Published. Use The Unpublish Button Beside Open To Remove It From The Careers Page.</p>}<small>Closing, Filling Or Putting A Position On Hold Removes It From The Public Page. Reopening Requires Publishing Again.</small>
-</div>
-}
 <label>Position Status <span class="required-marker">*</span><select aria-required="true" @bind="edit.Status">@foreach(var s in Choices.PositionStatuses){<option>@s</option>}</select></label>
 @if(edit.Status is "Closed" or "Cancelled" or "Filled"){
 <div class="closure-fields">

@@ -16,8 +16,8 @@ public class AtsService(IDbContextFactory<AtsDbContext> factory, Access access,R
     }
     public async Task<List<Candidate>> Candidates()
     {
-        var user=await access.Require();var scoped=Access.Scoped(user);var workspaceId=await access.WorkspaceId();var name=user.Identity!.Name;var uid=await access.UserId();await using var db=await factory.CreateDbContextAsync();var mode=await access.PositionMode(db);
-        var people=await db.Candidates.Include(x=>x.EmploymentHistory).Include(x=>x.EducationHistory).AsSplitQuery().AsNoTracking().Where(c=>!scoped||db.Assessments.Any(a=>a.CandidateId==c.Id&&(mode==null||a.Position!.IsAgencyPosition==mode)&&((user.IsInRole("Employer")||(a.Position!.AssignedRecruiter==name||db.PositionRecruiterAssignments.Any(pa=>pa.PositionId==a.PositionId&&db.Users.Any(au=>au.Id==pa.UserId&&au.UserName==name))))&&a.Position!.WorkspaceId==workspaceId))).OrderBy(x=>x.Name).ToListAsync();
+        var user=await access.Require();var scoped=Access.Scoped(user);var active=await access.Context();var ownOnly=active is {Owner:false,Membership:not null};var workspaceId=await access.WorkspaceId();var name=user.Identity!.Name;var uid=await access.UserId();await using var db=await factory.CreateDbContextAsync();var mode=await access.PositionMode(db);
+        var people=await db.Candidates.Include(x=>x.EmploymentHistory).Include(x=>x.EducationHistory).AsSplitQuery().AsNoTracking().Where(c=>!scoped||db.Assessments.Any(a=>a.CandidateId==c.Id&&(mode==null||a.Position!.IsAgencyPosition==mode)&&((user.IsInRole("Employer")||(a.Position!.AssignedRecruiter==name||db.PositionRecruiterAssignments.Any(pa=>pa.PositionId==a.PositionId&&db.Users.Any(au=>au.Id==pa.UserId&&au.UserName==name))))&&a.Position!.WorkspaceId==workspaceId)&&(!ownOnly||db.Assessments.Any(owned=>owned.CandidateId==c.Id&&owned.Position!.WorkspaceId==workspaceId&&(mode==null||owned.Position.IsAgencyPosition==mode)&&(owned.OwnerId==uid||db.EmployerProfileSubmissions.Any(s=>s.AssessmentId==owned.Id&&s.WorkspaceId==workspaceId&&s.SubmittedBy==uid)))))).OrderBy(x=>x.Name).ToListAsync();
         if(scoped)foreach(var person in people)person.Notes="";return people;
     }
     public async Task<List<Candidate>> TalentCandidates(bool master=false){
@@ -31,9 +31,9 @@ public class AtsService(IDbContextFactory<AtsDbContext> factory, Access access,R
     }
     public async Task<List<Assessment>> Assessments()
     {
-        var user=await access.Require(); var uid=await access.UserId(); var scoped=Access.Scoped(user);var workspaceId=await access.WorkspaceId(); await using var db=await factory.CreateDbContextAsync();var mode=await access.PositionMode(db);
+        var user=await access.Require(); var uid=await access.UserId(); var scoped=Access.Scoped(user);var active=await access.Context();var ownOnly=active is {Owner:false,Membership:not null};var workspaceId=await access.WorkspaceId(); await using var db=await factory.CreateDbContextAsync();var mode=await access.PositionMode(db);
         return await db.Assessments.Include(x=>x.Position).Include(x=>x.Candidate).AsNoTracking()
-            .Where(x=>(mode==null||x.Position!.IsAgencyPosition==mode)&&(x.State=="Saved" || user.IsInRole("Admin") || x.OwnerId==uid)&&(!scoped||((user.IsInRole("Employer")||(x.Position!.AssignedRecruiter==user.Identity!.Name||db.PositionRecruiterAssignments.Any(pa=>pa.PositionId==x.PositionId&&db.Users.Any(au=>au.Id==pa.UserId&&au.UserName==user.Identity!.Name))))&&x.Position!.WorkspaceId==workspaceId))).OrderByDescending(x=>x.LastAssessedDate??x.CreatedUtc).ToListAsync();
+            .Where(x=>(mode==null||x.Position!.IsAgencyPosition==mode)&&(x.State=="Saved" || user.IsInRole("Admin") || x.OwnerId==uid)&&(!scoped||((user.IsInRole("Employer")||(x.Position!.AssignedRecruiter==user.Identity!.Name||db.PositionRecruiterAssignments.Any(pa=>pa.PositionId==x.PositionId&&db.Users.Any(au=>au.Id==pa.UserId&&au.UserName==user.Identity!.Name))))&&x.Position!.WorkspaceId==workspaceId))&&(!ownOnly||x.OwnerId==uid||db.EmployerProfileSubmissions.Any(s=>s.AssessmentId==x.Id&&s.WorkspaceId==workspaceId&&s.SubmittedBy==uid))).OrderByDescending(x=>x.LastAssessedDate??x.CreatedUtc).ToListAsync();
     }
     public async Task<List<DecisionRule>> Rules()
     {

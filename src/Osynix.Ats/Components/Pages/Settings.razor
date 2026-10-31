@@ -5,6 +5,7 @@
 @inject AdminService Admin
 @inject Access Access
 @inject AuthenticationStateProvider Auth
+
 <SettingsNavigation Selected="@(platform?"administration":"profile")">
 @if(loaded){
 @if(!platform){<Profile Embedded="true" />}else{

@@ -1,0 +1,63 @@
+@page "/settings/integrations"
+@attribute [Authorize(Roles="Admin,Employer,Recruiter")]
+@inherits PageBase
+@inject IntegrationSettingsService IntegrationHub
+@inject AuthenticationStateProvider Auth
+<SettingsNavigation Selected="integrations">
+<PageTitle>Integrations · Osynix ATS</PageTitle>
+<div class="integrations-page">
+ <div class="page-heading"><div><div class="eyebrow">CONNECTED APPS</div><h2>Integrations</h2><p class="muted">Choose a provider and manage your account connections.</p></div></div>
+ <Feedback Error="@Error" Notice="@Notice" Busy="Busy" />
+ @if(data is not null){
+  @if(!data.Access.Enabled){
+   <section class="panel integration-locked"><span class="integration-label">Subscription access</span><h3>Online interview integrations are not included</h3><p>@data.Access.Reason</p><p>Upgrade to a plan with online interview integrations to connect a provider.</p>@if(data.Access.Owner){<a class="button" href="/employer/subscriptions">View subscription plans</a>}else{<p class="muted">Ask your workspace owner to update the subscription.</p>}</section>
+  }else{
+   <div class="integration-context"><b>@data.Access.Workspace</b><span>Connections belong to your organizer account. Other users' credentials are private.</span></div>
+   @foreach(var category in data.Providers.GroupBy(p=>p.Provider.Category)){
+    <section class="integration-category"><h3>@category.Key</h3><p class="muted">Available providers depend on your workspace subscription.</p>
+     <div class="integration-grid">
+      @foreach(var item in category){
+       <article class="integration-card @(selected==item.Provider.Id?"chosen":"")" @key="item.Provider.Id">
+        <div class="integration-card-top"><span class="integration-icon @item.Provider.Id" aria-hidden="true">@(item.Provider.Id=="google-meet"?"G":item.Provider.Id=="zoom"?"Z":"T")</span><span class="integration-status @(item.Status=="Connected"?"connected":item.Status=="Needs attention"?"attention":"")">@item.Status</span></div>
+        <h4>@item.Provider.Name</h4><p>@item.Provider.Description</p>
+        @if(item.Account is not null){<small class="integration-account">@item.Account</small>}
+        @if(!item.Included){<small>Requires a plan that includes @item.Provider.Name.</small><button class="secondary" disabled>Not included</button>}
+        else if(!item.Provider.Implemented){<button class="secondary" disabled>Coming soon</button>}
+        else{<button class="@(selected==item.Provider.Id?"":"secondary")" aria-pressed="@(selected==item.Provider.Id)" disabled="@Busy" @onclick="()=>selected=item.Provider.Id">@(item.Account is null?"Set up connection":"Manage connection")</button>}
+       </article>
+      }
+     </div>
+    </section>
+   }
+   @if(SelectedProvider is { } current){
+    <section class="panel integration-details" id="provider-details" aria-label="Google Meet connection">
+     <div class="integration-detail-heading"><div><span class="integration-label">Online interviews</span><h3>@current.Provider.Name</h3></div><span class="integration-status @(current.Status=="Connected"?"connected":"")">@current.Status</span></div>
+     @if(current.Account is not null){<p>Connected account: <b>@current.Account</b></p>}
+     <p>Use your Google account to create meetings, send calendar invitations, and import candidate-proposed times into ATS. Google’s read-only Gmail permission covers mailbox message content; ATS uses it to search for Calendar proposal notices and does not send or delete email. Candidates and hiring managers do not need to connect an account.</p>
+     @if(!string.IsNullOrEmpty(current.Error)){<div class="integration-error" role="alert">@current.Error</div>}
+     @if(!IntegrationHub.GoogleConfigured){<p class="integration-error">Google Meet needs administrator setup before an account can be connected. Contact your administrator.</p>}
+     else{
+      <div class="integration-controls"><form method="post" action="/integrations/google-meet" data-enhance="false"><AntiforgeryToken /><button type="submit" disabled="@Busy">@(current.Account is null?"Connect Google Meet":"Reconnect Google Meet")</button></form>
+       @if(current.Account is not null){<button class="secondary" disabled="@Busy" @onclick="CheckConnection">Check connection</button><button class="secondary" disabled="@Busy" @onclick="Disconnect">Disconnect</button>}
+      </div>
+     }
+     @if(current.Account is not null){<small>Cancel and synchronize active interviews before disconnecting.</small>}
+     <div class="integration-next"><b>After connecting</b><p>Open a candidate application, choose Online → Google Meet, then review and send the interview invitation.</p></div>
+    </section>
+   }
+   <p class="integration-footer">New providers and integration categories will be added here as they become available.</p>
+  }
+ }
+</div>
+</SettingsNavigation>
+@code {
+ [SupplyParameterFromQuery(Name="provider")]public string? Provider{get;set;}
+ [SupplyParameterFromQuery(Name="connected")]public string? Connected{get;set;}
+ [SupplyParameterFromQuery(Name="error")]public string? ConnectionError{get;set;}
+ IntegrationOverview? data;string selected="";
+ IntegrationProviderState? SelectedProvider=>data?.Providers.FirstOrDefault(p=>p.Provider.Id==selected&&p.Included&&p.Provider.Implemented);
+ protected override Task OnInitializedAsync()=>Run(async()=>{await Load();if(Provider=="google-meet"||Connected=="1"||ConnectionError is not null)selected="google-meet";if(Connected=="1")Notice="Google Meet account connected.";if(ConnectionError=="authorization")Error="Google authorization was not completed. Reconnect the original Google account and grant Calendar and Gmail read-only access.";if(ConnectionError=="active-interviews")Error="Cancel and synchronize active interviews before disconnecting Google Meet.";});
+ async Task Load(){var user=(await Auth.GetAuthenticationStateAsync()).User;data=await IntegrationHub.Load(user);}
+ Task CheckConnection()=>Run(async()=>{try{await IntegrationHub.CheckConnection((await Auth.GetAuthenticationStateAsync()).User,"google-meet");Notice="Google Meet and Gmail proposal access verified.";}finally{await Load();}});
+ Task Disconnect()=>Run(async()=>{await IntegrationHub.Disconnect((await Auth.GetAuthenticationStateAsync()).User,"google-meet");await Load();Notice="Google Meet disconnected.";});
+}

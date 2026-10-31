@@ -41,9 +41,10 @@ public class Access(AuthenticationStateProvider state, IDbContextFactory<AtsDbCo
         try{await RequireAdminPermission(permission);return true;}catch(UnauthorizedAccessException){return false;}
     }
 
-    public async Task<ClaimsPrincipal> Require(bool admin = false)
+    public async Task<ClaimsPrincipal> Require(bool admin = false) => await Require((await state.GetAuthenticationStateAsync()).User,admin);
+
+    public async Task<ClaimsPrincipal> Require(ClaimsPrincipal user,bool admin = false)
     {
-        var user = (await state.GetAuthenticationStateAsync()).User;
         if (user.Identity?.IsAuthenticated != true || !(user.IsInRole("Admin") || (!admin && (user.IsInRole("Recruiter")||user.IsInRole("Employer")))))
             throw new UnauthorizedAccessException("You do not have permission for this action.");
         if(factory is null&&user.IsInRole("Employer")&&!user.IsInRole("Admin"))throw new UnauthorizedAccessException("Employer Workspace Access Could Not Be Verified.");
@@ -114,7 +115,13 @@ public class Access(AuthenticationStateProvider state, IDbContextFactory<AtsDbCo
         var user=await Require();if(!Scoped(user)||factory is null)return;
         await using var db=await factory.CreateDbContextAsync();var name=user.Identity!.Name;var workspaceId=await WorkspaceId();var uid=user.FindFirstValue(ClaimTypes.NameIdentifier);
         var mode=await PositionMode(db);if(!await db.Assessments.AnyAsync(x=>x.Id==id&&(mode==null||x.Position!.IsAgencyPosition==mode)&&((user.IsInRole("Employer")||(x.Position!.AssignedRecruiter==name||db.PositionRecruiterAssignments.Any(pa=>pa.PositionId==x.PositionId&&db.Users.Any(au=>au.Id==pa.UserId&&au.UserName==name))))&&x.Position!.WorkspaceId==workspaceId)))throw new UnauthorizedAccessException("This application is not in your workspace.");
-    }    public async Task RequireClient(Guid id){
+    }
+    public async Task RequireApplication(Guid id,ClaimsPrincipal principal){
+        var user=await Require(principal);if(!Scoped(user)||factory is null)return;
+        await using var db=await factory.CreateDbContextAsync();var name=user.Identity!.Name;var active=await WorkspaceContext.Resolve(db,principal);var mode=await ProfileModes.Selected(db,principal,active);
+        if(!await db.Assessments.AnyAsync(x=>x.Id==id&&(mode==null||x.Position!.IsAgencyPosition==mode)&&((user.IsInRole("Employer")||(x.Position!.AssignedRecruiter==name||db.PositionRecruiterAssignments.Any(pa=>pa.PositionId==x.PositionId&&db.Users.Any(au=>au.Id==pa.UserId&&au.UserName==name))))&&x.Position!.WorkspaceId==active.Id)))throw new UnauthorizedAccessException("This application is not in your workspace.");
+    }
+    public async Task RequireClient(Guid id){
         var user=await Require();if(!Scoped(user)||factory is null)return;
         await using var db=await factory.CreateDbContextAsync();var name=user.Identity!.Name;var workspaceId=await WorkspaceId();var uid=user.FindFirstValue(ClaimTypes.NameIdentifier);var key=id.ToString();
         if(workspaceId is not null){if(!await db.Clients.AnyAsync(c=>c.Id==id&&c.WorkspaceId==workspaceId))throw new UnauthorizedAccessException("This client is not in your workspace.");return;}

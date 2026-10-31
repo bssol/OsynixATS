@@ -47,6 +47,13 @@ if(!string.IsNullOrWhiteSpace(builder.Configuration["Authentication:Google:Clien
   o.Events.OnRemoteFailure=context=>{context.Response.Redirect("/Account/Google?error=failed");context.HandleResponse();return Task.CompletedTask;};
  });
 }
+builder.Services.AddScoped<GoogleMeetService>();
+builder.Services.AddScoped<IntegrationSettingsService>();
+builder.Services.AddHttpClient();
+builder.Services.AddHostedService<GoogleMeetWorker>();
+if(GoogleMeetService.HasClientConfiguration(builder.Configuration)){
+ builder.Services.AddAuthentication().AddCookie("GoogleMeetExternal",o=>{o.Cookie.Name="Osynix.GoogleMeet.External";o.ExpireTimeSpan=TimeSpan.FromMinutes(5);}).AddGoogle(GoogleMeetService.Scheme,o=>GoogleMeetService.Configure(o,builder.Configuration));
+}
 builder.Services.AddRateLimiter(o=>{
  o.RejectionStatusCode=429;
  o.AddPolicy("review",context=>RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString()??"unknown",_=>new FixedWindowRateLimiterOptions{PermitLimit=120,Window=TimeSpan.FromMinutes(1),QueueLimit=0}));
@@ -88,6 +95,15 @@ builder.Services.AddHostedService<UpgradePaymentReminderService>();
 builder.Services.AddHostedService<PortalEmailWorker>();
 builder.Services.AddHostedService<SubscriptionLifecycleWorker>();
 var app=builder.Build();
+// Read-only operational check: never prints credentials or access tokens and never modifies calendar events.
+if(args.Contains("--verify-google-meet")){
+ using var diagnostic=app.Services.CreateScope();var meet=diagnostic.ServiceProvider.GetRequiredService<GoogleMeetService>();
+ if(!meet.Configured){Console.WriteLine("GOOGLE_MEET_CONFIGURATION_MISSING");return 1;}
+ var db=diagnostic.ServiceProvider.GetRequiredService<AtsDbContext>();var connections=await db.GoogleInterviewEvents.AsNoTracking().Select(e=>new{e.OwnerId,e.GoogleSubject}).Distinct().ToListAsync();
+ if(connections.Count==0){Console.WriteLine("GOOGLE_MEET_NO_LINKED_INTERVIEWS");return 1;}
+ var failed=false;foreach(var connection in connections){try{await meet.CheckAuthorization(connection.OwnerId,connection.GoogleSubject);Console.WriteLine("GOOGLE_MEET_AUTH_OK");}catch(GoogleMeetAuthorizationException e){failed=true;Console.WriteLine($"GOOGLE_MEET_AUTH_FAILED: HTTP {e.StatusCode}; {e.ErrorCode}");}catch(Exception e)when(e is InvalidOperationException or HttpRequestException or TaskCanceledException){failed=true;Console.WriteLine("GOOGLE_MEET_AUTH_CHECK_FAILED: "+e.GetType().Name);}}
+ return failed?1:0;
+}
 using(var scope=app.Services.CreateScope()) {
     var db=scope.ServiceProvider.GetRequiredService<AtsDbContext>();
     await DatabaseInitializer.InitializeAsync(db);

@@ -52,5 +52,5 @@ public static class PipelineWorkflow {
    _=>true
   };
  }
- public static bool ActionNeeded(Assessment a,InterviewSummary? i)=>a.Stage is not("Rejected" or "Hired" or "Offer Sent")&&(i?.Status is "Declined" or "New Time Proposed"||i is null&&a.InterviewStatus=="New Time Proposed"||i?.Status=="Confirmed"&&i.StartUtc.AddMinutes(i.DurationMinutes)<=DateTime.UtcNow||a.Stage is "Information Requested" or "Interview Requested" or "Offer Requested");
+ public static bool ActionNeeded(Assessment a,InterviewSummary? i)=>a.Stage is not("Rejected" or "Hired" or "Offer Sent")&&(i?.Status is "Declined" or "New Time Proposed" or "Response Requires Review"||i is null&&a.InterviewStatus=="New Time Proposed"||i?.Status=="Confirmed"&&i.StartUtc.AddMinutes(i.DurationMinutes)<=DateTime.UtcNow||a.Stage is "Information Requested" or "Interview Requested" or "Offer Requested");
 }

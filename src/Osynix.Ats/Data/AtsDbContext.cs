@@ -32,6 +32,7 @@ public class AtsDbContext(DbContextOptions<AtsDbContext> options) : IdentityDbCo
     public DbSet<SupportConversation> SupportConversations => Set<SupportConversation>();
     public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
     public DbSet<EmailTemplate> EmailTemplates => Set<EmailTemplate>();
+    public DbSet<Osynix.Ats.Services.GoogleInterviewEvent> GoogleInterviewEvents=>Set<Osynix.Ats.Services.GoogleInterviewEvent>();
     public DbSet<InterviewBooking> InterviewBookings=>Set<InterviewBooking>();
     public DbSet<InterviewDelivery> InterviewDeliveries=>Set<InterviewDelivery>();
     public DbSet<RecruiterAction> RecruiterActions=>Set<RecruiterAction>();
@@ -68,6 +69,8 @@ public class AtsDbContext(DbContextOptions<AtsDbContext> options) : IdentityDbCo
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<Osynix.Ats.Services.GoogleInterviewEvent>().HasKey(e=>e.InterviewId);
+        b.Entity<Osynix.Ats.Services.GoogleInterviewEvent>().HasOne<InterviewBooking>().WithMany().HasForeignKey(e=>e.InterviewId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<ChatInboxDeletion>().HasKey(x=>new{x.UserId,x.Kind,x.ConversationId});
         b.Entity<ChatInboxDeletion>().HasOne<AtsUser>().WithMany().HasForeignKey(x=>x.UserId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<SubscriptionPlan>().HasIndex(p=>new{p.AccountCategory,p.Code}).IsUnique();

@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 
 using System.Text.Json;
+using System.Security.Claims;
 
 using Microsoft.AspNetCore.DataProtection;
 
@@ -38,7 +39,7 @@ public record HiringRow(Guid Id,Guid PositionId,string Reference,string Position
 
 public record RecruiterFeedback(Guid Id,Guid AssessmentId,string ContactName,string Feedback,string Remarks,DateTime? AvailabilityStartUtc,int DurationMinutes,string TimeZone,string Mode,string Location,string Delivery);
 
-public partial class HiringReviewService(IDbContextFactory<AtsDbContext> factory,Access access,IDataProtectionProvider protection,IConfiguration config,IAccountEmail email,RecruitmentUpdates updates){
+public partial class HiringReviewService(IDbContextFactory<AtsDbContext> factory,Access access,IDataProtectionProvider protection,IConfiguration config,IAccountEmail email,RecruitmentUpdates updates,GoogleMeetService? googleMeet=null){
 
  public const string CookieName="Osynix.HiringReview";
 
@@ -57,11 +58,11 @@ public partial class HiringReviewService(IDbContextFactory<AtsDbContext> factory
 
  static Assessment Shared(Assessment a)=>new(){SnapshotJson=a.SnapshotJson,MatchPercent=a.MatchPercent,MustHaveFit=a.MustHaveFit,CoreRoleFit=a.CoreRoleFit,EvidenceStrength=a.EvidenceStrength,Decision=a.Decision};
 
- public async Task<List<Assessment>> Preview(IEnumerable<Guid> ids){
+ public async Task<List<Assessment>> Preview(IEnumerable<Guid> ids,ClaimsPrincipal? principal=null){
 
   var list=ids.Distinct().ToList();if(list.Count is <1 or >50)throw new InvalidOperationException("Select 1–50 saved profiles.");
 
-  foreach(var id in list)await access.RequireApplication(id);
+  foreach(var id in list)if(principal is null)await access.RequireApplication(id);else await access.RequireApplication(id,principal);
 
   await using var db=await factory.CreateDbContextAsync();
 
@@ -295,7 +296,7 @@ public partial class HiringReviewService(IDbContextFactory<AtsDbContext> factory
   if(input.Status is "Recommend Hire" or "Send Offer"&&booking?.Status!="Completed")throw new InvalidOperationException("Complete The Interview Before Requesting An Offer.");
   if(input.Status=="Send Offer"&&input.InterviewRevision is null)throw new InvalidOperationException("Reopen The Interview Evaluation Before Requesting An Offer.");
   if(booking is not null&&(booking.Status is not("Completed" or "Cancelled"))&&(input.Status is "Reject" or "Hold")){
-   await new InterviewService(factory,access,protection,config,email,updates).CancelForFeedback(db,booking,a);
+   await new InterviewService(factory,access,protection,config,email,updates,googleMeet).CancelForFeedback(db,booking,a);
   }
   if(sub.Feedback==input.Status&&sub.Remarks==input.Remarks.Trim()&&sub.AvailabilityStartUtc==start&&sub.TimeZone==normalizedZone&&sub.InterviewMode==normalizedMode&&sub.InterviewLocation==normalizedLocation&&sub.DurationMinutes==input.DurationMinutes&&!input.InterviewCompleted)return;
   var previous=JsonSerializer.Serialize(new{a.Stage,a.ClientStatus,sub.Feedback,sub.Remarks});
@@ -315,7 +316,7 @@ public partial class HiringReviewService(IDbContextFactory<AtsDbContext> factory
 
   AtsService.Audit(db,"HiringManager","Hiring Manager Feedback",sub.Id.ToString(),$"{input.Status}: {sub.Remarks}"+(start is null?"":$"\nInterview Availability: {start:yyyy-MM-dd HH:mm} UTC · {input.Mode} · {input.DurationMinutes} Minutes"),a.CandidateId,a.Id,previous,JsonSerializer.Serialize(new{a.Stage,a.ClientStatus,sub.Feedback,sub.Remarks,sub.AvailabilityStartUtc}));
 
-  db.Audit.Local.Last().ActorName="Submitted Through Client Review Link";await RecruiterActionService.Capture(db,sub,a);await db.SaveChangesAsync();updates.Publish();if(booking?.Status=="Cancelled")await new InterviewService(factory,access,protection,config,email,updates).FlushQueued(booking.Id);
+  db.Audit.Local.Last().ActorName="Submitted Through Client Review Link";await RecruiterActionService.Capture(db,sub,a);await db.SaveChangesAsync();updates.Publish();if(booking?.Status=="Cancelled")await new InterviewService(factory,access,protection,config,email,updates,googleMeet).FlushQueued(booking.Id);
 
  }
 

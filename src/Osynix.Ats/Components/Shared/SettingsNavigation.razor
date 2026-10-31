@@ -1,5 +1,6 @@
 @inject AuthenticationStateProvider Auth
 @inject Access Access
+@inject IntegrationSettingsService Integrations
 @if(!Enabled){@ChildContent}else{
 <div class="settings-page">
     <header class="settings-heading"><div class="eyebrow">ACCOUNT PREFERENCES</div><h1>Settings</h1><p class="muted">Your workspace, preferences and subscription.</p></header>
@@ -10,7 +11,7 @@
                 @if(owner){<a href="/employer/company" class="@(Selected is "company" or "careers"?"selected":"")">Business Settings</a>}
                 @if(owner){<a href="/employer/subscriptions" class="@(Selected=="subscriptions"?"selected":"")">Subscriptions</a>}
                 @if(!candidate){<a href="/settings/email-templates" class="@(Selected=="templates"?"selected":"")">Email Templates</a>}
-                @if(owner){<span class="settings-tab-disabled" aria-disabled="true" title="Integration setup is coming soon">Integrations</span>}
+                @if(!candidate){if(integrationsEnabled){<a href="/settings/integrations" class="@(Selected=="integrations"?"selected":"")">Integrations</a>}else{<span class="settings-tab-disabled" aria-disabled="true" title="Your workspace plan does not include online interview integrations">Integrations</span>}}
             </nav>
             @if(owner && Selected is "company" or "careers"){
                 <nav class="settings-subsections" aria-label="Business settings sections">
@@ -19,6 +20,7 @@
                 </nav>
             }
         }
+        @if(platform&&admin){<nav class="settings-sections" aria-label="Settings sections"><a href="/settings" class="@(Selected=="administration"?"selected":"")">Administration</a><a href="/settings/integrations" class="@(Selected=="integrations"?"selected":"")">Integrations</a></nav>}
         <div class="settings-detail">@ChildContent</div>
     </div>
 </div>
@@ -27,11 +29,12 @@
     [Parameter] public RenderFragment? ChildContent {get;set;}
     [Parameter] public string Selected {get;set;}="";
     [Parameter] public bool Enabled {get;set;}=true;
-    bool owner,platform,candidate;
+    bool owner,platform,candidate,admin,integrationsEnabled;
     protected override async Task OnInitializedAsync(){
         if(!Enabled)return;
         var user=(await Auth.GetAuthenticationStateAsync()).User;
-        platform=user.IsInRole("Admin")||user.IsInRole("SubAdmin");candidate=user.IsInRole("Candidate");
+        admin=user.IsInRole("Admin");platform=user.IsInRole("Admin")||user.IsInRole("SubAdmin");candidate=user.IsInRole("Candidate");
+        if(!candidate){try{integrationsEnabled=(await Integrations.Entitlement(user)).Enabled;}catch(UnauthorizedAccessException){}}
         if(!platform&&!candidate&&(user.IsInRole("Employer")||user.IsInRole("Recruiter"))){try{owner=(await Access.Context())?.Owner==true;}catch(UnauthorizedAccessException){}}
     }
 }

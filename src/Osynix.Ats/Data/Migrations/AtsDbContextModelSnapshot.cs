@@ -2355,11 +2355,11 @@ namespace Osynix.Ats.Data.Migrations
                     b.Property<int>("HiringTarget")
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("InternalNotes")
+                    b.Property<string>("Industry")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Industry")
+                    b.Property<string>("InternalNotes")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -2373,15 +2373,15 @@ namespace Osynix.Ats.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("JdNeedsAttentionJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("JobDescription")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("JobDescriptionHtml")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("JdNeedsAttentionJson")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -3109,6 +3109,51 @@ namespace Osynix.Ats.Data.Migrations
                     b.ToTable("WorkspaceMemberships");
                 });
 
+            modelBuilder.Entity("Osynix.Ats.Services.GoogleInterviewEvent", b =>
+                {
+                    b.Property<Guid>("InterviewId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CalendarUrl")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CandidateResponseHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("GoogleProposalHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Error")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("GoogleSubject")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SyncedHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("InterviewId");
+
+                    b.ToTable("GoogleInterviewEvents");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
@@ -3606,6 +3651,15 @@ namespace Osynix.Ats.Data.Migrations
                     b.HasOne("Osynix.Ats.Domain.EmployerWorkspace", null)
                         .WithMany()
                         .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Osynix.Ats.Services.GoogleInterviewEvent", b =>
+                {
+                    b.HasOne("Osynix.Ats.Domain.InterviewBooking", null)
+                        .WithMany()
+                        .HasForeignKey("InterviewId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

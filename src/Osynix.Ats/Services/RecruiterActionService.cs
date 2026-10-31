@@ -21,7 +21,7 @@ public class RecruiterActionService(IDbContextFactory<AtsDbContext> factory,Acce
   await db.SaveChangesAsync();
  }
  public Task<List<RecruiterActionItem>> Inbox(bool team=false,bool allWork=false)=>LoadInbox(team,allWork,0,false);
- public Task<List<RecruiterActionItem>> Notifications(bool allWork=true)=>LoadInbox(false,allWork,0,true);
+ public Task<List<RecruiterActionItem>> Notifications(bool allWork=true)=>LoadInbox(true,allWork,0,true);
  async Task<List<RecruiterActionItem>> LoadInbox(bool team,bool allWork,int attempt,bool includeUpdates){var principal=await access.Require();var uid=await access.UserId();var active=await access.Context();List<Assessment> apps;
  await using var db=await factory.CreateDbContextAsync();
  if(allWork&&!principal.IsInRole("Admin")){var choices=await WorkspaceContext.Choices(db,principal);var own=choices.FirstOrDefault(c=>c.Owner);var ownId=own?.Id;var teams=choices.Where(c=>!c.Owner).Select(c=>c.Id).ToList();var username=(await db.Users.FindAsync(uid))!.UserName;var positions=await db.Positions.Where(p=>(ownId!=null&&p.WorkspaceId==ownId&&(!p.IsAgencyPosition||db.EmployerWorkspaces.Any(w=>w.Id==ownId&&w.AgencyEnabled)))||(p.WorkspaceId!=null&&teams.Contains(p.WorkspaceId.Value)&&(p.AssignedRecruiter==username||db.PositionRecruiterAssignments.Any(a=>a.PositionId==p.Id&&a.UserId==uid)))).Select(p=>p.Id).ToListAsync();apps=await db.Assessments.Include(a=>a.Position).AsNoTracking().Where(a=>a.State=="Saved"&&positions.Contains(a.PositionId)).ToListAsync();}

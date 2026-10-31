@@ -12,6 +12,112 @@ using Osynix.Ats.Services;
 using Xunit;
 namespace Osynix.Ats.Tests;
 public class InterviewWorkflowTests {
+ sealed class GoogleHttp:HttpMessageHandler,IHttpClientFactory {
+  public int Created,Patched,Deleted,Read;public bool Exists,Fail,Pending;public string LastBody="";public string TokenError="";public string RemoteStatus="needsAction",RemoteComment="",Responder="candidate@private.test";
+  public HttpClient CreateClient(string name)=>new(this,false);
+  protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken token){
+   if(request.RequestUri!.Host=="oauth2.googleapis.com"&&TokenError.Length>0)return Json(TokenError=="unauthorized_client"?System.Net.HttpStatusCode.Unauthorized:System.Net.HttpStatusCode.BadRequest,JsonSerializer.Serialize(new{error=TokenError}));
+   if(request.RequestUri!.Host=="oauth2.googleapis.com")return Json(System.Net.HttpStatusCode.OK,"{\"access_token\":\"test-access\"}");
+   Assert.Equal("Bearer",request.Headers.Authorization?.Scheme);
+   if(Fail)return Json(System.Net.HttpStatusCode.ServiceUnavailable,"{}");
+   if(request.Method==HttpMethod.Delete){Deleted++;Exists=false;return new(System.Net.HttpStatusCode.NoContent);}
+   if(request.Method==HttpMethod.Get){Read++;if(!Exists)return Json(System.Net.HttpStatusCode.NotFound,"{}");}
+   if(request.Method==HttpMethod.Post){Created++;Exists=true;LastBody=await request.Content!.ReadAsStringAsync(token);using var body=JsonDocument.Parse(LastBody);Assert.Matches("^[0-9a-v]+$",body.RootElement.GetProperty("id").GetString()!);Assert.Contains("conferenceDataVersion=1",request.RequestUri.Query);Assert.Contains("sendUpdates=all",request.RequestUri.Query);}
+   if(request.Method==HttpMethod.Patch){Patched++;LastBody=await request.Content!.ReadAsStringAsync(token);}
+   if(!Pending)return Json(System.Net.HttpStatusCode.OK,JsonSerializer.Serialize(new{hangoutLink="https://meet.google.com/abc-defg-hij",htmlLink="https://www.google.com/calendar/event?eid=fixture",attendees=new[]{new{email=Responder,responseStatus=RemoteStatus,comment=RemoteComment},new{email="manager@client.test",responseStatus="accepted",comment=""}}}));
+   return Json(System.Net.HttpStatusCode.OK,Pending?"{\"conferenceData\":{\"createRequest\":{\"status\":{\"statusCode\":\"pending\"}}}}":"{\"hangoutLink\":\"https://meet.google.com/abc-defg-hij\"}");
+  }
+  static HttpResponseMessage Json(System.Net.HttpStatusCode code,string body)=>new(code){Content=new StringContent(body,System.Text.Encoding.UTF8,"application/json")};
+ }
+ async Task<(GoogleMeetService Meet,GoogleHttp Http)> EnableGoogle(Fixture f){
+  var http=new GoogleHttp();var googleConfig=new ConfigurationBuilder().AddConfiguration(f.Config).AddInMemoryCollection(new Dictionary<string,string?>{{"GoogleMeet:ClientId","fixture-client"},{"GoogleMeet:ClientSecret","fixture-secret"}}).Build();var meet=new GoogleMeetService(f.Factory,f.Protection,googleConfig,http,f.Updates);
+  await meet.Connect("recruiter","google-owner","organizer@example.test","test-refresh-secret");
+  f.Interviews=new(f.Factory,f.Access,f.Protection,f.Config,f.Mail,f.Updates,meet);f.Review=new(f.Factory,f.Access,f.Protection,f.Config,f.Mail,f.Updates,meet);return(meet,http);
+ }
+ [Fact]public async Task ReconnectBindsCredentialToCurrentClientAndClearsStaleAuthorizationError(){
+  await using var f=new Fixture();await f.Init();var (meet,http)=await EnableGoogle(f);await f.Interviews.Invite((await f.Input()) with{Provider="Google Meet",MeetingLink=""});http.TokenError="unauthorized_client";await meet.Sync((await f.Interviews.Details(f.ApplicationId))!.Id);
+  var failure=await Assert.ThrowsAsync<GoogleMeetAuthorizationException>(()=>meet.VerifyConnection("recruiter"));Assert.Equal("unauthorized_client",failure.ErrorCode);Assert.Equal(401,failure.StatusCode);
+  await meet.Connect("recruiter","google-owner","organizer@example.test","new-test-refresh");Assert.Equal("fixture-client",(await meet.Connection("recruiter"))!.ClientId);Assert.Equal("",await meet.Status((await f.Interviews.Details(f.ApplicationId))!.Id));
+  http.TokenError="";await meet.VerifyConnection("recruiter");Assert.Equal(1,http.Created);Assert.Equal(0,http.Patched);Assert.Equal(0,http.Deleted);
+ }
+ [Fact]public async Task ChangedOAuthClientRequiresReconnectBeforeUsingStoredRefreshCredential(){
+  await using var f=new Fixture();await f.Init();await EnableGoogle(f);var otherConfig=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{{"GoogleMeet:ClientId","different-client"},{"GoogleMeet:ClientSecret","different-secret"}}).Build();var other=new GoogleMeetService(f.Factory,f.Protection,otherConfig,new GoogleHttp());
+  var error=await Assert.ThrowsAsync<GoogleMeetAuthorizationException>(()=>other.CheckAuthorization("recruiter","google-owner"));Assert.Equal("client_changed",error.ErrorCode);
+ }
+ [Theory][InlineData("invalid_client","client settings were rejected")][InlineData("invalid_grant","Reconnect the original Google account")][InlineData("server_error","temporarily unavailable")][InlineData("unauthorized_client","Reconnect Google Meet")]
+ public async Task TokenErrorsDistinguishConfigurationConsentAndTemporaryFailure(string error,string expected){
+  await using var f=new Fixture();await f.Init();var (_,http)=await EnableGoogle(f);await f.Interviews.Invite((await f.Input()) with{Provider="Google Meet",MeetingLink=""});http.TokenError=error;var booking=(await f.Interviews.Details(f.ApplicationId))!;
+  var failure=await Assert.ThrowsAsync<InvalidOperationException>(()=>f.Interviews.RefreshGoogleResponse(booking.Id));Assert.Contains(expected,failure.Message);Assert.Equal(booking.MeetingLink,(await f.Interviews.Details(f.ApplicationId))!.MeetingLink);
+ }
+ [Theory][InlineData("tentative","Response Requires Review")][InlineData("declined","Declined")][InlineData("accepted","Confirmed")]
+ public async Task GoogleCandidateResponseIsImportedWithoutRewritingCalendarAndRaisesScopedTask(string response,string expected){
+  await using var f=new Fixture();await f.Init();var (meet,http)=await EnableGoogle(f);await f.Interviews.Invite((await f.Input()) with{Provider="Google Meet",MeetingLink=""});
+  var before=(await f.Interviews.Details(f.ApplicationId))!;var notificationCount=0;f.Updates.Changed+=()=>notificationCount++;
+  http.RemoteStatus=response;http.RemoteComment="Please review my availability.";await meet.Sync(before.Id);
+  var after=(await f.Interviews.Details(f.ApplicationId))!;Assert.Equal(expected,after.Status);Assert.Equal(before.StartUtc,after.StartUtc);Assert.Null(after.ProposedStartUtc);Assert.Contains("Google Calendar",after.ResponseSource);Assert.Contains(http.RemoteComment,after.ResponseNotes);Assert.Equal(0,http.Patched);Assert.Equal(1,notificationCount);
+  var tasks=await new RecruiterActionService(f.Factory,f.Access,f.Updates).Inbox();if(response!="accepted"){Assert.Equal("Review Interview Response",Assert.Single(tasks).Action.Type);Assert.True(PipelineWorkflow.ActionNeeded(Assert.Single(await new AtsService(f.Factory,f.Access).Assessments()),InterviewService.Summary(after)));}
+  var revision=after.Revision;await meet.Sync(after.Id);Assert.Equal(revision,(await f.Interviews.Details(f.ApplicationId))!.Revision);Assert.Equal(1,notificationCount);
+  Assert.Contains("google.com/calendar",await f.Interviews.GoogleCalendarLink(after.Id));
+ }
+ [Fact]public async Task ManagerCalendarResponseCannotBeMistakenForCandidateResponse(){
+  await using var f=new Fixture();await f.Init();var (meet,http)=await EnableGoogle(f);await f.Interviews.Invite((await f.Input()) with{Provider="Google Meet",MeetingLink=""});http.Responder=f.Contact.Email;http.RemoteStatus="tentative";var before=(await f.Interviews.Details(f.ApplicationId))!;await meet.Sync(before.Id);Assert.Equal("Awaiting Confirmation",(await f.Interviews.Details(f.ApplicationId))!.Status);
+ }
+ [Fact]public async Task CalendarTentativeCanBeRecordedAsExactProposalAndApprovedByRecruiter(){
+  await using var f=new Fixture();await f.Init();var (meet,http)=await EnableGoogle(f);await f.Interviews.Invite((await f.Input()) with{Provider="Google Meet",MeetingLink=""});var booking=(await f.Interviews.Details(f.ApplicationId))!;http.RemoteStatus="tentative";await meet.Sync(booking.Id);booking=(await f.Interviews.Details(f.ApplicationId))!;
+  var proposed=DateTime.UtcNow.AddDays(6).ToString("yyyy-MM-ddTHH:mm");await f.Interviews.RecordResponse(new(booking.Id,booking.Revision,"New Time Proposed","Recorded after reviewing Google proposal",proposed,"Asia/Karachi"),"Google Calendar");
+  booking=(await f.Interviews.Details(f.ApplicationId))!;Assert.Equal("New Time Proposed",booking.Status);await meet.Sync(booking.Id);Assert.Equal("New Time Proposed",(await f.Interviews.Details(f.ApplicationId))!.Status);
+  var stranger=new InterviewService(f.Factory,new Access(new State("stranger"),f.Factory),f.Protection,f.Config,f.Mail,f.Updates,meet);await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>stranger.ReviewProposalAsRecruiter(f.ApplicationId,booking.Id,booking.Revision,true,null,"UTC"));
+  await f.Interviews.ReviewProposalAsRecruiter(f.ApplicationId,booking.Id,booking.Revision,true,null,"UTC");var approved=(await f.Interviews.Details(f.ApplicationId))!;Assert.Equal("Confirmed",approved.Status);Assert.Equal(InterviewService.ParseTime(proposed,"Asia/Karachi"),approved.StartUtc);await meet.Sync(booking.Id);Assert.Equal("Confirmed",(await f.Interviews.Details(f.ApplicationId))!.Status);
+ }
+ [Fact]public async Task GoogleResponseCannotReopenRevokedSharingOrClosedApplications(){
+  await using var f=new Fixture();await f.Init();var (meet,http)=await EnableGoogle(f);await f.Interviews.Invite((await f.Input()) with{Provider="Google Meet",MeetingLink=""});var before=(await f.Interviews.Details(f.ApplicationId))!;await using(var db=f.Factory.CreateDbContext()){(await db.HiringReviewGrants.SingleAsync()).Revoked=true;await db.SaveChangesAsync();}http.RemoteStatus="accepted";await meet.Sync(before.Id);Assert.Equal(before.Status,(await f.Interviews.Details(f.ApplicationId))!.Status);
+ }
+ [Fact]public async Task SharedCalendarInvitationDoesNotExposeCandidateResponseToken(){
+  await using var f=new Fixture();await f.Init();var (_,http)=await EnableGoogle(f);await f.Interviews.Invite((await f.Input()) with{Provider="Google Meet",MeetingLink=""});using var json=JsonDocument.Parse(http.LastBody);Assert.DoesNotContain("token=",json.RootElement.GetProperty("description").GetString());Assert.Contains("ATS invitation",json.RootElement.GetProperty("description").GetString());
+ }
+ [Fact]public async Task GoogleMeetCreatesCalendarInviteAndIncludesGeneratedLinkInEmailsWithoutDuplicates(){
+  await using var f=new Fixture();await f.Init();var (meet,http)=await EnableGoogle(f);f.Mail.Bodies.Clear();
+  await f.Interviews.Invite((await f.Input()) with{Provider="Google Meet",MeetingLink=""});
+  var booking=(await f.Interviews.Details(f.ApplicationId))!;Assert.Equal("https://meet.google.com/abc-defg-hij",booking.MeetingLink);
+  Assert.Equal(1,http.Created);Assert.All(f.Mail.Bodies,b=>Assert.Contains(booking.MeetingLink,b));Assert.Equal(2,f.Mail.Bodies.Count);
+  Assert.Null(await meet.Sync(booking.Id));Assert.Equal(1,http.Created);Assert.Equal(0,http.Patched);
+  using var body=JsonDocument.Parse(http.LastBody);Assert.Equal(2,body.RootElement.GetProperty("attendees").GetArrayLength());
+ }
+ [Fact]public async Task HiringManagerRejectionCancelsGoogleMeetingImmediately(){
+  await using var f=new Fixture();await f.Init();var (_,http)=await EnableGoogle(f);await f.Interviews.Invite((await f.Input()) with{Provider="Google Meet",MeetingLink=""});
+  var row=await f.Row();await f.Review.Reply(f.ReviewCookie,new(row.Id,row.Revision,row.ApplicationRevision,"Reject","Not Suitable",null,"","",30,""));Assert.Equal(1,http.Deleted);
+ }
+ [Fact]public async Task GoogleMeetFailureHoldsEmailsAndRetryRecovers(){
+  await using var f=new Fixture();await f.Init();var (_,http)=await EnableGoogle(f);http.Fail=true;f.Mail.Bodies.Clear();
+  var result=await f.Interviews.Invite((await f.Input()) with{Provider="Google Meet",MeetingLink=""});Assert.Contains("held",result.Message);Assert.Empty(f.Mail.Bodies);
+  var booking=(await f.Interviews.Details(f.ApplicationId))!;Assert.Contains("Google Meet",await f.Interviews.DeliveryStatus(booking.Id));
+  http.Fail=false;await f.Interviews.RetryDelivery(booking.Id);Assert.Equal(2,f.Mail.Bodies.Count);Assert.Equal(1,http.Created);
+ }
+ [Fact]public async Task GooglePendingConferenceRetriesExistingEventWithoutDuplicateInvitations(){
+  await using var f=new Fixture();await f.Init();var (_,http)=await EnableGoogle(f);http.Pending=true;f.Mail.Bodies.Clear();
+  await f.Interviews.Invite((await f.Input()) with{Provider="Google Meet",MeetingLink=""});Assert.Empty(f.Mail.Bodies);Assert.Equal(1,http.Created);
+  http.Pending=false;await f.Interviews.RetryDelivery((await f.Interviews.Details(f.ApplicationId))!.Id);Assert.Equal(1,http.Created);Assert.Equal(0,http.Patched);Assert.Equal(2,f.Mail.Bodies.Count);
+ }
+ [Fact]public async Task GoogleMeetReschedulesAndCancelsTheSameEvent(){
+  await using var f=new Fixture();await f.Init();var (_,http)=await EnableGoogle(f);
+  await f.Interviews.Invite((await f.Input()) with{Provider="Google Meet",MeetingLink=""});
+  var booking=(await f.Interviews.Details(f.ApplicationId))!;
+  await f.Interviews.RecordResponse(new(booking.Id,booking.Revision,"New Time Proposed","",DateTime.UtcNow.AddDays(5).ToString("yyyy-MM-ddTHH:mm"),"UTC"),"Phone");
+  booking=(await f.Interviews.Details(f.ApplicationId))!;await f.Interviews.ReviewProposal(f.ApplicationId,booking.Id,booking.Revision,true,null,"UTC");Assert.Equal(1,http.Patched);Assert.Equal(1,http.Created);Assert.DoesNotContain("attendees",http.LastBody);
+  var a=Assert.Single(await new AtsService(f.Factory,f.Access).Assessments());await f.Interviews.Progress(a.Id,a.Revision,"Reject","");Assert.Equal(1,http.Deleted);
+ }
+ [Fact]public async Task GoogleCredentialsAreProtectedAndActiveEventsPreventAccountReplacementOrDisconnect(){
+  await using var f=new Fixture();await f.Init();var (meet,_)=await EnableGoogle(f);
+  await using(var db=f.Factory.CreateDbContext()){var value=(await db.Set<Microsoft.AspNetCore.Identity.IdentityUserToken<string>>().SingleAsync()).Value!;Assert.DoesNotContain("test-refresh-secret",value);}
+  await f.Interviews.Invite((await f.Input()) with{Provider="Google Meet",MeetingLink=""});
+  await Assert.ThrowsAsync<InvalidOperationException>(()=>meet.Connect("recruiter","other-google","other@example.test","other-refresh"));
+  await Assert.ThrowsAsync<InvalidOperationException>(()=>meet.Disconnect("recruiter"));
+  var a=Assert.Single(await new AtsService(f.Factory,f.Access).Assessments());await f.Interviews.Progress(a.Id,a.Revision,"Reject","");await meet.Disconnect("recruiter");Assert.Null(await meet.Connection("recruiter"));
+ }
+ [Fact]public async Task GoogleAutoCreationRequiresConnectionAndDoesNotSaveInvalidInvitation(){
+  await using var f=new Fixture();await f.Init();var meet=new GoogleMeetService(f.Factory,f.Protection,f.Config,new GoogleHttp());f.Interviews=new(f.Factory,f.Access,f.Protection,f.Config,f.Mail,f.Updates,meet);
+  var input=await f.Input();await Assert.ThrowsAsync<InvalidOperationException>(()=>f.Interviews.Invite(input with{Provider="Google Meet",MeetingLink=""}));await using var db=f.Factory.CreateDbContext();Assert.Empty(await db.InterviewBookings.ToListAsync());
+ }
  sealed class State(string name="recruiter"):AuthenticationStateProvider{public override Task<AuthenticationState> GetAuthenticationStateAsync()=>Task.FromResult(new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity([new(ClaimTypes.Name,name),new(ClaimTypes.NameIdentifier,name),new(ClaimTypes.Role,"Recruiter")],"Test"))));}
  sealed class Factory(DbContextOptions<AtsDbContext> options):IDbContextFactory<AtsDbContext>{public AtsDbContext CreateDbContext()=>new(options);}
  sealed class Mail:IAccountEmail{public bool Configured{get;set;}=true;public bool Fail;public List<string> Bodies=[];public Task Send(string email,string subject,string body){if(Fail)throw new InvalidOperationException();Bodies.Add(email+"\n"+body);return Task.CompletedTask;}}

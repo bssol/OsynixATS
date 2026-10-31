@@ -37,7 +37,7 @@ public static class HiringReviewEndpoints {
   app.MapGet("/review/preview",async Task<IResult>(string? ids,HiringReviewService review,ReportService reports,HttpContext c)=>{
    Private(c);var values=(ids??"").Split(',',StringSplitOptions.RemoveEmptyEntries);
    if(values.Length is <1 or >50||values.Any(x=>!Guid.TryParse(x,out _)))return Results.BadRequest("Select 1–50 saved profiles.");
-   try{return Results.Content(reports.HiringManagerHtml(await review.Preview(values.Select(Guid.Parse))),"text/html");}
+   try{return Results.Content(reports.HiringManagerHtml(await review.Preview(values.Select(Guid.Parse),c.User)),"text/html");}
    catch(UnauthorizedAccessException){return Results.Forbid();}catch(InvalidOperationException e){return Results.BadRequest(e.Message);}
   }).RequireAuthorization(p=>p.RequireRole("Admin","Recruiter","Employer"));
  }

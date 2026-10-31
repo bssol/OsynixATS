@@ -122,3 +122,6 @@ tools/              Build/test commands
 - [EF Core SQLite provider](https://learn.microsoft.com/en-us/ef/core/providers/sqlite/)
 - [SQLite provider limitations](https://learn.microsoft.com/en-us/ef/core/providers/sqlite/limitations)
 - [EF migrations with multiple providers](https://learn.microsoft.com/en-us/ef/core/managing-schemas/migrations/providers)
+
+## Google Meet interviews
+See [Google Meet setup and acceptance](docs/google-meet-integration.md) for OAuth configuration, scheduling behavior and live verification.
